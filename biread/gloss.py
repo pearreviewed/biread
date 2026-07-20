@@ -176,7 +176,25 @@ def content_words(surface: str) -> list[str]:
             if w not in LANGUAGE.function_words]
 
 
+def spans_coordination(surface: str) -> bool:
+    """A coordinator with a content word on each side — "Moscovie ou Chine".
+
+    The two sides are separate logical parts, so the hover is over two things
+    at once. A leading "et …" is not this: nothing content-bearing precedes it.
+    """
+    seen_content = False
+    for word in WORD_RE.findall(surface.lower()):
+        if word in LANGUAGE.coordinators:
+            if seen_content:
+                return True
+        elif word not in LANGUAGE.function_words:
+            seen_content = True
+    return False
+
+
 def over_broad(surface: str, pos: str = "") -> bool:
+    if spans_coordination(surface):
+        return True
     limit = 1 if PREDICATE_POS_RE.search(pos) else MAX_CONTENT_WORDS
     return len(content_words(surface)) > limit
 
@@ -188,9 +206,10 @@ def anchor(paragraph: str, proposed: list[dict]) -> list[GlossUnit] | None:
     the model has lost its place or invented words, and the whole segmentation
     is untrustworthy. Gaps between units are fine: they render as plain text.
 
-    A unit wider than a phrase is dropped rather than rejected: it is a bundling
-    mistake, not a sign the model lost the text, so the words under it simply
-    read as prose while the rest of the paragraph keeps its hovers.
+    This only locates; it does not judge width. Whether a unit is too broad to
+    hover is decided by `displayable` at render time, so the cache holds the
+    model's full proposal and the width rule can be retuned without paying to
+    gloss again.
     """
     haystack, index = fold(paragraph)
     located: list[GlossUnit] = []
@@ -203,8 +222,6 @@ def anchor(paragraph: str, proposed: list[dict]) -> list[GlossUnit] | None:
         if found == -1:
             return None
         cursor = found + len(surface)
-        if over_broad(unit["surface"], unit["pos"]):
-            continue
         located.append(GlossUnit(
             start=index[found],
             end=index[found + len(surface) - 1] + 1,
@@ -214,6 +231,13 @@ def anchor(paragraph: str, proposed: list[dict]) -> list[GlossUnit] | None:
             perfect=unit["perfect"],
         ))
     return located or None
+
+
+def displayable(paragraph: str, units: list[GlossUnit]) -> list[GlossUnit]:
+    """Units narrow enough to show. The width rule is applied here, at the edge
+    where units become hovers, rather than baked into the cache — so tightening
+    it drops the offenders on the next render, with nothing to pay again."""
+    return [u for u in units if not over_broad(paragraph[u.start:u.end], u.pos)]
 
 
 def coverage(paragraph: str, units: list[GlossUnit]) -> float:

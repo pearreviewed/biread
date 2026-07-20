@@ -5,7 +5,9 @@ from biread.cleanup import Chapter
 from biread.errors import GlossError
 from biread.gloss import (
     chunks,
+    displayable,
     over_broad,
+    spans_coordination,
     rescue,
     FIELD,
     anchor,
@@ -328,24 +330,27 @@ def test_a_clause_is_too_wide_for_one_hover():
 
 
 def test_an_over_broad_unit_is_dropped_and_its_neighbours_kept():
+    # anchor locates everything; displayable is where width is judged.
     text = "Sur la table, il mit les femmes de son côté et monta."
     units = anchor(text, parse_units("\n".join([
         line("Sur la table", "prep. phrase", "on the table"),
         line("il mit les femmes de son côté", "clause", "he won the women over"),
         line("monta", "verb", "climbed", "inf=monter"),
     ])))
-    assert [text[u.start:u.end] for u in units] == ["Sur la table", "monta"]
+    assert [text[u.start:u.end] for u in displayable(text, units)] == ["Sur la table", "monta"]
 
 
-def test_dropping_a_wide_unit_does_not_lose_the_reader_s_place():
-    # The cursor still advances past what was dropped, so a later unit cannot
-    # accidentally anchor inside it and come out in the wrong order.
-    text = "Il monta l’escalier, puis il monta le grand escalier de pierre."
+def test_a_wide_unit_anchors_but_still_does_not_reach_the_reader():
+    # It is located — anchor keeps it, so the model's proposal survives in the
+    # cache — but displayable filters it before it becomes a hover.
+    text = "Il monta le grand escalier de pierre lentement."
     units = anchor(text, parse_units("\n".join([
         line("Il monta le grand escalier de pierre", "clause", "he climbed it"),
-        line("monta", "verb", "climbed"),
+        line("lentement", "adverb", "slowly"),
     ])))
-    assert units is None or all(u.start >= text.index("puis") for u in units)
+    assert [text[u.start:u.end] for u in units] == \
+        ["Il monta le grand escalier de pierre", "lentement"]
+    assert [text[u.start:u.end] for u in displayable(text, units)] == ["lentement"]
 
 
 def test_a_verb_group_may_not_swallow_a_noun():
@@ -380,7 +385,8 @@ def test_the_label_only_ever_costs_one_hover():
         line("sur la table", "prepositional phrase", "on the table"),
         line("il se leva", "verb", "he rose"),
     ])))
-    assert [text[u.start:u.end] for u in units] == ["sur la table", "il se leva"]
+    shown = displayable(text, units)
+    assert [text[u.start:u.end] for u in shown] == ["sur la table", "il se leva"]
 
 
 def test_changing_the_rules_invalidates_what_they_produced(tmp_path, book, config, make_client, good_reply, monkeypatch):
@@ -404,3 +410,34 @@ def test_the_same_rules_still_hit_the_cache(tmp_path, book, config, make_client,
     second = make_client()
     gloss_book(book, second, Cache.load(path), config())
     assert second.prompts == []
+
+
+# ---- coordination is a boundary, not something to hover across ----
+
+def test_a_coordination_of_two_content_words_is_too_wide():
+    for surface in ["de Moscovie ou de la Chine", "plus simple et plus ordinaire",
+                    "de blondes et de brunes", "Leuwenhoek et Hartsoeker"]:
+        assert over_broad(surface, "noun phrase"), surface
+
+
+def test_a_leading_conjunction_is_not_a_coordination():
+    # "et son beau visage" attaches et to the previous unit; nothing content-
+    # bearing precedes it, so it is not two parts glued together.
+    assert not over_broad("et son beau visage", "noun phrase")
+    assert not over_broad("et de grands calculs", "noun phrase")
+
+
+def test_an_ordinary_phrase_is_untouched_by_the_coordination_rule():
+    for surface in ["un jeune homme", "de la tête aux pieds", "cent vingt mille pieds"]:
+        assert not over_broad(surface, "noun phrase"), surface
+
+
+def test_displayable_drops_the_coordinated_unit_and_keeps_its_neighbours():
+    text = "Les États de Moscovie ou de la Chine sont petits."
+    units = anchor(text, parse_units("\n".join([
+        line("Les États", "noun phrase", "the states"),
+        line("de Moscovie ou de la Chine", "prepositional phrase", "of Muscovy or China"),
+        line("sont petits", "verb", "are small"),
+    ])))
+    shown = displayable(text, units)
+    assert [text[u.start:u.end] for u in shown] == ["Les États", "sont petits"]

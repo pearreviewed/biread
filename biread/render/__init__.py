@@ -19,6 +19,7 @@ import unicodedata
 from pathlib import Path
 
 from ..cleanup import Chapter
+from ..gloss import displayable
 from ..translate import hash_text
 
 TEMPLATES = Path(__file__).parent / "templates"
@@ -102,7 +103,7 @@ def build_book_data(
             pair = {"fr": paragraph, "en": translations.get(key, "")}
             if published:
                 pair["pub"] = published.get(key, "")
-            units = (glosses or {}).get(key)
+            units = displayable(paragraph, (glosses or {}).get(key) or [])
             if units:
                 # Positional, to keep the payload small: a book carries tens of
                 # thousands of these. [start, end, part of speech, gloss,

@@ -18,6 +18,10 @@ class Language:
     #: conjunctions, auxiliaries, negation, numerals. A hover unit may carry any
     #: number of these; what it may not carry is a second word from outside it.
     function_words: frozenset[str]
+    #: Coordinating conjunctions. One of these between two content words joins
+    #: two logical parts — "Moscovie ou Chine", "simple et ordinaire" — and a
+    #: hover explains one part, so it is a boundary, not something to glue across.
+    coordinators: frozenset[str]
     #: The half of the gloss prompt that is a fact about the language rather than
     #: about glossing — how units divide, and which verb forms earn a second line.
     gloss_rules: str
@@ -95,8 +99,11 @@ auxiliary and agreement: "il monta" -> pc=il est monté, "elle s'assit" -> pc=el
 assise, "ils virent" -> pc=ils ont vu.
 A passé simple verb that carries pc= but not inf= is incomplete. Always give both."""
 
+FRENCH_COORDINATORS = frozenset("et ou ni mais car".split())
+
 FRENCH = Language(
     name="French",
     function_words=FRENCH_FUNCTION_WORDS,
+    coordinators=FRENCH_COORDINATORS,
     gloss_rules=FRENCH_GLOSS_RULES,
 )
