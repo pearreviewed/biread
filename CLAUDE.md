@@ -153,12 +153,23 @@ Recorded because the reasoning matters more than the outcome.
 
 ## Known open issues
 
-- **`cleanup.py` does not strip Wikisource footnotes.** They use `↑` back-links,
-  which no pattern matches, so the end of Micromégas carries four paragraphs of
-  apparatus — including one of Aristotle in Greek — into the book as body text.
-  They get translated, and would get glossed. Fix before building the gloss
-  stage.
-- Nothing is committed. This repository has no commits at all.
+- **The Wikisource header is still body text.** Footnotes are stripped now, but
+  the bibliographic line that opens the file is not, so `Voltaire`, `Garnier`,
+  `1877` and `tome 21` are hover targets in the built book. That is precisely
+  the apparatus the brief says not to pay to gloss — it just sits at the head of
+  the file rather than the tail.
+- **Anchoring is all-or-nothing per paragraph.** One unit the model will not
+  match discards the other eighty, and three paragraphs are plain for that
+  reason. `anchor()` already tolerates gaps between units, so skipping the
+  offender is a small change — but how much drift to forgive before the whole
+  segmentation is untrustworthy is a judgement call, not a default to pick
+  quietly.
+- **A failed paragraph records nothing about why it failed.** The model's reply
+  is not kept, so diagnosing a failure means paying to reproduce it. That is how
+  the curly-apostrophe run cost $1.64 to explain.
+- **Mobile renders no hover units at all.** Reasonable for touch, except the
+  mobile layout also triggers on a narrow desktop window, where hover works and
+  silently does nothing.
 - `.book-mobile` still has a fixed width, so a short landscape phone could
   squash the way the desktop spread used to.
 
