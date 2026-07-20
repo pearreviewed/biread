@@ -176,24 +176,37 @@ def content_words(surface: str) -> list[str]:
             if w not in LANGUAGE.function_words]
 
 
-def spans_coordination(surface: str) -> bool:
-    """A coordinator with a content word on each side — "Moscovie ou Chine".
+def _split_between_content(surface: str, markers: frozenset[str]) -> bool:
+    """True if a marker word sits between two content words.
 
-    The two sides are separate logical parts, so the hover is over two things
-    at once. A leading "et …" is not this: nothing content-bearing precedes it.
+    Both "Moscovie ou Chine" (coordinator) and "citoyens de la terre"
+    (preposition) are two logical parts on either side of a joining word. A
+    leading "et …" or "de …" is not: nothing content-bearing precedes it.
     """
-    seen_content = False
+    seen_content = pending = False
     for word in WORD_RE.findall(surface.lower()):
-        if word in LANGUAGE.coordinators:
-            if seen_content:
-                return True
+        if word in markers and seen_content:
+            pending = True
         elif word not in LANGUAGE.function_words:
+            if pending:
+                return True
             seen_content = True
     return False
 
 
+def spans_coordination(surface: str) -> bool:
+    return _split_between_content(surface, LANGUAGE.coordinators)
+
+
+def joins_two_nouns(surface: str) -> bool:
+    return _split_between_content(surface, LANGUAGE.prepositions)
+
+
 def over_broad(surface: str, pos: str = "") -> bool:
-    if spans_coordination(surface):
+    """Too wide to be one hover: more than a single content word and its
+    grammatical hangers-on. An adjective stays with its noun (it sits flush,
+    with no preposition between), but a second noun does not."""
+    if spans_coordination(surface) or joins_two_nouns(surface):
         return True
     limit = 1 if PREDICATE_POS_RE.search(pos) else MAX_CONTENT_WORDS
     return len(content_words(surface)) > limit

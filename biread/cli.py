@@ -170,8 +170,9 @@ def report_gloss_estimate(chapters: list[Chapter], cache: Cache, cfg: Config) ->
     if result.cost is None:
         print(f"No pricing on file for {gloss_cfg.model} — its spend cannot be capped.")
     else:
-        print(f"Rough estimated cost: ${result.cost:.4f} (glossing outputs several times "
-              f"its input, so treat this as the looser of the two estimates)")
+        print(f"Estimated cost of a clean pass: ${result.cost:.4f}. Paragraphs the "
+              f"model mis-segments are retried on their own, which on difficult text "
+              f"has run to roughly double this — read it as a floor, not a ceiling.")
 
 
 def run_glossing(chapters: list[Chapter], cache: Cache, cfg: Config):

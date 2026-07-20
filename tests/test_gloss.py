@@ -427,9 +427,24 @@ def test_a_leading_conjunction_is_not_a_coordination():
     assert not over_broad("et de grands calculs", "noun phrase")
 
 
-def test_an_ordinary_phrase_is_untouched_by_the_coordination_rule():
-    for surface in ["un jeune homme", "de la tête aux pieds", "cent vingt mille pieds"]:
+def test_two_nouns_joined_by_a_preposition_are_two_units():
+    # A noun with a "de/à + noun" complement is two nouns, so two hovers.
+    for surface in ["citoyens de la terre", "les lois de la gravitation",
+                    "pieds de roi", "de la tête aux pieds", "la musique de Lulli"]:
+        assert over_broad(surface, "noun phrase"), surface
+
+
+def test_an_adjective_stays_with_its_noun():
+    # No preposition between the two content words: one describes the other.
+    for surface in ["un jeune homme", "sa petite fourmilière", "un bon observateur",
+                    "cent vingt mille pieds", "ce beau visage"]:
         assert not over_broad(surface, "noun phrase"), surface
+
+
+def test_a_single_noun_with_a_leading_preposition_is_fine():
+    # "de la terre" on its own is one noun; the preposition leads, it does not join.
+    for surface in ["de la terre", "sur la table", "dans le globe", "à Saturne"]:
+        assert not over_broad(surface, "prepositional phrase"), surface
 
 
 def test_displayable_drops_the_coordinated_unit_and_keeps_its_neighbours():

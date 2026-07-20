@@ -22,6 +22,11 @@ class Language:
     #: two logical parts — "Moscovie ou Chine", "simple et ordinaire" — and a
     #: hover explains one part, so it is a boundary, not something to glue across.
     coordinators: frozenset[str]
+    #: Prepositions that introduce a noun complement. One between two content
+    #: words marks a noun-of-noun — "citoyens de la terre", "pieds de roi" —
+    #: which is two nouns, two units. An adjective sits flush against its noun
+    #: with no preposition between, so this leaves "un jeune homme" alone.
+    prepositions: frozenset[str]
     #: The half of the gloss prompt that is a fact about the language rather than
     #: about glossing — how units divide, and which verb forms earn a second line.
     gloss_rules: str
@@ -43,7 +48,8 @@ quoique quoiqu afin ainsi alors aussi encore déjà puis
 dans sur sous par pour avec sans chez vers entre depuis pendant contre selon
 avant après derrière devant près loin jusque jusqu malgré parmi outre dès hors sauf
 ne n pas plus jamais rien personne aucun aucune nul nulle guère point
-très bien trop peu assez tant si
+très bien trop peu assez tant si beaucoup autant moins environ davantage
+quant autour
 suis es est sommes êtes sont étais était étions étiez étaient
 fus fut fûmes fûtes furent serai seras sera serons serez seront
 serais serait serions seriez seraient sois soit soyons soyez soient
@@ -59,14 +65,28 @@ mille million millions milliard milliards premier première second seconde demi
 
 FRENCH_GLOSS_RULES = """\
 WHAT A UNIT IS:
-- One phrase and never more. A phrase is a single content word — one noun, verb, \
-adjective or adverb — with the function words leaning on it: articles, determiners, \
-prepositions, pronouns, auxiliaries, negation. An adjective sitting on its noun stays \
-with it.
-      Sur la table          ONE unit
-      il se leva            ONE unit
-      un jeune homme        ONE unit
-      l'escalier            ONE unit
+- Exactly one content word — one noun, or one verb, or one standalone adjective or \
+adverb — with the grammatical words leaning on it: articles, determiners, prepositions, \
+pronouns, auxiliaries, negation. Never two nouns, never two verbs, never a noun and a \
+verb together.
+      Sur la table          ONE unit   (preposition + article + one noun)
+      il se leva            ONE unit   (pronoun + verb)
+      l'escalier            ONE unit   (article + one noun)
+- An adjective describing a noun stays on that noun; it is not a second content word.
+      un jeune homme        ONE unit   ("a young man")
+      sa petite fourmilière ONE unit
+      un bon observateur    ONE unit
+
+- TWO NOUNS ARE TWO UNITS. When a noun is followed by "de", "à", "en" and another noun, \
+that is a noun with a complement — split before the preposition, one unit each:
+      citoyens de la terre
+          -> citoyens | de la terre
+      les lois de la gravitation
+          -> les lois | de la gravitation
+      cent vingt mille pieds de roi
+          -> cent vingt mille pieds | de roi
+      de Moscovie ou de la Chine
+          -> de Moscovie | ou de la Chine
 
 - A unit NEVER spans two parts of a clause. A subject and its verb are separate units. \
 A verb and its object are separate units. Break at every such boundary, however short \
@@ -79,8 +99,10 @@ the pieces become:
           -> Enfin | le muphti | fit condamner | le livre
       Ils entendaient des mites parler d'assez bon sens
           -> Ils entendaient | des mites | parler | d'assez bon sens
-      dont le bout fort effilé venait donner auprès du vaisseau
-          -> dont le bout | fort effilé | venait donner | auprès du vaisseau
+
+- Two things joined by "et", "ou", "ni" are two units. Split at the conjunction:
+      attractives et répulsives   -> attractives | et répulsives
+      de blondes et de brunes     -> de blondes | et de brunes
 
 - A relative pronoun opens a new unit with the verb after it: "qui tournent".
 - Punctuation between units belongs to no unit.
@@ -101,9 +123,16 @@ A passé simple verb that carries pc= but not inf= is incomplete. Always give bo
 
 FRENCH_COORDINATORS = frozenset("et ou ni mais car".split())
 
+# Elided "d'" is listed as "d" because units tokenise on the apostrophe.
+FRENCH_PREPOSITIONS = frozenset(
+    "de d à au aux du des en dans sur sous par pour avec sans chez vers entre "
+    "contre selon parmi".split()
+)
+
 FRENCH = Language(
     name="French",
     function_words=FRENCH_FUNCTION_WORDS,
     coordinators=FRENCH_COORDINATORS,
+    prepositions=FRENCH_PREPOSITIONS,
     gloss_rules=FRENCH_GLOSS_RULES,
 )
