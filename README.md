@@ -89,8 +89,33 @@ hold Shift to jump ten. `A−` / `A+` resize the text and repaginate around wher
 you are. **Blur translation** hides the English until you hover a paragraph.
 The star bookmarks a spread, the ribbon removes it, and your place is restored
 next time — all stored as positions in the book, so they survive resizing the
-window or changing the font size. Everything lives in `localStorage` under
-`biread:<book>:`.
+window or changing the font size.
+
+## Saving your place
+
+Progress saves itself. Every page turn records where you are; the star records a
+bookmark. Reopen the book and it offers to resume. There is no account to make
+and no button to press — nothing is uploaded, because there is nowhere to upload
+it to.
+
+It is kept in the browser's `localStorage`, under keys prefixed `biread:<book>:`.
+Two consequences follow from that, both by design:
+
+- **It is per-browser, per-device.** Your phone and your laptop keep separate
+  places; two people sharing one browser share one place. That is the price of
+  having no login, and for a book you hand around it is usually the right one.
+- **Clearing the browser's site data resets it.** Private/incognito windows
+  start blank and forget on close. Nothing else touches it.
+
+Each book is keyed by its own slug, so several biread books on one site do not
+collide.
+
+Because saving is entirely client-side, **hosting is just static files** —
+GitHub Pages, an S3 bucket, or a file on disk all behave the same. Anyone who
+opens the page gets their own autosaving copy, no backend and no sign-in. If you
+ever did want progress to follow a reader *between* devices, that is the one
+thing local storage cannot do — it needs a server and some notion of identity,
+which is a different project from this one.
 
 ## Adding a format
 
