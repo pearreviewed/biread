@@ -1,0 +1,24 @@
+# Environment / secrets
+.env
+
+# Generated data — the cache is the expensive, rebuildable asset (see README)
+cache/
+output/
+
+# Book source texts — bring your own, legally-obtained copies
+*.txt
+*.pdf
+*.epub
+
+# Python
+venv/
+__pycache__/
+*.pyc
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+
+# The rules above would also hide files we DO want to track — carve out exceptions
+!requirements.txt
+!examples/**/*.txt

@@ -1,0 +1,171 @@
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+
+@font-face {
+  font-family: 'EB Garamond';
+  font-style: normal; font-weight: 400; font-display: swap;
+  src: url(data:font/woff2;base64,@@FONT_REGULAR@@) format('woff2');
+}
+@font-face {
+  font-family: 'EB Garamond';
+  font-style: italic; font-weight: 400; font-display: swap;
+  src: url(data:font/woff2;base64,@@FONT_ITALIC@@) format('woff2');
+}
+
+/* A fixed height, not min-height: it gives the flex chain below a definite
+   height, so the book can size itself against the space actually left over
+   after the header — whatever height the header wraps to. Sizing the book
+   against the viewport instead pushes its bottom margin, and with it the page
+   number and the scrubber, off the bottom of a short window. */
+body {
+  height: 100vh; overflow: hidden;
+  background: radial-gradient(120% 90% at 50% 15%, #2c2418 0%, #1c160f 55%, #120d08 100%);
+  display: flex; flex-direction: column; font-family: 'EB Garamond', Georgia, serif; color: #ded2b8;
+}
+button { font-family: inherit; cursor: pointer; }
+button:focus-visible { outline: 2px solid rgba(200,175,130,.85); outline-offset: 2px; }
+
+/* ---------- header ---------- */
+#app-header { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 16px 30px; border-bottom: 1px solid rgba(180,150,100,.14); flex-wrap: wrap; }
+.header-left { display: flex; align-items: baseline; gap: 14px; min-width: 0; }
+.eyebrow { font-size: 12px; letter-spacing: .34em; text-transform: uppercase; color: #8f7d5e; white-space: nowrap; }
+.booktitle { font-size: 18px; color: #cbbc9b; font-style: italic; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.header-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.counter { font-size: 13px; letter-spacing: .18em; color: #7d6e52; min-width: 54px; text-align: right; }
+
+.btn-pill { font-size: 14px; color: #e4d7ba; background: rgba(120,95,55,.16); border: 1px solid rgba(180,150,100,.28); border-radius: 999px; padding: 7px 16px; }
+.segmented-row { display: flex; align-items: center; gap: 6px; }
+.segmented { display: flex; align-items: stretch; border: 1px solid rgba(180,150,100,.28); border-radius: 999px; overflow: hidden; }
+.segmented button { font-size: 14px; border: none; padding: 7px 15px; background: transparent; color: #c8b891; transition: background .2s ease, color .2s ease; }
+.segmented button[aria-pressed="true"] { background: rgba(180,150,100,.26); color: #f4ead0; }
+.segmented button[aria-disabled="true"] { color: rgba(228,215,186,.34); cursor: default; opacity: .6; }
+.seg-divider { width: 1px; align-self: stretch; background: rgba(180,150,100,.28); }
+.info-btn { flex: 0 0 auto; width: 24px; height: 24px; border-radius: 50%; border: 1px solid rgba(180,150,100,.5); background: transparent; color: #d8c8a4; font-family: Georgia, serif; font-style: italic; font-size: 14px; line-height: 1; display: flex; align-items: center; justify-content: center; }
+.info-btn.active { background: rgba(180,150,100,.22); }
+
+.nav-controls { display: flex; align-items: center; border: 1px solid rgba(180,150,100,.28); border-radius: 999px; overflow: hidden; }
+.nav-controls button { font-size: 14px; color: #e4d7ba; background: transparent; border: none; padding: 7px 12px; letter-spacing: .02em; }
+.nav-controls button.active { background: rgba(180,150,100,.2); }
+.bm-star { display: flex; align-items: center; }
+.bm-star svg { display: block; transition: fill .18s ease; }
+
+.fontsize-control { display: flex; align-items: center; border: 1px solid rgba(180,150,100,.28); border-radius: 999px; overflow: hidden; }
+.fontsize-control button { color: #e4d7ba; background: transparent; border: none; padding: 7px 13px; }
+.fontsize-control button:first-child { font-size: 13px; }
+.fontsize-control button:last-child { font-size: 17px; padding: 5px 13px; }
+
+/* ---------- book ---------- */
+#stage-wrap { flex: 1; min-height: 0; display: flex; align-items: flex-start; justify-content: center; perspective: 2400px; padding: 14px 24px 20px; }
+#stage-wrap.mobile { perspective: 1800px; padding: 12px 16px 16px; }
+
+/* Width follows height, so a short window makes the book smaller rather than
+   squatter — a spread stays roughly 1.22:1, which is two pages of about 0.61
+   each. Sized the other way round (fixed width, elastic height) a 680px-tall
+   window gives almost square pages. max-width still caps it on tall screens,
+   where the box simply grows taller than the ratio, which reads fine. */
+.book-desk { position: relative; height: 100%; max-height: 1320px; aspect-ratio: 61 / 50; max-width: min(1060px, 94vw); margin: 0 auto; border-radius: 5px; cursor: pointer; background: #e9ddc0; transition: opacity .18s ease; box-shadow: 0 2px 0 rgba(0,0,0,.3), 0 34px 70px -24px rgba(0,0,0,.72), 0 10px 26px rgba(0,0,0,.45); }
+.book-mobile { position: relative; width: min(560px,92vw); height: 100%; max-height: 1200px; margin: 0 auto; border-radius: 5px; cursor: pointer; transition: opacity .18s ease; }
+
+.page { position: absolute; top: 0; bottom: 0; width: 50%; padding: calc(var(--fpx) * 2.2) calc(var(--fpx) * 2.9) calc(var(--fpx) * 2); overflow: hidden; background-color: #fdf4ee; background-image: url(data:image/png;base64,@@PAPER_GRAIN@@), radial-gradient(170% 125% at 98% 50%, #fdf5ef 0%, #fbf1e7 97.5%, #f0dcc8 99.4%, #caa885 100%); box-shadow: inset -20px 0 34px -20px rgba(70,45,15,.30); }
+.page-left { left: 0; }
+.page-right { right: 0; background-image: url(data:image/png;base64,@@PAPER_GRAIN@@), radial-gradient(170% 125% at 2% 50%, #fdf5ef 0%, #fbf1e7 97.5%, #f0dcc8 99.4%, #caa885 100%); box-shadow: inset 20px 0 34px -20px rgba(70,45,15,.30); }
+.page-mobile { position: absolute; inset: 0; padding: calc(var(--fpx) * 2) calc(var(--fpx) * 1.5) calc(var(--fpx) * 2.7); overflow: hidden; background-color: #fdf4ee; background-image: url(data:image/png;base64,@@PAPER_GRAIN@@), radial-gradient(140% 145% at 50% 45%, #fdf5ef 0%, #fbf1e7 96.5%, #e2cbb2 100%); box-shadow: 0 20px 50px -20px rgba(0,0,0,.6); }
+
+/* Set by markOverflow() when a rendered page turns out taller than its box —
+   an over-long paragraph, or a published column longer than the translation
+   pagination measured. Ordinary pages never scroll. */
+.page.overflowing, .page-mobile.overflowing { overflow-y: auto; scrollbar-width: thin; }
+
+.gutter { position: absolute; top: 0; bottom: 0; left: calc(50% - 32px); width: 64px; pointer-events: none; z-index: 4; background: linear-gradient(90deg, rgba(55,35,12,0) 0%, rgba(55,35,12,.06) 38%, rgba(45,28,10,.1) 48.5%, rgba(45,28,10,.2) 50%, rgba(45,28,10,.1) 51.5%, rgba(55,35,12,.06) 62%, rgba(55,35,12,0) 100%); }
+
+/* Offscreen twin of the book, used to lay out a page before it is shown.
+   It carries the real classes so measurement can never drift from the CSS. */
+#measure-host { position: fixed; left: -10000px; top: 0; visibility: hidden; pointer-events: none; z-index: -1; }
+
+.chapter-heading { margin-bottom: 14px; }
+.ch-eyebrow { font-size: calc(var(--fpx) * 0.6); letter-spacing: .32em; text-transform: uppercase; color: #8a7551; font-weight: 600; }
+.ch-title { font-size: calc(var(--fpx) * 1.32); line-height: 1.12; margin: 7px 0 0; color: #2a1f12; font-weight: 600; }
+.ch-rule { height: 1px; background: linear-gradient(90deg,#b7a67f,transparent); margin: 16px 0 0; }
+
+p.pair { margin: 0 -12px 0.34em; padding: 2px 12px; font-size: var(--fpx); line-height: 1.38; text-align: justify; text-indent: 1.4em; hyphens: auto; border-radius: 4px; background: transparent; transition: filter .34s ease; }
+/* Hover targets. Only the unit highlights — no paragraph tint; that was
+   removed from the design deliberately. */
+.unit { border-radius: 3px; cursor: help; transition: background .12s ease; }
+.unit:hover, .unit.pinned { background: rgba(180,150,100,.26); }
+
+.tip { position: fixed; z-index: 70; max-width: 300px; background: #211b14; color: #efe6d2; border-radius: 8px; padding: 9px 12px; box-shadow: 0 12px 32px rgba(0,0,0,.55); pointer-events: none; animation: xfade .12s ease-out; }
+.tip-surface { font-size: 15px; color: #f4ead0; }
+.tip-pos { font-size: 12px; font-style: italic; color: #9a8a6a; margin-top: 1px; }
+.tip-gloss { font-size: 14px; line-height: 1.4; margin-top: 6px; }
+.tip-form { font-size: 12.5px; color: #c3b590; margin-top: 4px; }
+
+/* A paragraph resumed from the previous page is not a new paragraph. */
+p.pair.continued { text-indent: 0; }
+p.pair-fr { color: #332a1d; }
+p.pair-en { color: #4b4335; }
+p.pair-en.blurred { filter: blur(5px); }
+.xfade { animation: xfade .32s ease; }
+
+.page-num { position: absolute; bottom: calc(var(--fpx) * 1.05); left: calc(var(--fpx) * 2.9); font-size: 13px; letter-spacing: .2em; color: #9c8a66; }
+.page-num-mobile { position: absolute; bottom: calc(var(--fpx)); right: calc(var(--fpx) * 1.5); font-size: 13px; letter-spacing: .2em; color: #9c8a66; }
+
+.mobile-pair { padding: 4px 12px; margin: 0 -12px; }
+.mobile-pair .pair-fr { margin: 0 0 .35em; padding: 0; }
+.mobile-pair .pair-en { margin: 0; padding: 0; font-style: italic; font-size: calc(var(--fpx) - 1px); }
+.mobile-divider { height: 1px; background: rgba(120,90,45,.18); margin: 16px 0 14px; }
+
+/* ---------- page turn ---------- */
+.leaf { position: absolute; top: 0; bottom: 0; width: 50%; transform-style: preserve-3d; z-index: 6; pointer-events: none; transition: transform .58s cubic-bezier(.42,.10,.22,1); }
+.leaf-mobile { position: absolute; inset: 0; transform-style: preserve-3d; z-index: 6; pointer-events: none; transition: transform .55s cubic-bezier(.42,.10,.22,1); }
+.leaf-face { backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+.leaf-shade { position: absolute; inset: 0; pointer-events: none; opacity: 0; animation: pageShade .58s ease-in-out; backface-visibility: hidden; }
+
+/* ---------- marginal furniture ---------- */
+.ribbon { position: absolute; top: -4px; width: 22px; height: 42px; z-index: 7; cursor: pointer; filter: drop-shadow(0 4px 5px rgba(0,0,0,.34)); }
+.ribbon-inner { width: 100%; height: 100%; clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 74%, 0 100%); background: linear-gradient(100deg, #7c3a3d 0%, #85434a 38%, #8b4c4d 50%, #834348 62%, #78383c 100%); box-shadow: inset 0 0 5px rgba(60,20,22,.16); }
+
+.scrubber { position: absolute; left: 58px; right: 58px; bottom: 8px; height: 22px; z-index: 8; cursor: pointer; touch-action: none; }
+.scrubber.mobile { left: 30px; right: 30px; }
+.scrub-track { position: absolute; left: 0; right: 0; top: 9px; height: 4px; border-radius: 2px; background: rgba(90,66,30,.22); }
+.scrub-fill { position: absolute; left: 0; top: 0; bottom: 0; background: rgba(120,90,45,.55); border-radius: 2px; }
+.scrub-knob { position: absolute; top: 50%; width: 9px; height: 9px; margin-left: -4.5px; transform: translateY(-50%) rotate(45deg); background: #9c7a44; box-shadow: 0 1px 2px rgba(0,0,0,.4); }
+.scrub-bubble { position: absolute; bottom: 18px; transform: translateX(-50%); pointer-events: none; background: #211b14; color: #efe6d2; border-radius: 7px; padding: 6px 10px; font-size: 12.5px; white-space: nowrap; box-shadow: 0 8px 22px rgba(0,0,0,.5); }
+
+/* ---------- overlays ---------- */
+.popover { background: #211b14; color: #efe6d2; border-radius: 10px; box-shadow: 0 18px 44px rgba(0,0,0,.55); padding: 12px 8px; z-index: 60; position: fixed; top: calc(var(--header-h, 66px) + 8px); right: 30px; width: 280px; max-height: 60vh; overflow-y: auto; animation: xfade .16s ease-out; }
+.popover.mobile { left: 16px; right: 16px; width: auto; }
+.popover-title { font-size: 11px; letter-spacing: .22em; text-transform: uppercase; color: #8f7d5e; padding: 2px 12px 8px; }
+.popover-row { display: block; width: 100%; text-align: left; background: transparent; border: none; border-radius: 6px; padding: 8px 12px; color: #e7dcc2; }
+.popover-row.active { background: rgba(180,150,100,.16); }
+.popover-row .sub { font-size: 15px; font-style: italic; margin-top: 1px; }
+.popover-row .eyebrow-sm { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: #8f7d5e; }
+.popover-row .page-ref { color: #e8cf94; font-size: 13px; }
+.popover-row .chapter-ref { font-style: italic; margin-left: 8px; color: #c3b590; }
+.bm-row { display: flex; align-items: center; gap: 6px; padding: 2px 4px 2px 0; }
+.bm-row .popover-row { flex: 1; }
+.bm-remove { background: transparent; border: none; color: #8f7d5e; font-size: 15px; padding: 4px 8px; }
+.popover-empty { padding: 6px 12px 4px; font-size: 14px; font-style: italic; color: #9a8a6a; }
+
+.info-panel { background: #211b14; color: #efe6d2; border-radius: 10px; box-shadow: 0 18px 44px rgba(0,0,0,.55); padding: 18px 20px; position: fixed; top: calc(var(--header-h, 66px) + 10px); right: 30px; width: 360px; z-index: 60; animation: xfade .16s ease-out; }
+.info-panel.mobile { left: 16px; right: 16px; width: auto; }
+.info-close { position: absolute; top: 10px; right: 12px; cursor: pointer; color: #a2926f; font-size: 18px; line-height: 1; background: none; border: none; }
+.info-title { font-size: 13px; letter-spacing: .06em; font-weight: 600; color: #f6efdd; padding-right: 18px; }
+.info-rule { height: 1px; background: rgba(255,255,255,.15); margin: 10px 0; }
+.info-body { font-size: 14.5px; line-height: 1.5; color: #ddd0b6; }
+.info-cmd { margin: 11px 0; padding: 9px 11px; background: rgba(0,0,0,.32); border-radius: 6px; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12.5px; color: #c7b78f; white-space: pre-wrap; word-break: break-word; }
+.info-foot { font-size: 13px; line-height: 1.5; color: #a99a78; }
+
+.resume-banner { position: fixed; top: calc(var(--header-h, 66px) + 6px); left: 50%; transform: translateX(-50%); z-index: 61; display: flex; align-items: center; gap: 14px; background: #211b14; color: #efe6d2; border-radius: 999px; box-shadow: 0 12px 32px rgba(0,0,0,.5); padding: 8px 10px 8px 18px; max-width: calc(100vw - 32px); animation: xfade .18s ease-out; font-size: 14.5px; }
+.resume-banner .hl { font-style: italic; color: #f0e6d0; }
+.resume-go { font-size: 14px; color: #1c160f; background: #d8c39a; border: none; border-radius: 999px; padding: 6px 14px; font-weight: 600; }
+.resume-x { background: transparent; border: none; color: #9a8a6a; font-size: 18px; line-height: 1; padding: 2px 6px; }
+
+.loading-msg { flex: 1; display: flex; align-items: center; justify-content: center; color: #8f7d5e; font-size: 18px; font-style: italic; }
+
+@media (prefers-reduced-motion: reduce) {
+  .leaf, .leaf-mobile { transition: none !important; }
+  .leaf-shade { animation: none !important; }
+}
+
+@keyframes pageShade { 0% { opacity: 0; } 45% { opacity: .7; } 100% { opacity: 0; } }
+@keyframes xfade { from { opacity: 0; } }

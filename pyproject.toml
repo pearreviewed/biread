@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "biread"
+version = "0.1.0"
+description = "Build a self-contained bilingual (French/English) HTML reader from a plain-text book."
+requires-python = ">=3.10"
+dependencies = [
+    "python-dotenv>=1.0.1",
+    "anthropic>=0.40.0",
+    "openai>=1.50.0",
+    "requests>=2.31.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+# Drives the reader in a real browser; also needs `playwright install chromium`.
+browser = ["pytest>=8.0", "playwright>=1.40"]
+
+[project.scripts]
+biread = "biread.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["biread*"]
+
+[tool.setuptools.package-data]
+biread = ["render/templates/*", "assets/*.png", "assets/fonts/*.woff2"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -1,0 +1,446 @@
+"""Smoke tests for the reader itself, driven in a real browser.
+
+Everything else in the suite tests Python. The reader is where the expensive
+bugs have lived — pagination measured against a box that was not laid out yet,
+a drag target destroyed mid-gesture, a layout mode chosen from a stale width —
+and none of them are reachable without a rendering engine.
+
+Requires `pip install -e ".[browser]"` plus `playwright install chromium`;
+skipped entirely when that is not present.
+"""
+import pytest
+
+from biread.cleanup import Chapter
+from biread.render import render_book
+from biread.translate import hash_text
+
+sync_playwright = pytest.importorskip(
+    "playwright.sync_api", reason="playwright not installed"
+).sync_playwright
+
+SHORT_FR = "Une phrase française assez courte pour en tenir plusieurs sur une page."
+SHORT_EN = "A French sentence short enough to fit several of them on one page."
+# Deliberately taller than any page. Each sentence is numbered so that two
+# different slices of it can never be byte-identical — otherwise a test that
+# reassembles the parts cannot tell a dropped part from a repeated one.
+TALL_FR = " ".join(f"{SHORT_FR} [fr-{n}]" for n in range(90))
+TALL_EN = " ".join(f"{SHORT_EN} [en-{n}]" for n in range(90))
+
+
+def build_reader(tmp_path_factory, published: bool):
+    paragraphs = [f"{SHORT_FR} ({n})" for n in range(24)]
+    paragraphs.insert(12, TALL_FR)
+    chapters = [
+        Chapter(None, None, [f"{SHORT_FR} (préambule)"]),
+        Chapter("I", "Le Départ", paragraphs[:13]),
+        Chapter("II", "L'Arrivée", paragraphs[13:]),
+    ]
+
+    translations, publications = {}, {}
+    for chapter in chapters:
+        if chapter.title:
+            translations[hash_text(chapter.title)] = f"[{chapter.title}]"
+        for paragraph in chapter.paragraphs:
+            english = TALL_EN if paragraph == TALL_FR else f"{SHORT_EN} ({len(paragraph)})"
+            translations[hash_text(paragraph)] = english
+            # Published prose runs longer, which is what makes it a separate
+            # constraint on where pages break.
+            publications[hash_text(paragraph)] = english + " " + english
+
+    out = tmp_path_factory.mktemp("reader") / "book.html"
+    render_book(
+        "Livre d'Essai", chapters, translations, out,
+        publications if published else None, "a note" if published else "",
+    )
+    return out
+
+
+@pytest.fixture(scope="module")
+def browser():
+    with sync_playwright() as playwright:
+        instance = playwright.chromium.launch()
+        yield instance
+        instance.close()
+
+
+def open_reader(browser, path, width=1280, height=900):
+    page = browser.new_page(viewport={"width": width, "height": height})
+    page.goto(path.as_uri())
+    page.wait_for_function(
+        "() => { const c = document.getElementById('counter');"
+        "return c && c.textContent && !c.textContent.includes('+'); }",
+        timeout=15000,
+    )
+    return page
+
+
+@pytest.fixture(scope="module")
+def reader(browser, tmp_path_factory):
+    page = open_reader(browser, build_reader(tmp_path_factory, published=False))
+    yield page
+    page.close()
+
+
+@pytest.fixture(scope="module")
+def reader_with_published(browser, tmp_path_factory):
+    page = open_reader(browser, build_reader(tmp_path_factory, published=True))
+    yield page
+    page.close()
+
+
+def spread_count(page):
+    return int(page.inner_text("#counter").split("/")[1].strip())
+
+
+def current_spread(page):
+    return int(page.inner_text("#counter").split("/")[0].strip())
+
+
+def rewind(page):
+    """Return to the first spread. The page is shared across the module, so a
+    test that cares about position has to establish its own."""
+    for _ in range(6):
+        page.evaluate(
+            "document.dispatchEvent(new KeyboardEvent('keydown',"
+            "{key:'ArrowLeft',shiftKey:true,bubbles:true}))"
+        )
+        page.wait_for_timeout(220)
+
+
+def test_book_opens_paginated(reader):
+    assert spread_count(reader) > 1
+    assert reader.locator("#stage-wrap .page-left p.pair-fr").count() >= 1
+    assert reader.locator("#stage-wrap .page-right p.pair-en").count() >= 1
+
+
+def test_short_paragraphs_share_a_page(reader):
+    # Guards the zero-width-probe bug, which silently put one paragraph on
+    # every spread even though several fit. Spread 1 is the one-paragraph
+    # preamble, so look across the opening stretch of the book.
+    most = reader.evaluate(
+        """async () => {
+          const wait = ms => new Promise(r => setTimeout(r, ms));
+          let most = 0;
+          for (let i = 0; i < 6; i++) {
+            most = Math.max(most, document.querySelectorAll(
+              '#stage-wrap .page-left p.pair-fr').length);
+            document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+            await wait(660);
+          }
+          return most;
+        }"""
+    )
+    assert most > 1
+
+
+def test_no_page_clips_unless_it_holds_a_single_paragraph(reader):
+    findings = reader.evaluate(
+        """() => {
+          const bad = [];
+          for (const p of document.querySelectorAll('#stage-wrap .page')) {
+            if (p.classList.contains('leaf-face')) continue;
+            const clipped = p.scrollHeight > p.clientHeight + 1;
+            const paras = p.querySelectorAll('p.pair').length;
+            if (clipped && paras > 1) bad.push({ paras, over: p.scrollHeight - p.clientHeight });
+          }
+          return bad;
+        }"""
+    )
+    assert findings == []
+
+
+def test_a_paragraph_taller_than_a_page_continues_instead_of_scrolling(reader):
+    rewind(reader)
+    result = reader.evaluate(
+        """async () => {
+          const wait = ms => new Promise(r => setTimeout(r, ms));
+          let continuations = 0, clipped = 0, flush = true;
+          for (let i = 0; i < 25; i++) {
+            for (const p of document.querySelectorAll('#stage-wrap .page:not(.leaf-face)')) {
+              if (p.scrollHeight > p.clientHeight + 1) clipped++;
+            }
+            for (const p of document.querySelectorAll('#stage-wrap p.pair.continued')) {
+              continuations++;
+              if (getComputedStyle(p).textIndent !== '0px') flush = false;
+            }
+            document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+            await wait(660);
+          }
+          return { continuations, clipped, flush };
+        }"""
+    )
+    assert result["continuations"] > 0, "the over-tall paragraph should span spreads"
+    assert result["clipped"] == 0, "a book reader must never need scrolling"
+    assert result["flush"] is True, "a resumed paragraph starts flush, not indented"
+
+
+def test_splitting_a_paragraph_loses_no_text(reader):
+    # The split point is chosen by binary search and snapped to a word boundary
+    # in each column independently. Reassembling the parts has to give the
+    # original back — no dropped or duplicated words at the seam.
+    rewind(reader)
+    report = reader.evaluate(
+        """async () => {
+          const wait = ms => new Promise(r => setTimeout(r, ms));
+          const norm = s => s.replace(/\\s+/g, ' ').trim();
+          const parts = new Map();     // "spread:pair" -> text, so a repeated
+                                       // sentence is never mistaken for a dupe
+          for (let i = 0; i < 30; i++) {
+            const spread = document.getElementById('counter').textContent.split('/')[0].trim();
+            for (const p of document.querySelectorAll('#stage-wrap .page-left p.pair-fr')) {
+              parts.set(spread + ':' + p.dataset.pair, p.textContent);
+            }
+            document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+            await wait(660);
+          }
+          const collected = new Map();
+          for (const [key, text] of [...parts].sort(
+                 (a, b) => Number(a[0].split(':')[0]) - Number(b[0].split(':')[0]))) {
+            const pair = key.split(':')[1];
+            collected.set(pair, (collected.get(pair) || []).concat([text]));
+          }
+          const PAIRS = JSON.parse(document.getElementById('book-data').textContent).pairs;
+          const split = [], broken = [];
+          for (const [pair, pieces] of collected) {
+            if (pieces.length < 2) continue;
+            split.push(Number(pair));
+            if (norm(pieces.join(' ')) !== norm(PAIRS[pair].fr)) broken.push(Number(pair));
+          }
+          return { split, broken };
+        }"""
+    )
+    assert report["split"], "expected at least one paragraph to be split across spreads"
+    assert report["broken"] == [], "reassembled parts must equal the original paragraph"
+
+
+def test_arrow_key_turns_the_page(reader):
+    rewind(reader)
+    before = current_spread(reader)
+    reader.keyboard.press("ArrowRight")
+    reader.wait_for_timeout(800)
+    assert current_spread(reader) == before + 1
+
+
+def test_shift_arrow_jumps_ten_spreads(reader):
+    rewind(reader)
+    before = current_spread(reader)
+    reader.keyboard.press("Shift+ArrowRight")
+    reader.wait_for_timeout(600)
+    assert current_spread(reader) == min(before + 10, spread_count(reader))
+
+
+def test_english_column_is_tagged_english_for_hyphenation(reader):
+    # lang drives `hyphens: auto`; inheriting lang="fr" hyphenates English
+    # with French syllabification and shifts every line count.
+    assert reader.get_attribute("#stage-wrap .page-left p.pair-fr", "lang") == "fr"
+    assert reader.get_attribute("#stage-wrap .page-right p.pair-en", "lang") == "en"
+
+
+def test_bookmarks_persist_as_a_position_in_the_book(reader):
+    reader.evaluate("localStorage.clear()")
+    reader.click("#bm-star")
+    reader.wait_for_timeout(200)
+    stored = reader.evaluate(
+        "JSON.parse(localStorage.getItem('biread:' + "
+        "JSON.parse(document.getElementById('book-data').textContent).slug + ':bookmarks'))"
+    )
+    # A spread index would move when the window or font size changes; a pair index does not.
+    assert stored["v"] == 2
+    assert isinstance(stored["pairs"], list) and len(stored["pairs"]) == 1
+    reader.click("#bm-star")
+
+
+def test_narrow_viewport_switches_to_the_stacked_layout(browser, tmp_path_factory):
+    page = open_reader(browser, build_reader(tmp_path_factory, published=False))
+    assert page.locator("#stage-wrap .book-desk").count() == 1
+
+    page.set_viewport_size({"width": 375, "height": 800})
+    page.wait_for_selector("#stage-wrap .book-mobile", timeout=10000)
+    assert page.locator("#stage-wrap .page-left").count() == 0
+    assert page.locator("#stage-wrap .mobile-pair").count() >= 1
+    page.close()
+
+
+def test_published_toggle_swaps_english_without_moving_the_french(reader_with_published):
+    page = reader_with_published
+    french_before = page.inner_text("#stage-wrap .page-left")
+    english_before = page.inner_text("#stage-wrap .page-right")
+
+    page.click("#seg-published")
+    page.wait_for_timeout(500)
+
+    assert page.inner_text("#stage-wrap .page-left") == french_before, "French page must not change"
+    assert page.inner_text("#stage-wrap .page-right") != english_before, "English page should swap"
+    assert page.get_attribute("#seg-published", "aria-pressed") == "true"
+
+
+def test_published_column_stays_reachable_when_it_runs_long(reader_with_published):
+    # Pagination measures the generated translation only, so a longer published
+    # column may overflow — including on pages holding several paragraphs. The
+    # guarantee is not that it fits, but that it is never cut off unreachably.
+    findings = reader_with_published.evaluate(
+        """() => {
+          const bad = [];
+          for (const p of document.querySelectorAll('#stage-wrap .page:not(.leaf-face)')) {
+            if (p.scrollHeight > p.clientHeight + 1
+                && getComputedStyle(p).overflowY !== 'auto') bad.push(p.className);
+          }
+          return bad;
+        }"""
+    )
+    assert findings == []
+
+
+def test_the_published_segment_stays_disabled_without_a_published_text(reader):
+    assert reader.get_attribute("#seg-published", "aria-disabled") == "true"
+    assert reader.is_disabled("#seg-published")
+
+
+def _pointer(page, kind, x_fraction, buttons):
+    page.evaluate(
+        """([kind, fraction, buttons]) => {
+          const track = document.querySelector('#stage-wrap .scrub-track');
+          const box = track.getBoundingClientRect();
+          track.dispatchEvent(new PointerEvent(kind, {
+            clientX: box.left + box.width * fraction,
+            clientY: box.top + box.height / 2,
+            bubbles: true, pointerId: 1, pointerType: 'mouse',
+            isPrimary: true, buttons: buttons,
+          }));
+        }""",
+        [kind, x_fraction, buttons],
+    )
+
+
+def test_a_lost_pointer_release_does_not_leave_the_scrubber_scrubbing(reader):
+    # The release can go missing — pointer cancelled, capture lost, drag ended
+    # off-window. Without a guard the scrubber stays live and merely moving the
+    # mouse along the bottom of the book flips pages with no way to stop it.
+    rewind(reader)
+    _pointer(reader, "pointerdown", 0.2, 1)
+    reader.wait_for_timeout(120)
+    _pointer(reader, "pointermove", 0.25, 1)
+    reader.wait_for_timeout(400)
+    after_drag = current_spread(reader)
+
+    for fraction in (0.3, 0.5, 0.7, 0.9):  # no button held
+        _pointer(reader, "pointermove", fraction, 0)
+        reader.wait_for_timeout(180)
+
+    assert current_spread(reader) == after_drag, "hovering must not turn pages"
+
+
+def test_a_complete_drag_still_scrubs(reader):
+    rewind(reader)
+    before = current_spread(reader)
+    _pointer(reader, "pointerdown", 0.7, 1)
+    reader.wait_for_timeout(150)
+    _pointer(reader, "pointermove", 0.75, 1)
+    reader.wait_for_timeout(350)
+    _pointer(reader, "pointerup", 0.75, 0)
+    reader.wait_for_timeout(350)
+    assert current_spread(reader) != before
+
+
+def test_a_zero_width_scrubber_cannot_poison_the_spread_index(reader):
+    # An unlaid-out track measures zero wide; the fraction is then 0/0, and a
+    # NaN spread index compares false against everything, so the reader would
+    # neither paint nor recover.
+    rewind(reader)
+    reader.evaluate("document.querySelector('#stage-wrap .scrubber').style.display = 'none'")
+    _pointer(reader, "pointerdown", 0.5, 1)
+    _pointer(reader, "pointermove", 0.8, 1)
+    _pointer(reader, "pointerup", 0.8, 0)
+    reader.wait_for_timeout(300)
+    reader.evaluate("document.querySelector('#stage-wrap .scrubber').style.display = ''")
+    assert reader.inner_text("#counter").strip() != ""
+    assert current_spread(reader) >= 1  # int() would raise on "NaN"
+
+
+# ---- gloss hover ----
+
+GLOSS_FR = "Sur la table, il se leva et monta l'escalier tranquillement."
+
+
+def build_glossed_reader(tmp_path_factory):
+    from biread.gloss import GlossUnit
+
+    def unit(surface, pos, gloss, inf="", pc=""):
+        start = GLOSS_FR.index(surface)
+        return GlossUnit(start, start + len(surface), pos, gloss, inf, pc)
+
+    chapters = [Chapter("I", "Le Départ", [GLOSS_FR] + [f"{SHORT_FR} ({n})" for n in range(8)])]
+    translations = {hash_text(p): SHORT_EN for c in chapters for p in c.paragraphs}
+    translations[hash_text("Le Départ")] = "[Le Départ]"
+    glosses = {hash_text(GLOSS_FR): [
+        unit("Sur la table", "prep. phrase", "on the table"),
+        unit("il se leva", "verb", "he rose", "se lever", "il s'est levé"),
+        unit("monta", "verb", "climbed", "monter", "est monté"),
+    ]}
+
+    out = tmp_path_factory.mktemp("glossed") / "book.html"
+    render_book("Livre Glosé", chapters, translations, out, None, "", glosses)
+    return out
+
+
+@pytest.fixture(scope="module")
+def glossed(browser, tmp_path_factory):
+    page = open_reader(browser, build_glossed_reader(tmp_path_factory))
+    yield page
+    page.close()
+
+
+def test_units_become_hover_targets_only_in_the_french(glossed):
+    assert glossed.locator("#stage-wrap .page-left .unit").count() == 3
+    assert glossed.locator("#stage-wrap .page-right .unit").count() == 0
+
+
+def test_the_paragraph_still_reads_as_the_original_text(glossed):
+    # Units are offsets into the source, so the rendered text must be unchanged
+    # — spans and the plain text between them reassemble it exactly.
+    rendered = glossed.evaluate(
+        "document.querySelector('#stage-wrap .page-left p.pair-fr').textContent"
+    )
+    assert rendered == GLOSS_FR
+
+
+def test_hover_shows_the_gloss_with_the_verb_forms(glossed):
+    glossed.hover("#stage-wrap .page-left .unit >> nth=1")
+    glossed.wait_for_selector(".tip", timeout=3000)
+    tip = glossed.inner_text(".tip")
+    assert "il se leva" in tip
+    assert "verb" in tip
+    assert "he rose" in tip
+    assert "from se lever" in tip          # infinitive, verbs only
+    assert "passé composé: il s'est levé" in tip
+
+
+def test_a_non_verb_shows_no_verb_lines(glossed):
+    glossed.hover("#stage-wrap .page-left .unit >> nth=0")
+    glossed.wait_for_selector(".tip", timeout=3000)
+    tip = glossed.inner_text(".tip")
+    assert "on the table" in tip
+    assert "from " not in tip
+    assert "passé composé" not in tip
+
+
+def test_the_tooltip_stays_on_screen(glossed):
+    glossed.hover("#stage-wrap .page-left .unit >> nth=0")
+    glossed.wait_for_selector(".tip", timeout=3000)
+    box = glossed.evaluate(
+        """() => { const r = document.querySelector('.tip').getBoundingClientRect();
+                   return {left: r.left, top: r.top, right: r.right, bottom: r.bottom}; }"""
+    )
+    assert box["left"] >= 0 and box["top"] >= 0
+    assert box["right"] <= 1280 and box["bottom"] <= 900
+
+
+def test_escape_dismisses_the_tooltip(glossed):
+    glossed.hover("#stage-wrap .page-left .unit >> nth=0")
+    glossed.wait_for_selector(".tip", timeout=3000)
+    glossed.keyboard.press("Escape")
+    assert glossed.locator(".tip").count() == 0
+
+
+def test_a_book_without_glosses_has_no_hover_targets(reader):
+    assert reader.locator("#stage-wrap .unit").count() == 0
