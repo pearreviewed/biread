@@ -193,3 +193,37 @@ def test_estimate_counts_only_uncached_paragraphs(tmp_path, book, config):
     assert result.total == 2
     assert result.pending == 2
     assert result.cost > 0
+
+
+# ---- typography: the failure that cost a real run ----
+
+CURLY = "Il s’appelait Micromégas — « un nom qui convient », dit-il… l’escalier."
+
+
+def test_a_straight_apostrophe_matches_a_curly_one():
+    # French is one long chain of elisions and models return ' for ’ whatever
+    # the prompt says. Byte-exact matching rejected 34 of 36 real paragraphs.
+    units = anchor(CURLY, parse_units(line("Il s'appelait", "verb", "he was called")))
+    assert units is not None
+    assert CURLY[units[0].start:units[0].end] == "Il s’appelait"   # the ORIGINAL
+
+
+def test_folded_punctuation_still_yields_original_offsets():
+    for surface, expected in [
+        ("un nom qui convient", "un nom qui convient"),
+        ("l'escalier", "l’escalier"),
+    ]:
+        units = anchor(CURLY, parse_units(line(surface, "noun", "gloss")))
+        assert units, surface
+        assert CURLY[units[0].start:units[0].end] == expected
+
+
+def test_an_ellipsis_written_as_three_dots_matches():
+    units = anchor(CURLY, parse_units(line("dit-il...", "verb", "said he")))
+    assert units is not None
+    assert CURLY[units[0].start:units[0].end] == "dit-il…"
+
+
+def test_folding_does_not_excuse_an_actual_word_change():
+    # Tolerating typography must not tolerate invention.
+    assert anchor(CURLY, parse_units(line("Il se nommait", "verb", "he was named"))) is None

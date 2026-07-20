@@ -118,30 +118,61 @@ def parse_units(block: str) -> list[dict]:
     return units
 
 
+# Models normalise typography however firmly they are told not to: a curly
+# apostrophe comes back straight, an em dash as a hyphen, guillemets as quotes.
+# French prose is one long chain of elisions — l'étoile, j'ai, qu'il — so
+# byte-exact matching rejected 34 of 36 paragraphs on the first real run.
+#
+# These are folded for *matching only*. Offsets still point into the original,
+# so what reaches the reader is still the source text, character for character.
+FOLD = {
+    "\u2019": "'", "\u2018": "'",
+    "\u201c": '"', "\u201d": '"',
+    "\u00ab": '"', "\u00bb": '"',
+    "\u2014": "-", "\u2013": "-",
+    "\u00a0": " ", "\u202f": " ", "\u2009": " ",
+    "\u2026": "...",
+}
+
+
+def fold(text: str) -> tuple[str, list[int]]:
+    """Normalised text, and a map from each normalised index to the original."""
+    out: list[str] = []
+    index: list[int] = []
+    for position, char in enumerate(text):
+        for folded in FOLD.get(char, char):
+            out.append(folded)
+            index.append(position)
+    return "".join(out), index
+
+
 def anchor(paragraph: str, proposed: list[dict]) -> list[GlossUnit] | None:
     """Locate each proposed unit in the paragraph, in order.
 
     Returns None if any unit cannot be found at or after the previous one —
-    the model has altered the text or lost its place, and the whole segmentation
+    the model has lost its place or invented words, and the whole segmentation
     is untrustworthy. Gaps between units are fine: they render as plain text.
     """
+    haystack, index = fold(paragraph)
     located: list[GlossUnit] = []
     cursor = 0
     for unit in proposed:
-        surface = unit["surface"]
-        found = paragraph.find(surface, cursor)
+        surface = fold(unit["surface"])[0].strip()
+        if not surface:
+            continue
+        found = haystack.find(surface, cursor)
         if found == -1:
             return None
         located.append(GlossUnit(
-            start=found,
-            end=found + len(surface),
+            start=index[found],
+            end=index[found + len(surface) - 1] + 1,
             pos=unit["pos"],
             gloss=unit["gloss"],
             infinitive=unit["infinitive"],
             perfect=unit["perfect"],
         ))
         cursor = found + len(surface)
-    return located
+    return located or None
 
 
 def coverage(paragraph: str, units: list[GlossUnit]) -> float:
@@ -180,8 +211,10 @@ def estimate(chapters: list[Chapter], cache: Cache, cfg: Config):
 
     input_tokens = (len(SYSTEM_PROMPT) * len(batches) + body_chars) // CHARS_PER_TOKEN
     # Every unit costs its surface again plus a gloss, a part of speech and
-    # sometimes two verb forms — several times the paragraph it came from.
-    output_tokens = int(body_chars * 3.5) // CHARS_PER_TOKEN
+    # sometimes two verb forms. Calibrated against a real Micromégas run rather
+    # than guessed: the first estimate used 3.5 and came in at a third of the
+    # actual bill.
+    output_tokens = int(body_chars * 5.3) // CHARS_PER_TOKEN
     return Estimate(
         total=len(units),
         cached=len(units) - len(pending),
