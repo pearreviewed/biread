@@ -44,7 +44,10 @@ reading edition. Divide each paragraph into hover units and explain each one in 
 {LANGUAGE.gloss_rules}
 
 FOR EACH UNIT, one line, fields separated by {FIELD}:
-surface {FIELD} part of speech {FIELD} English gloss in this context
+surface {FIELD} part of speech {FIELD} English gloss {FIELD} inf=… {FIELD} pc=…
+The last two appear only on verbs, per the rules above. A passé simple verb carries both:
+il disséqua {FIELD} verb {FIELD} dissected {FIELD} inf=disséquer {FIELD} pc=il a disséqué
+un jeune homme {FIELD} noun phrase {FIELD} a young man
 
 THE SURFACE FIELD IS COPIED, NOT WRITTEN. Reproduce it exactly as it appears in the \
 paragraph — same spelling, same accents, same apostrophes, same case. Do not correct, \

@@ -85,11 +85,15 @@ the pieces become:
 PART OF SPEECH: one of noun, verb, adjective, adverb, pronoun, noun phrase, \
 prepositional phrase. Never "clause" or "sentence" — both are too big to be a unit.
 
-FURTHER FIELDS, only where they apply:
-- inf=<infinitive> — ONLY for verbs, and only when the unit is not already an infinitive.
-- pc=<passé composé> — ONLY for verbs in the passé simple, rewritten into the passé \
-composé with the correct auxiliary and agreement (il monta -> il est monté; \
-elle s'assit -> elle s'est assise)."""
+VERB FORMS. Every verb not already in the infinitive carries inf=. A verb in the passé \
+simple carries inf= AND pc= — both, always, never one without the other:
+- inf=<infinitive> — the infinitive. "il disséqua" -> inf=disséquer, "ils virent" -> \
+inf=voir, "elle s'assit" -> inf=s'asseoir. Omit it only when the verb already IS an \
+infinitive.
+- pc=<passé composé> — the same verb rewritten into the passé composé, with the right \
+auxiliary and agreement: "il monta" -> pc=il est monté, "elle s'assit" -> pc=elle s'est \
+assise, "ils virent" -> pc=ils ont vu.
+A passé simple verb that carries pc= but not inf= is incomplete. Always give both."""
 
 FRENCH = Language(
     name="French",
