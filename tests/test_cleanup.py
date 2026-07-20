@@ -188,3 +188,43 @@ def test_a_bare_page_number_is_not_mistaken_for_a_footnote():
     chapters, removed = clean("CHAPITRE I.\nTitre\n\nDu texte.\n[122]\n\nPlus de texte.\n")
     assert chapters[0].paragraphs == ["Du texte.", "Plus de texte."]
     assert any(r.kind == "Bare page-number artifact" for r in removed)
+
+
+# ---- the transcription's own header ----
+
+WIKISOURCE_HEADER = """Voltaire
+Micromégas
+Micromégas, Garnier, 1877, tome 21 (p. 105-122).
+MICROMÉGAS
+HISTOIRE PHILOSOPHIQUE
+
+(1752)
+
+CHAPITRE I.
+LE DÉPART
+
+Dans une de ces planètes il y avait un jeune homme.
+"""
+
+
+def test_the_source_citation_header_is_not_body_text():
+    chapters, removed = clean(WIKISOURCE_HEADER)
+    paragraphs = [p for c in chapters for p in c.paragraphs]
+    assert not any("Garnier" in p for p in paragraphs)
+    assert not any("HISTOIRE PHILOSOPHIQUE" in p for p in paragraphs)
+    assert paragraphs[0] == "(1752)"
+    assert [r.kind for r in removed].count("Source citation header") == 1
+
+
+def test_a_page_citation_inside_the_book_is_left_alone():
+    # The rule reads a leading block as apparatus. The same shape further in is
+    # the author writing, and eating it would be losing text.
+    body = WIKISOURCE_HEADER + "\nVoyez son Traité (p. 40-41) sur la matière.\n"
+    paragraphs = [p for c in clean(body)[0] for p in c.paragraphs]
+    assert any("Traité (p. 40-41)" in p for p in paragraphs)
+
+
+def test_a_book_with_no_header_keeps_its_first_paragraph():
+    plain = "CHAPITRE I.\nLE DÉPART\n\nIl monta l'escalier sans rien dire.\n"
+    paragraphs = [p for c in clean(plain)[0] for p in c.paragraphs]
+    assert paragraphs == ["Il monta l'escalier sans rien dire."]

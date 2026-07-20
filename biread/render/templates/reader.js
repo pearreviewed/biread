@@ -65,7 +65,7 @@
   var backgroundTimer = null;
   var transitionTimer = null;
   var probe = {};
-  var view = {}; // the mounted book: page nodes, scrubber, ribbon host
+  var view = {}; // the mounted book: page nodes, ribbon host
 
   // Type scales with the book, so a smaller book keeps the same number of
   // characters per line instead of turning into a narrow ribbon of text.
@@ -700,92 +700,9 @@
 
     view.ribbonHost = document.createElement('div');
     book.appendChild(view.ribbonHost);
-    book.appendChild(buildScrubber());
     wrap.appendChild(book);
   }
 
-  // Built once per mount, never rebuilt by paint(): a drag must not have the
-  // node it captured the pointer on replaced underneath it.
-  function buildScrubber() {
-    var wrap = document.createElement('div');
-    wrap.className = 'scrubber' + (S.mobile ? ' mobile' : '');
-    wrap.addEventListener('click', function (e) { e.stopPropagation(); });
-
-    var track = document.createElement('div');
-    track.className = 'scrub-track';
-    var fill = document.createElement('div');
-    fill.className = 'scrub-fill';
-    var knob = document.createElement('div');
-    knob.className = 'scrub-knob';
-    track.appendChild(fill);
-    track.appendChild(knob);
-    wrap.appendChild(track);
-
-    var scrubbing = false;
-    function positionFrom(e) {
-      var box = track.getBoundingClientRect();
-      var n = Math.max(spreads.length, 1);
-      // A hidden or unlaid-out track measures zero wide; dividing by that gives
-      // NaN, and a NaN spread index poisons the whole reader.
-      var fraction = box.width > 0
-        ? Math.max(0, Math.min(1, (e.clientX - box.left) / box.width))
-        : 0;
-      return { index: Math.round(fraction * (n - 1)), percent: fraction * 100 };
-    }
-    function showBubble(position) {
-      if (!view.bubble) {
-        view.bubble = document.createElement('div');
-        view.bubble.className = 'scrub-bubble';
-        wrap.appendChild(view.bubble);
-      }
-      view.bubble.style.left = position.percent + '%';
-      var spread = spreads[position.index];
-      var chapter = spread ? chapterForPair(spread.from.p) : null;
-      view.bubble.textContent =
-        'p. ' + (position.index + 1) + (chapter ? '  ' + chapter.frTitle : '');
-    }
-    function hideBubble() {
-      if (view.bubble) { view.bubble.remove(); view.bubble = null; }
-    }
-
-    track.addEventListener('pointerdown', function (e) {
-      e.stopPropagation();
-      e.preventDefault();
-      track.setPointerCapture(e.pointerId);
-      scrubbing = true;
-      var position = positionFrom(e);
-      showBubble(position);
-      goToSpread(position.index, false);
-    });
-    function endScrub(e) {
-      if (!scrubbing) return; // also stops releasePointerCapture recursing here
-      scrubbing = false;
-      if (e && e.pointerId != null && track.hasPointerCapture(e.pointerId)) {
-        track.releasePointerCapture(e.pointerId);
-      }
-      hideBubble();
-    }
-
-    track.addEventListener('pointermove', function (e) {
-      // A release can go missing: the pointer is cancelled, capture is lost, or
-      // the drag ends off-window. `scrubbing` would then stay true and merely
-      // moving the mouse across the bottom of the book would flip pages, with
-      // no way to stop it. No button down means no drag, whatever we were told.
-      if (scrubbing && e.buttons === 0) endScrub(e);
-      var position = positionFrom(e);
-      showBubble(position);
-      if (scrubbing) goToSpread(position.index, false);
-    });
-    track.addEventListener('pointerup', endScrub);
-    track.addEventListener('pointercancel', endScrub);
-    track.addEventListener('lostpointercapture', endScrub);
-    track.addEventListener('pointerleave', function () { if (!scrubbing) hideBubble(); });
-
-    view.scrubber = wrap;
-    view.scrubFill = fill;
-    view.scrubKnob = knob;
-    return wrap;
-  }
 
   // ---------- painting ----------
   function paint(options) {
@@ -796,7 +713,6 @@
     view.book.style.opacity = S.fade ? '0' : '1';
     if (S.mobile) paintMobile(options); else paintDesk(options);
     paintRibbon();
-    paintScrubber();
   }
 
   function pageInner(xfade) {
@@ -936,13 +852,6 @@
     view.ribbonHost.appendChild(ribbon);
   }
 
-  function paintScrubber() {
-    var n = spreads.length;
-    view.scrubber.style.display = n > 1 ? '' : 'none';
-    var fraction = n > 1 ? S.spreadIndex / (n - 1) : 0;
-    view.scrubFill.style.width = fraction * 100 + '%';
-    view.scrubKnob.style.left = fraction * 100 + '%';
-  }
 
   function updateCounter() {
     var el = document.getElementById('counter');
@@ -950,6 +859,41 @@
     el.textContent =
       S.spreadIndex + 1 + ' / ' + spreads.length + (fullyPaginated() ? '' : '+');
   }
+
+  // The counter is the page finder: the thing that says where you are is the
+  // thing that takes you elsewhere. Click it, type a page, press Enter.
+  var counterLabel = document.getElementById('counter');
+  var counterInput = document.getElementById('counter-input');
+
+  function closeFinder() {
+    counterInput.hidden = true;
+    counterLabel.hidden = false;
+  }
+
+  function openFinder() {
+    if (!S.ready || !spreads.length) return;
+    counterLabel.hidden = true;
+    counterInput.hidden = false;
+    counterInput.value = String(S.spreadIndex + 1);
+    counterInput.focus();
+    counterInput.select();
+  }
+
+  counterLabel.addEventListener('click', openFinder);
+  counterInput.addEventListener('blur', closeFinder);
+  counterInput.addEventListener('keydown', function (e) {
+    // While typing, arrows and space belong to the field, not to the book.
+    e.stopPropagation();
+    if (e.key === 'Enter') {
+      var page = parseInt(counterInput.value.replace(/[^0-9]/g, ''), 10);
+      closeFinder();
+      // goToSpread paginates far enough to reach the page and clamps past the
+      // end, so a number beyond the book lands on its last spread.
+      if (isFinite(page) && page > 0) goToSpread(page - 1, false);
+    } else if (e.key === 'Escape') {
+      closeFinder();
+    }
+  });
 
   // ---------- bookmarks ----------
   function bookmarkOnSpread(spreadIndex) {
@@ -1019,6 +963,8 @@
 
   document.addEventListener('keydown', function (e) {
     if (e.metaKey || e.ctrlKey || e.altKey) return;
+    // Typing into a field is never page navigation, whatever the key.
+    if (e.target && e.target.tagName === 'INPUT') return;
     if (e.key === 'Escape') { hideTip(); closeOverlays(); return; }
     var inControl = e.target && e.target.closest && e.target.closest('button, [role="button"]');
     if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') {

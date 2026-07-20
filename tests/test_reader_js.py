@@ -99,6 +99,7 @@ def current_spread(page):
 def rewind(page):
     """Return to the first spread. The page is shared across the module, so a
     test that cares about position has to establish its own."""
+    page.evaluate("document.getElementById('counter-input').blur()")
     for _ in range(6):
         page.evaluate(
             "document.dispatchEvent(new KeyboardEvent('keydown',"
@@ -296,65 +297,83 @@ def test_the_published_segment_stays_disabled_without_a_published_text(reader):
     assert reader.is_disabled("#seg-published")
 
 
-def _pointer(page, kind, x_fraction, buttons):
-    page.evaluate(
-        """([kind, fraction, buttons]) => {
-          const track = document.querySelector('#stage-wrap .scrub-track');
-          const box = track.getBoundingClientRect();
-          track.dispatchEvent(new PointerEvent(kind, {
-            clientX: box.left + box.width * fraction,
-            clientY: box.top + box.height / 2,
-            bubbles: true, pointerId: 1, pointerType: 'mouse',
-            isPrimary: true, buttons: buttons,
-          }));
-        }""",
-        [kind, x_fraction, buttons],
-    )
+def open_finder(page):
+    page.click("#counter")
+    page.wait_for_selector("#counter-input:not([hidden])")
 
 
-def test_a_lost_pointer_release_does_not_leave_the_scrubber_scrubbing(reader):
-    # The release can go missing — pointer cancelled, capture lost, drag ended
-    # off-window. Without a guard the scrubber stays live and merely moving the
-    # mouse along the bottom of the book flips pages with no way to stop it.
+def test_the_counter_opens_a_page_field(reader):
     rewind(reader)
-    _pointer(reader, "pointerdown", 0.2, 1)
-    reader.wait_for_timeout(120)
-    _pointer(reader, "pointermove", 0.25, 1)
+    open_finder(reader)
+    assert reader.is_hidden("#counter")
+    assert reader.input_value("#counter-input") == "1"     # where you are, to edit
+
+
+def test_typing_a_page_goes_there(reader):
+    rewind(reader)
+    open_finder(reader)
+    reader.fill("#counter-input", "7")
+    reader.press("#counter-input", "Enter")
     reader.wait_for_timeout(400)
-    after_drag = current_spread(reader)
-
-    for fraction in (0.3, 0.5, 0.7, 0.9):  # no button held
-        _pointer(reader, "pointermove", fraction, 0)
-        reader.wait_for_timeout(180)
-
-    assert current_spread(reader) == after_drag, "hovering must not turn pages"
+    assert current_spread(reader) == 7
+    assert reader.is_hidden("#counter-input")
 
 
-def test_a_complete_drag_still_scrubs(reader):
+def test_escape_leaves_the_page_alone(reader):
     rewind(reader)
     before = current_spread(reader)
-    _pointer(reader, "pointerdown", 0.7, 1)
-    reader.wait_for_timeout(150)
-    _pointer(reader, "pointermove", 0.75, 1)
-    reader.wait_for_timeout(350)
-    _pointer(reader, "pointerup", 0.75, 0)
-    reader.wait_for_timeout(350)
-    assert current_spread(reader) != before
+    open_finder(reader)
+    reader.fill("#counter-input", "9")
+    reader.press("#counter-input", "Escape")
+    reader.wait_for_timeout(200)
+    assert current_spread(reader) == before
+    assert reader.is_hidden("#counter-input")
 
 
-def test_a_zero_width_scrubber_cannot_poison_the_spread_index(reader):
-    # An unlaid-out track measures zero wide; the fraction is then 0/0, and a
-    # NaN spread index compares false against everything, so the reader would
-    # neither paint nor recover.
+def test_clicking_away_cancels(reader):
     rewind(reader)
-    reader.evaluate("document.querySelector('#stage-wrap .scrubber').style.display = 'none'")
-    _pointer(reader, "pointerdown", 0.5, 1)
-    _pointer(reader, "pointermove", 0.8, 1)
-    _pointer(reader, "pointerup", 0.8, 0)
+    before = current_spread(reader)
+    open_finder(reader)
+    reader.fill("#counter-input", "9")
+    reader.evaluate("document.getElementById('counter-input').blur()")
+    reader.wait_for_timeout(200)
+    assert current_spread(reader) == before
+    assert reader.is_hidden("#counter-input")
+
+
+def test_arrow_keys_edit_the_field_instead_of_turning_the_page(reader):
+    # The reader steers on arrows. A caret moving inside the field must not also
+    # move the book underneath it.
+    rewind(reader)
+    before = current_spread(reader)
+    open_finder(reader)
+    reader.fill("#counter-input", "5")
+    for key in ("ArrowLeft", "ArrowRight", "ArrowLeft", "ArrowRight"):
+        reader.press("#counter-input", key)
+    reader.wait_for_timeout(200)
+    assert current_spread(reader) == before
+    reader.press("#counter-input", "Enter")
+    reader.wait_for_timeout(400)
+    assert current_spread(reader) == 5
+
+
+def test_a_page_past_the_end_lands_on_the_last_one(reader):
+    rewind(reader)
+    open_finder(reader)
+    reader.fill("#counter-input", "9999")
+    reader.press("#counter-input", "Enter")
+    reader.wait_for_timeout(600)
+    assert current_spread(reader) == spread_count(reader)
+
+
+def test_junk_in_the_field_does_nothing(reader):
+    rewind(reader)
+    before = current_spread(reader)
+    open_finder(reader)
+    reader.fill("#counter-input", "abc")
+    reader.press("#counter-input", "Enter")
     reader.wait_for_timeout(300)
-    reader.evaluate("document.querySelector('#stage-wrap .scrubber').style.display = ''")
-    assert reader.inner_text("#counter").strip() != ""
-    assert current_spread(reader) >= 1  # int() would raise on "NaN"
+    assert current_spread(reader) == before
 
 
 # ---- gloss hover ----

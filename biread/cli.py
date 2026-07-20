@@ -184,6 +184,8 @@ def run_glossing(chapters: list[Chapter], cache: Cache, cfg: Config):
     run = gloss_book(chapters, get_client(gloss_cfg), cache, gloss_cfg, progress)
     if run.glossed:
         print()
+        if run.rescued:
+            print(f"  {run.rescued} needed a second pass on their own.")
     else:
         print("Every paragraph was already annotated — nothing to gloss.")
 

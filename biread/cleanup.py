@@ -41,6 +41,14 @@ WIKISOURCE_UI_CHROME = frozenset({
 
 BARE_PAGE_NUMBER_RE = re.compile(r"^\[?\d{1,4}\]?$")
 
+# The header Wikisource prints above a transcription — author, title, and the
+# edition it was scanned from: "Micromégas, Garnier, 1877, tome 21 (p. 105-122)."
+# A library catalogue entry, not the book. Left in place it rejoins into the
+# first paragraph and is treated as prose: translated, and glossed at real cost.
+# The parenthesised page range is the part worth matching; a year or a publisher
+# could be anything, but prose does not carry "(p. 105-122)".
+SOURCE_CITATION_RE = re.compile(r"\(\s*pp?\.\s*\d+(\s*[-–—]\s*\d+)?\s*\)")
+
 # Wikisource marks each footnote with an upwards arrow linking back to its
 # reference. Spelled as an escape because the bare glyph is easy to mistake for
 # other arrows in an editor. Written U+2191.
@@ -154,6 +162,12 @@ def _blocks(text: str) -> tuple[list[list[str]], list[Removal]]:
                 continue
             lines.append(line)
         if not lines:
+            continue
+        # Only while nothing real has been kept yet: a citation belongs to the
+        # transcription's header, and the same shape appearing mid-book would be
+        # the author's own.
+        if not out and any(SOURCE_CITATION_RE.search(ln) for ln in lines):
+            removed.append(Removal("Source citation header", " ".join(lines)))
             continue
         # Judged on the whole block, not its first line: a footnote is usually
         # hard-wrapped, and dropping only its opening line would strand the

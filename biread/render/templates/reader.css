@@ -16,7 +16,7 @@ html, body { margin: 0; padding: 0; }
    height, so the book can size itself against the space actually left over
    after the header — whatever height the header wraps to. Sizing the book
    against the viewport instead pushes its bottom margin, and with it the page
-   number and the scrubber, off the bottom of a short window. */
+   number off the bottom of a short window. */
 body {
   height: 100vh; overflow: hidden;
   background: radial-gradient(120% 90% at 50% 15%, #2c2418 0%, #1c160f 55%, #120d08 100%);
@@ -31,7 +31,14 @@ button:focus-visible { outline: 2px solid rgba(200,175,130,.85); outline-offset:
 .eyebrow { font-size: 12px; letter-spacing: .34em; text-transform: uppercase; color: #8f7d5e; white-space: nowrap; }
 .booktitle { font-size: 18px; color: #cbbc9b; font-style: italic; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .header-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.counter { font-size: 13px; letter-spacing: .18em; color: #7d6e52; min-width: 54px; text-align: right; }
+/* The counter is the page finder: it already says where you are, so it is also
+   what takes you elsewhere. Sized alike so swapping one for the other does not
+   shift the header. */
+.counter, .counter-input { font-family: inherit; font-size: 13px; letter-spacing: .18em; min-width: 62px; width: 62px; text-align: right; padding: 3px 6px; border-radius: 6px; }
+.counter { color: #7d6e52; background: none; border: 1px solid transparent; }
+.counter:hover { color: #c8b891; border-color: rgba(180,150,100,.28); }
+.counter:empty { visibility: hidden; }
+.counter-input { color: #f4ead0; background: rgba(120,95,55,.16); border: 1px solid rgba(200,175,130,.55); outline: none; }
 
 .btn-pill { font-size: 14px; color: #e4d7ba; background: rgba(120,95,55,.16); border: 1px solid rgba(180,150,100,.28); border-radius: 999px; padding: 7px 16px; }
 .segmented-row { display: flex; align-items: center; gap: 6px; }
@@ -124,12 +131,6 @@ p.pair-en.blurred { filter: blur(5px); }
 .ribbon { position: absolute; top: -4px; width: 22px; height: 42px; z-index: 7; cursor: pointer; filter: drop-shadow(0 4px 5px rgba(0,0,0,.34)); }
 .ribbon-inner { width: 100%; height: 100%; clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 74%, 0 100%); background: linear-gradient(100deg, #7c3a3d 0%, #85434a 38%, #8b4c4d 50%, #834348 62%, #78383c 100%); box-shadow: inset 0 0 5px rgba(60,20,22,.16); }
 
-.scrubber { position: absolute; left: 58px; right: 58px; bottom: 8px; height: 22px; z-index: 8; cursor: pointer; touch-action: none; }
-.scrubber.mobile { left: 30px; right: 30px; }
-.scrub-track { position: absolute; left: 0; right: 0; top: 9px; height: 4px; border-radius: 2px; background: rgba(90,66,30,.22); }
-.scrub-fill { position: absolute; left: 0; top: 0; bottom: 0; background: rgba(120,90,45,.55); border-radius: 2px; }
-.scrub-knob { position: absolute; top: 50%; width: 9px; height: 9px; margin-left: -4.5px; transform: translateY(-50%) rotate(45deg); background: #9c7a44; box-shadow: 0 1px 2px rgba(0,0,0,.4); }
-.scrub-bubble { position: absolute; bottom: 18px; transform: translateX(-50%); pointer-events: none; background: #211b14; color: #efe6d2; border-radius: 7px; padding: 6px 10px; font-size: 12.5px; white-space: nowrap; box-shadow: 0 8px 22px rgba(0,0,0,.5); }
 
 /* ---------- overlays ---------- */
 .popover { background: #211b14; color: #efe6d2; border-radius: 10px; box-shadow: 0 18px 44px rgba(0,0,0,.55); padding: 12px 8px; z-index: 60; position: fixed; top: calc(var(--header-h, 66px) + 8px); right: 30px; width: 280px; max-height: 60vh; overflow-y: auto; animation: xfade .16s ease-out; }

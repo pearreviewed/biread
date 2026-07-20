@@ -15,14 +15,17 @@ Nothing here prints; the caller reports.
 """
 from __future__ import annotations
 
+import hashlib
 import json
-from dataclasses import asdict, dataclass, field
+import re
+from dataclasses import asdict, dataclass, field, replace
 from typing import Callable
 
 from .cache import Cache
 from .cleanup import Chapter
 from .config import Config
 from .errors import GlossError
+from .language import FRENCH as LANGUAGE
 from .llm import LLMClient
 from .translate import Unit, batch, hash_text, parse_response
 
@@ -35,24 +38,13 @@ CHARS_PER_TOKEN = 4
 #: invisible separators it is obvious in a terminal when a response goes wrong.
 FIELD = "¦"
 
-SYSTEM_PROMPT = f"""You are annotating literary French prose for a bilingual reading \
-edition. Divide each paragraph into hover units and explain each one in its context.
+SYSTEM_PROMPT = f"""You are annotating literary {LANGUAGE.name} prose for a bilingual \
+reading edition. Divide each paragraph into hover units and explain each one in its context.
 
-WHAT A UNIT IS:
-- A unit is a content word together with the function words attached to it. Articles, \
-prepositions, pronouns, and auxiliaries are never units of their own — they belong with \
-the word they govern. "Sur la table" is ONE unit, not three. "il se leva" is ONE unit.
-- Punctuation between units is not part of any unit.
-- Cover the paragraph in order, from beginning to end.
+{LANGUAGE.gloss_rules}
 
 FOR EACH UNIT, one line, fields separated by {FIELD}:
 surface {FIELD} part of speech {FIELD} English gloss in this context
-
-Then, only where they apply, append further fields:
-- inf=<infinitive> — ONLY for verbs, and only when the unit is not already an infinitive.
-- pc=<passé composé> — ONLY for verbs in the passé simple, rewritten into the passé \
-composé with the correct auxiliary and agreement (il monta -> il est monté; \
-elle s'assit -> elle s'est assise).
 
 THE SURFACE FIELD IS COPIED, NOT WRITTEN. Reproduce it exactly as it appears in the \
 paragraph — same spelling, same accents, same apostrophes, same case. Do not correct, \
@@ -88,6 +80,7 @@ class GlossRun:
     glosses: dict[str, list[GlossUnit]]
     total: int
     glossed: int = 0
+    rescued: int = 0  # of `glossed`, how many needed a second pass on their own
     unglossed: list[str] = field(default_factory=list)
     cost: float | None = None
     stopped_at_cap: bool = False
@@ -97,6 +90,18 @@ def body_units(chapters: list[Chapter]) -> list[Unit]:
     """Only body paragraphs. Chapter headings and anything cleanup left behind
     are apparatus, and glossing apparatus is paying for what nobody hovers."""
     return [Unit(hash_text(p), p) for c in chapters for p in c.paragraphs]
+
+
+#: Cutting a sentence into units is a judgement the rules make, so a gloss is
+#: only reusable while those rules hold. Keying the cache on the paragraph alone
+#: would serve segmentation from a superseded rule set forever, with no way to
+#: tell — the entries look identical. Folding the rules in means editing them
+#: invalidates exactly what they produced, and nothing else.
+RULES_VERSION = hashlib.sha256(SYSTEM_PROMPT.encode("utf-8")).hexdigest()[:8]
+
+
+def cache_key(paragraph_hash: str) -> str:
+    return f"{paragraph_hash}.{RULES_VERSION}"
 
 
 def parse_units(block: str) -> list[dict]:
@@ -146,12 +151,43 @@ def fold(text: str) -> tuple[str, list[int]]:
     return "".join(out), index
 
 
+WORD_RE = re.compile(r"[^\W\d_]+", re.UNICODE)
+
+# A hover is meant to explain one phrase. The model reliably drifts wider than
+# that — whole relative clauses arrived as single units on the first real run —
+# and the prompt alone did not hold it.
+#
+# A noun phrase may carry an adjective, so two content words are allowed:
+# "un jeune homme". Anything that predicates may not, because its second content
+# word is a subject or an object rather than part of the phrase — "le procès |
+# dura", not "le procès dura". The part of speech comes from the model and can
+# be wrong, but a wrong label only costs one hover: the words under it read as
+# ordinary prose.
+MAX_CONTENT_WORDS = 2
+PREDICATE_POS_RE = re.compile(r"verb|clause|sentence", re.IGNORECASE)
+
+
+def content_words(surface: str) -> list[str]:
+    """The words in a unit that are not closed-class, folded for comparison."""
+    return [w for w in WORD_RE.findall(surface.lower())
+            if w not in LANGUAGE.function_words]
+
+
+def over_broad(surface: str, pos: str = "") -> bool:
+    limit = 1 if PREDICATE_POS_RE.search(pos) else MAX_CONTENT_WORDS
+    return len(content_words(surface)) > limit
+
+
 def anchor(paragraph: str, proposed: list[dict]) -> list[GlossUnit] | None:
     """Locate each proposed unit in the paragraph, in order.
 
     Returns None if any unit cannot be found at or after the previous one —
     the model has lost its place or invented words, and the whole segmentation
     is untrustworthy. Gaps between units are fine: they render as plain text.
+
+    A unit wider than a phrase is dropped rather than rejected: it is a bundling
+    mistake, not a sign the model lost the text, so the words under it simply
+    read as prose while the rest of the paragraph keeps its hovers.
     """
     haystack, index = fold(paragraph)
     located: list[GlossUnit] = []
@@ -163,6 +199,9 @@ def anchor(paragraph: str, proposed: list[dict]) -> list[GlossUnit] | None:
         found = haystack.find(surface, cursor)
         if found == -1:
             return None
+        cursor = found + len(surface)
+        if over_broad(unit["surface"], unit["pos"]):
+            continue
         located.append(GlossUnit(
             start=index[found],
             end=index[found + len(surface) - 1] + 1,
@@ -171,7 +210,6 @@ def anchor(paragraph: str, proposed: list[dict]) -> list[GlossUnit] | None:
             infinitive=unit["infinitive"],
             perfect=unit["perfect"],
         ))
-        cursor = found + len(surface)
     return located or None
 
 
@@ -205,7 +243,7 @@ def estimate(chapters: list[Chapter], cache: Cache, cfg: Config):
     from .translate import Estimate
 
     units = body_units(chapters)
-    pending = [i for i, u in enumerate(units) if u.hash not in cache]
+    pending = [i for i, u in enumerate(units) if cache_key(u.hash) not in cache]
     batches = list(batch(units, pending, max_chars=BATCH_CHARS))
     body_chars = sum(len(units[i].text) for i in pending)
 
@@ -223,6 +261,73 @@ def estimate(chapters: list[Chapter], cache: Cache, cfg: Config):
         output_tokens=output_tokens,
         cost=cfg.estimate_cost(input_tokens, output_tokens),
     )
+
+
+SENTENCE_END_RE = re.compile(r"(?<=[.!?…»])\s+")
+RESCUE_CHARS = 700
+
+
+def chunks(text: str, limit: int = RESCUE_CHARS) -> list[tuple[int, str]]:
+    """Sentence-aligned pieces of a paragraph, as (offset, text).
+
+    Each piece is a literal slice, so a unit anchored inside one lands in the
+    paragraph by adding the offset and nothing else.
+    """
+    edges = [0, *(m.end() for m in SENTENCE_END_RE.finditer(text)), len(text)]
+    spans = [(a, b) for a, b in zip(edges, edges[1:]) if text[a:b].strip()]
+
+    out: list[tuple[int, str]] = []
+    start = end = None
+    for a, b in spans:
+        if start is None or b - start > limit:
+            if start is not None:
+                out.append((start, text[start:end]))
+            start = a
+        end = b
+    if start is not None:
+        out.append((start, text[start:end]))
+    return out
+
+
+def _gloss_alone(client: LLMClient, text: str) -> list[GlossUnit] | None:
+    """One passage, on its own. None if it will not anchor."""
+    prompt = build_prompt([Unit("", text)], [0])
+    try:
+        completion = client.complete(SYSTEM_PROMPT, prompt, MAX_TOKENS)
+    except Exception:
+        return None
+    if completion.truncated:
+        return None
+    try:
+        blocks = parse_response(completion.text)
+    except ValueError:
+        return None
+    return anchor(text, parse_units(blocks.get(0, "")))
+
+
+def rescue(client: LLMClient, text: str) -> list[GlossUnit] | None:
+    """A paragraph the batch could not anchor, tried again with less to track.
+
+    Alone first — most failures are the model losing its place across a batch,
+    and one paragraph by itself is usually enough. Failing that, sentence by
+    sentence: a piece that will not anchor is dropped whole and reads as plain
+    text, so drift stays inside the sentence that caused it instead of costing
+    the paragraph its other eighty units.
+    """
+    located = _gloss_alone(client, text)
+    if located:
+        return located
+
+    pieces = chunks(text)
+    if len(pieces) < 2:
+        return None
+
+    out: list[GlossUnit] = []
+    for offset, piece in pieces:
+        found = _gloss_alone(client, piece)
+        if found:
+            out.extend(replace(u, start=u.start + offset, end=u.end + offset) for u in found)
+    return out or None
 
 
 def _gloss_batch(
@@ -270,34 +375,47 @@ def gloss_book(
     targets, and is named in the run so it can be looked at.
     """
     units = body_units(chapters)
-    glosses = {u.hash: decode(cache.get(u.hash)) for u in units if u.hash in cache}
+    glosses = {u.hash: decode(cache.get(cache_key(u.hash)))
+               for u in units if cache_key(u.hash) in cache}
     run = GlossRun(glosses=glosses, total=len(units))
 
     pending = [i for i, u in enumerate(units) if u.hash not in glosses]
     if not pending:
         return run
 
-    for group in batch(units, pending, max_chars=BATCH_CHARS):
-        anchored = _gloss_batch(client, units, group)
-        fresh = {}
-        for n, index in enumerate(group):
-            unit = units[index]
-            located = anchored.get(n)
-            if not located:
-                run.unglossed.append(unit.text[:60])
-                continue
-            glosses[unit.hash] = located
-            fresh[unit.hash] = encode(located)
+    def capped() -> bool:
+        run.cost = cfg.estimate_cost(client.input_tokens, client.output_tokens)
+        return run.cost is not None and run.cost >= cfg.max_cost_usd
 
-        cache.update(fresh)
-        run.glossed += len(fresh)
+    def keep(unit: Unit, located: list[GlossUnit]) -> None:
+        glosses[unit.hash] = located
+        cache.update({cache_key(unit.hash): encode(located)})
+        run.glossed += 1
         if on_progress:
             on_progress(len(glosses), run.total)
 
-        run.cost = cfg.estimate_cost(client.input_tokens, client.output_tokens)
-        if run.cost is not None and run.cost >= cfg.max_cost_usd:
+    failed: list[Unit] = []
+    for group in batch(units, pending, max_chars=BATCH_CHARS):
+        anchored = _gloss_batch(client, units, group)
+        for n, index in enumerate(group):
+            located = anchored.get(n)
+            if located:
+                keep(units[index], located)
+            else:
+                failed.append(units[index])
+
+        if capped():
             run.stopped_at_cap = True
+            run.unglossed = [u.text[:60] for u in failed]
             return run
 
-    run.cost = cfg.estimate_cost(client.input_tokens, client.output_tokens)
+    for unit in failed:
+        located = rescue(client, unit.text) if not run.stopped_at_cap else None
+        if located:
+            keep(unit, located)
+            run.rescued += 1
+        else:
+            run.unglossed.append(unit.text[:60])
+        run.stopped_at_cap = run.stopped_at_cap or capped()
+
     return run
