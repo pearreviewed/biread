@@ -13,7 +13,10 @@
   var PAIRS = DATA.pairs;
   var CHAPTERS = DATA.chapters;
   var PUBLISHED = !!DATA.publishedAvailable;
-  var MOBILE_BREAKPOINT = 820;
+  // Below this the two columns get too cramped to read and the reader falls back
+  // to a single stacked column. Kept low enough that a partly-sized laptop window
+  // still gets the two-page spread — only phones and very narrow windows stack.
+  var MOBILE_BREAKPOINT = 640;
   var TURN_MS = 600;
   var FADE_MS = 150;
   var STORE_VERSION = 2;
