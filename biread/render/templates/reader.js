@@ -1241,6 +1241,9 @@
     S.source = source;
     segTranslation.setAttribute('aria-pressed', String(source === 'translation'));
     segPublished.setAttribute('aria-pressed', String(source === 'published'));
+    // Dismiss the ⓘ note on a deliberate switch, rather than leaving it to the
+    // click-outside handler — the panel should never linger over the reader.
+    if (S.infoOpen) { S.infoOpen = false; renderOverlays(); }
     paint({ xfade: true });
   }
   segTranslation.addEventListener('click', function () { setSource('translation'); });
