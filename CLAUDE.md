@@ -159,25 +159,25 @@ Recorded because the reasoning matters more than the outcome.
 
 ## Known open issues
 
-- **The Wikisource header is still body text.** Footnotes are stripped now, but
-  the bibliographic line that opens the file is not, so `Voltaire`, `Garnier`,
-  `1877` and `tome 21` are hover targets in the built book. That is precisely
-  the apparatus the brief says not to pay to gloss — it just sits at the head of
-  the file rather than the tail.
-- **Anchoring is all-or-nothing per paragraph.** One unit the model will not
-  match discards the other eighty, and three paragraphs are plain for that
-  reason. `anchor()` already tolerates gaps between units, so skipping the
-  offender is a small change — but how much drift to forgive before the whole
-  segmentation is untrustworthy is a judgement call, not a default to pick
-  quietly.
+- **A find-failure still discards the whole paragraph.** `anchor()` returns None
+  if any one unit will not match in order, so one bad unit loses the other
+  eighty. The rescue pass hides this in practice — it retries such a paragraph
+  alone, then sentence by sentence, and the last full run left none plain — but
+  the underlying anchor is still all-or-nothing, paid around with extra calls
+  rather than fixed.
 - **A failed paragraph records nothing about why it failed.** The model's reply
   is not kept, so diagnosing a failure means paying to reproduce it. That is how
   the curly-apostrophe run cost $1.64 to explain.
-- **Mobile renders no hover units at all.** Reasonable for touch, except the
-  mobile layout also triggers on a narrow desktop window, where hover works and
-  silently does nothing.
-- `.book-mobile` still has a fixed width, so a short landscape phone could
-  squash the way the desktop spread used to.
+- **Mobile renders no hover units at all.** Reasonable for touch. The 640px
+  breakpoint keeps most laptop windows on the spread, so the "hover works but
+  does nothing on a narrow desktop window" surface is smaller than it was, but a
+  phone-width reader gets no glosses.
+- `.book-mobile` still has a fixed width (the desktop spread's sizing moved to
+  JS, but mobile did not), so a short landscape phone could squash.
+- **The EPUB and PDF are validated structurally, not in the wild.** No one has
+  opened the EPUB in Apple Books or Kindle, or printed the PDF, in a test.
+- **Nothing packages it for release.** No LICENSE, no CI, no contributing
+  notes — needed before open-sourcing, none of it written.
 
 ---
 
