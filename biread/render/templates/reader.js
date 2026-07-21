@@ -1148,7 +1148,10 @@
       S.bmOpen = S.chapOpen = S.dlOpen = false;
       renderOverlays();
     }
-    if (S.infoOpen && !e.target.closest('[data-info]') && !e.target.closest('.info-panel')) {
+    // The source toggle refreshes the note in place (setSource), so a click on it
+    // is not "outside" — it must not close the panel.
+    if (S.infoOpen && !e.target.closest('[data-info]') && !e.target.closest('.info-panel')
+        && !e.target.closest('.segmented')) {
       S.infoOpen = false;
       renderOverlays();
     }
@@ -1244,9 +1247,9 @@
     S.source = source;
     segTranslation.setAttribute('aria-pressed', String(source === 'translation'));
     segPublished.setAttribute('aria-pressed', String(source === 'published'));
-    // Dismiss the ⓘ note on a deliberate switch, rather than leaving it to the
-    // click-outside handler — the panel should never linger over the reader.
-    if (S.infoOpen) { S.infoOpen = false; renderOverlays(); }
+    // The ⓘ note describes the column you are reading, so refresh it (rather than
+    // close it) each time the source changes, however many times you switch.
+    if (S.infoOpen) renderOverlays();
     paint({ xfade: true });
   }
   segTranslation.addEventListener('click', function () { setSource('translation'); });
@@ -1443,7 +1446,6 @@
 
     var title = document.createElement('div');
     title.className = 'info-title';
-    title.textContent = i18n('publishedPanelTitle');
     var rule = document.createElement('div');
     rule.className = 'info-rule';
     var body = document.createElement('div');
@@ -1457,10 +1459,17 @@
     panel.appendChild(body);
 
     if (PUBLISHED) {
-      body.textContent = DATA.publishedNote || i18n('publishedToggleHint');
+      // The note names and follows whichever column you are reading — the
+      // generated one, or the published edition you brought.
+      var onPublished = S.source === 'published';
+      title.textContent = onPublished ? i18n('publishedPanelTitle') : i18n('translation');
+      body.textContent = onPublished
+        ? (DATA.publishedNote || i18n('publishedToggleHint'))
+        : i18n('publishedToggleHint');
       foot.textContent = i18n('privacyFoot');
       panel.appendChild(foot);
     } else {
+      title.textContent = i18n('publishedPanelTitle');
       body.textContent = i18n('bringYourOwn');
       var command = document.createElement('div');
       command.className = 'info-cmd';

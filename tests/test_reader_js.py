@@ -406,6 +406,32 @@ def test_published_column_stays_reachable_when_it_runs_long(reader_with_publishe
     assert findings == []
 
 
+def test_the_info_note_names_and_follows_the_source(reader_with_published):
+    page = reader_with_published
+    page.click("#seg-translation")          # start on the generated side
+    page.wait_for_timeout(200)
+    page.click("#info-btn")
+    page.wait_for_selector(".info-panel")
+    ai_body = page.text_content(".info-body")
+    assert page.text_content(".info-title") == "AI translation"
+
+    # Switching refreshes the note in place — it does not close, and the message
+    # changes — however many times you switch.
+    for _ in range(2):
+        page.click("#seg-published")
+        page.wait_for_timeout(300)
+        assert page.locator(".info-panel").count() == 1, "the note should stay open"
+        assert page.text_content(".info-title") == "Published translation"
+        assert page.text_content(".info-body") != ai_body
+        page.click("#seg-translation")
+        page.wait_for_timeout(300)
+        assert page.text_content(".info-title") == "AI translation"
+
+    page.click("#info-btn")                  # leave the shared fixture clean
+    page.wait_for_timeout(100)
+    page.click("#seg-translation")
+
+
 def test_the_published_segment_stays_disabled_without_a_published_text(reader):
     assert reader.get_attribute("#seg-published", "aria-disabled") == "true"
     assert reader.is_disabled("#seg-published")
