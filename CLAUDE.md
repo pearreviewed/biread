@@ -140,7 +140,7 @@ two at once. `--dry-run` needs no API key.
 | ⓘ panel, no published translation | A3 — "You can read a published translation alongside this one. Bring a copy you own and pass it in:" |
 | ⓘ panel, published loaded | B7d — "Your translation keeps pace with the French as closely as two editions allow. It has its own notes and front matter, which stay behind." |
 | Download button — embed the EPUB/PDF, or link to sibling files? | Embed, as lazy base64 `<script type="application/octet-stream">` blobs (read only on click, so a multi-MB PDF is not parsed on every open). The book stays one shareable file; the button works offline. |
-| Download button — where in the header? | Far right, set a little apart. Every other control works the book in place; download is the one that takes it away. A small icon like "copy link", opening a quiet menu. Shown only for formats actually built (`--epub`/`--pdf`), else hidden. |
+| Download button — where in the header? | Far right, paired with the "copy link" icon (moved there too) and set a little apart. Every other control works the book in place; these two hand it off — the link the current spot, the download the whole book. A quiet icon menu, shown only for formats actually built (`--epub`/`--pdf`), else hidden. |
 
 ## Reversals
 
