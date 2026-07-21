@@ -45,9 +45,17 @@ button:focus-visible { outline: 2px solid rgba(200,175,130,.85); outline-offset:
 /* Copy a link to the current page. The address bar already tracks the page, so
    this is the discoverable way to hand it to another device. */
 .link-btn { display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 8px; border: 1px solid transparent; background: none; color: #7d6e52; position: relative; }
-.link-btn:hover { color: #c8b891; border-color: rgba(180,150,100,.28); }
+.link-btn:hover, .link-btn.active { color: #c8b891; border-color: rgba(180,150,100,.28); }
 .link-btn.copied { color: #b9c99a; }
 .link-btn.copied::after { content: 'Link copied'; position: absolute; top: calc(100% + 6px); right: 0; white-space: nowrap; font-size: 12px; letter-spacing: .04em; color: #cdbf9d; background: #211b14; border-radius: 6px; padding: 4px 8px; box-shadow: 0 8px 22px rgba(0,0,0,.5); animation: xfade .16s ease-out; }
+
+/* Link + download are a "take it with you" pair at the far edge, set a little
+   apart from the controls that work the book in place. The gap goes before the
+   pair (on the link, which leads it); the two stay tight together. */
+#link-btn { margin-left: 8px; }
+/* .link-btn sets display:flex, which would otherwise defeat the `hidden`
+   attribute that keeps the download out of a plain build (no format embedded). */
+.dl-btn[hidden] { display: none; }
 
 .btn-pill { font-size: 14px; color: #e4d7ba; background: rgba(120,95,55,.16); border: 1px solid rgba(180,150,100,.28); border-radius: 999px; padding: 7px 16px; }
 .segmented-row { display: flex; align-items: center; gap: 6px; }
@@ -146,6 +154,9 @@ p.pair-en.blurred { filter: blur(5px); }
 /* ---------- overlays ---------- */
 .popover { background: #211b14; color: #efe6d2; border-radius: 10px; box-shadow: 0 18px 44px rgba(0,0,0,.55); padding: 12px 8px; z-index: 60; position: fixed; top: calc(var(--header-h, 66px) + 8px); right: 30px; width: 280px; max-height: 60vh; overflow-y: auto; animation: xfade .16s ease-out; }
 .popover.mobile { left: 16px; right: 16px; width: auto; }
+/* The download menu is short — two rows at most — so it need not be as wide. */
+.popover.dl-menu { width: 208px; }
+.popover.dl-menu.mobile { width: auto; }
 .popover-title { font-size: 11px; letter-spacing: .22em; text-transform: uppercase; color: #8f7d5e; padding: 2px 12px 8px; }
 .popover-row { display: block; width: 100%; text-align: left; background: transparent; border: none; border-radius: 6px; padding: 8px 12px; color: #e7dcc2; }
 .popover-row.active { background: rgba(180,150,100,.16); }

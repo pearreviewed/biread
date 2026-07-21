@@ -13,6 +13,13 @@
   var PAIRS = DATA.pairs;
   var CHAPTERS = DATA.chapters;
   var PUBLISHED = !!DATA.publishedAvailable;
+  // Formats built alongside this book, in menu order. The bytes live in separate
+  // <script> blobs (read only on download); this just says what to offer.
+  var DOWNLOADS = DATA.downloads || [];
+  var DOWNLOAD_LABELS = {
+    epub: { title: 'EPUB', sub: 'For e-readers' },
+    pdf: { title: 'PDF', sub: 'Print · side by side' }
+  };
   // Below this the two columns get too cramped to read and the reader falls back
   // to a single stacked column. Kept low enough that a partly-sized laptop window
   // still gets the two-page spread — only phones and very narrow windows stack.
@@ -65,7 +72,8 @@
     ready: false,
     chapOpen: false,
     bmOpen: false,
-    infoOpen: false
+    infoOpen: false,
+    dlOpen: false
   };
 
   var reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -1032,7 +1040,7 @@
   }
 
   function closeOverlays() {
-    S.chapOpen = S.bmOpen = S.infoOpen = false;
+    S.chapOpen = S.bmOpen = S.infoOpen = S.dlOpen = false;
     S.resumePair = null;
     renderOverlays();
   }
@@ -1054,8 +1062,8 @@
   });
 
   document.addEventListener('click', function (e) {
-    if ((S.bmOpen || S.chapOpen) && !e.target.closest('[data-pop]') && !e.target.closest('.popover')) {
-      S.bmOpen = S.chapOpen = false;
+    if ((S.bmOpen || S.chapOpen || S.dlOpen) && !e.target.closest('[data-pop]') && !e.target.closest('.popover')) {
+      S.bmOpen = S.chapOpen = S.dlOpen = false;
       renderOverlays();
     }
     if (S.infoOpen && !e.target.closest('[data-info]') && !e.target.closest('.info-panel')) {
@@ -1163,6 +1171,7 @@
     S.chapOpen = name === 'chap' ? !S.chapOpen : false;
     S.bmOpen = name === 'bm' ? !S.bmOpen : false;
     S.infoOpen = name === 'info' ? !S.infoOpen : false;
+    S.dlOpen = name === 'dl' ? !S.dlOpen : false;
     if (S.bmOpen) paginateAll(); // bookmark rows show page numbers
     renderOverlays();
   }
@@ -1170,6 +1179,37 @@
   document.getElementById('bm-btn').addEventListener('click', function (e) { e.stopPropagation(); togglePanel('bm'); });
   document.getElementById('info-btn').addEventListener('click', function (e) { e.stopPropagation(); togglePanel('info'); });
   document.getElementById('bm-star').addEventListener('click', function (e) { e.stopPropagation(); toggleBookmark(); });
+
+  // The download control appears only when a format was built into the file.
+  var downloadButton = document.getElementById('dl-btn');
+  if (DOWNLOADS.length) {
+    downloadButton.hidden = false;
+    downloadButton.addEventListener('click', function (e) { e.stopPropagation(); togglePanel('dl'); });
+  }
+
+  // Rebuild the base64 blob into a file and hand it to the browser to save. The
+  // bytes are read here, on click, not at load — that is why they sit in their
+  // own <script> rather than in the book data.
+  var DOWNLOAD_MIME = { epub: 'application/epub+zip', pdf: 'application/pdf' };
+  function download(entry) {
+    var blob = document.getElementById('dl-' + entry.format);
+    if (!blob) return;
+    var binary = atob(blob.textContent.replace(/\s+/g, ''));
+    var bytes = new Uint8Array(binary.length);
+    for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    var url = URL.createObjectURL(
+      new Blob([bytes], { type: DOWNLOAD_MIME[entry.format] || 'application/octet-stream' })
+    );
+    var link = document.createElement('a');
+    link.href = url;
+    link.download = entry.filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    S.dlOpen = false;
+    renderOverlays();
+  }
 
   // ---------- overlays ----------
   function popover() {
@@ -1195,11 +1235,40 @@
     document.getElementById('info-btn').classList.toggle('active', S.infoOpen);
     document.getElementById('bm-btn').textContent =
       'Signets' + (S.bookmarks.length ? ' · ' + S.bookmarks.length : '');
+    var dl = document.getElementById('dl-btn');
+    if (dl) {
+      dl.classList.toggle('active', S.dlOpen);
+      dl.setAttribute('aria-expanded', S.dlOpen ? 'true' : 'false');
+    }
 
     if (S.chapOpen) root.appendChild(renderChapterList());
     if (S.bmOpen) root.appendChild(renderBookmarkList());
     if (S.infoOpen) root.appendChild(renderInfoPanel());
+    if (S.dlOpen) root.appendChild(renderDownloadMenu());
     if (S.resumePair != null) root.appendChild(renderResumeBanner());
+  }
+
+  function renderDownloadMenu() {
+    var pop = popover();
+    pop.classList.add('dl-menu');
+    pop.appendChild(popoverTitle('Download'));
+    DOWNLOADS.forEach(function (entry) {
+      var meta = DOWNLOAD_LABELS[entry.format] ||
+        { title: String(entry.format).toUpperCase(), sub: '' };
+      var row = document.createElement('button');
+      row.className = 'popover-row';
+      var title = document.createElement('div');
+      title.className = 'eyebrow-sm';
+      title.textContent = meta.title;
+      var sub = document.createElement('div');
+      sub.className = 'sub';
+      sub.textContent = meta.sub;
+      row.appendChild(title);
+      row.appendChild(sub);
+      row.addEventListener('click', function () { download(entry); });
+      pop.appendChild(row);
+    });
+    return pop;
   }
 
   function renderChapterList() {

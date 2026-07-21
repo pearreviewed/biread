@@ -8,6 +8,7 @@ and none of them are reachable without a rendering engine.
 Requires `pip install -e ".[browser]"` plus `playwright install chromium`;
 skipped entirely when that is not present.
 """
+import pathlib
 import re
 
 import pytest
@@ -28,8 +29,13 @@ SHORT_EN = "A French sentence short enough to fit several of them on one page."
 TALL_FR = " ".join(f"{SHORT_FR} [fr-{n}]" for n in range(90))
 TALL_EN = " ".join(f"{SHORT_EN} [en-{n}]" for n in range(90))
 
+# Stand-in export bytes: the download path is format-agnostic, so recognisable
+# marker bytes are enough to prove the right file came back intact.
+DL_EPUB = b"PK\x03\x04FAKE-EPUB\x00\x01\x02"
+DL_PDF = b"%PDF-1.4\nFAKE-PDF\n%%EOF"
 
-def build_reader(tmp_path_factory, published: bool):
+
+def build_reader(tmp_path_factory, published: bool, downloads=None):
     paragraphs = [f"{SHORT_FR} ({n})" for n in range(24)]
     paragraphs.insert(12, TALL_FR)
     chapters = [
@@ -53,6 +59,7 @@ def build_reader(tmp_path_factory, published: bool):
     render_book(
         "Livre d'Essai", chapters, translations, out,
         publications if published else None, "a note" if published else "",
+        None, downloads,
     )
     return out
 
@@ -66,7 +73,7 @@ def browser():
 
 
 def open_reader(browser, path, width=1280, height=900):
-    page = browser.new_page(viewport={"width": width, "height": height})
+    page = browser.new_page(viewport={"width": width, "height": height}, accept_downloads=True)
     page.goto(path.as_uri())
     page.wait_for_function(
         "() => { const c = document.getElementById('counter');"
@@ -86,6 +93,15 @@ def reader(browser, tmp_path_factory):
 @pytest.fixture(scope="module")
 def reader_with_published(browser, tmp_path_factory):
     page = open_reader(browser, build_reader(tmp_path_factory, published=True))
+    yield page
+    page.close()
+
+
+@pytest.fixture(scope="module")
+def reader_with_downloads(browser, tmp_path_factory):
+    page = open_reader(browser, build_reader(
+        tmp_path_factory, published=False,
+        downloads=[("epub", "Livre.epub", DL_EPUB), ("pdf", "Livre.pdf", DL_PDF)]))
     yield page
     page.close()
 
@@ -462,6 +478,42 @@ def test_the_copy_link_button_copies_a_url_with_the_page(reader):
       return got;
     }""")
     assert copied and re.search(r"#p\d+$", copied), copied
+
+
+# ---- download control ----
+
+def test_no_download_control_without_a_built_format(reader):
+    # The button ships in the markup but stays hidden unless a format was embedded.
+    assert reader.locator("#dl-btn").count() == 1
+    assert reader.is_hidden("#dl-btn")
+
+
+def test_the_download_control_sits_at_the_far_edge(reader_with_downloads):
+    page = reader_with_downloads
+    assert page.is_visible("#dl-btn")
+    # Every other control works the book in place; download is set apart, last.
+    assert page.evaluate(
+        "() => document.querySelector('.header-right').lastElementChild.id") == "dl-btn"
+
+
+def test_the_menu_lists_built_formats_and_saves_them_intact(reader_with_downloads):
+    page = reader_with_downloads
+    page.click("#dl-btn")
+    page.wait_for_selector(".popover.dl-menu", timeout=3000)
+    labels = page.eval_on_selector_all(
+        ".dl-menu .popover-row .eyebrow-sm", "els => els.map(e => e.textContent)")
+    assert labels == ["EPUB", "PDF"]
+
+    # A download closes the menu, so reopen it before the next one.
+    for fmt, filename, blob in [("EPUB", "Livre.epub", DL_EPUB), ("PDF", "Livre.pdf", DL_PDF)]:
+        if page.locator(".popover.dl-menu").count() == 0:
+            page.click("#dl-btn")
+            page.wait_for_selector(".popover.dl-menu", timeout=3000)
+        with page.expect_download() as info:
+            page.click(f".dl-menu .popover-row:has(.eyebrow-sm:text-is('{fmt}'))")
+        download = info.value
+        assert download.suggested_filename == filename
+        assert pathlib.Path(download.path()).read_bytes() == blob
 
 
 # ---- gloss hover ----

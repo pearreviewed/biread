@@ -320,23 +320,28 @@ def run(args: argparse.Namespace) -> None:
 
     # The HTML keeps the slug so its hosted URL stays clean; the EPUB and PDF are
     # named for the book, since those are the files a reader saves and shares.
+    # They are written first so the reader can embed them behind its download
+    # control — the book stays one self-contained, shareable file.
     name = download_name(title)
-    output_path = args.output / f"{slug}.html"
-    render_book(
-        title, chapters, run_result.translations, output_path,
-        published, published_note, glosses,
-    )
-    print(f"\nWrote {output_path}")
-
+    downloads = []
     if args.epub:
         epub_path = args.output / f"{name}.epub"
         write_epub(title, chapters, run_result.translations, glosses, epub_path)
         print(f"Wrote {epub_path}")
+        downloads.append(("epub", epub_path.name, epub_path.read_bytes()))
 
     if args.pdf:
         pdf_path = args.output / f"{name}.pdf"
         write_pdf(title, chapters, run_result.translations, pdf_path)
         print(f"Wrote {pdf_path}")
+        downloads.append(("pdf", pdf_path.name, pdf_path.read_bytes()))
+
+    output_path = args.output / f"{slug}.html"
+    render_book(
+        title, chapters, run_result.translations, output_path,
+        published, published_note, glosses, downloads,
+    )
+    print(f"\nWrote {output_path}")
 
 
 def main(argv: list[str] | None = None) -> None:

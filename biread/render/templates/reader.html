@@ -15,9 +15,6 @@
   <div class="header-right">
     <button class="counter" id="counter" aria-label="Go to a page"></button>
     <input class="counter-input" id="counter-input" type="text" inputmode="numeric" autocomplete="off" aria-label="Page number" hidden>
-    <button class="link-btn" id="link-btn" aria-label="Copy a link to this page" title="Copy a link to this page">
-      <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg>
-    </button>
     <button class="btn-pill" id="blur-toggle">Blur translation</button>
     <div class="segmented-row">
       <div class="segmented" role="group" aria-label="Translation source">
@@ -41,11 +38,23 @@
       <span class="seg-divider"></span>
       <button id="font-inc" aria-label="Larger text">A+</button>
     </div>
+    <!-- The "take it with you" pair, set apart at the far edge. Every other
+         control works the book in place; these hand it off — the link this exact
+         spot, the download the whole book. Download hidden unless a format was built. -->
+    <button class="link-btn" id="link-btn" aria-label="Copy a link to this page" title="Copy a link to this page">
+      <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg>
+    </button>
+    <button class="link-btn dl-btn" id="dl-btn" data-pop="1" aria-haspopup="true" aria-expanded="false" aria-label="Download this book" title="Download this book" hidden>
+      <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+    </button>
   </div>
 </header>
 <div id="stage-wrap"><div class="loading-msg">Ouverture du livre…</div></div>
 <div id="measure-host"></div>
 <div id="overlay-root"></div>
+<!-- Built formats, base64, read only when the reader downloads one — kept out of
+     the book data so it is not parsed on every open. Empty on a plain build. -->
+@@DOWNLOADS@@
 <script type="application/json" id="book-data">@@BOOK_DATA@@</script>
 <script>@@JS@@</script>
 </body>

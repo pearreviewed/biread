@@ -89,6 +89,23 @@ def _b64(path: Path) -> str:
     return base64.b64encode(path.read_bytes()).decode("ascii")
 
 
+# A file the reader can download: (format id, saved filename, its bytes).
+Download = tuple[str, str, bytes]
+
+
+def _download_scripts(downloads: list[Download] | None) -> str:
+    """One base64 <script> blob per built format, read only when the reader
+    downloads it. Kept out of the book data so a multi-megabyte PDF is not parsed
+    on every open. base64 has no `<`, so it cannot close the script early."""
+    if not downloads:
+        return ""
+    return "\n".join(
+        f'<script type="application/octet-stream" id="dl-{fmt}">'
+        f'{base64.b64encode(blob).decode("ascii")}</script>'
+        for fmt, _filename, blob in downloads
+    )
+
+
 def build_book_data(
     title: str,
     chapters: list[Chapter],
@@ -96,6 +113,7 @@ def build_book_data(
     published: dict[str, str] | None = None,
     published_note: str = "",
     glosses: dict | None = None,
+    downloads: list[Download] | None = None,
 ) -> dict:
     """`pairs` is a flat list of {fr, en} across the whole book, including any
     untitled leading section. `chapters[i].pair` indexes into it, marking where
@@ -127,7 +145,7 @@ def build_book_data(
                 ]
             pairs.append(pair)
 
-    return {
+    data = {
         "titleFr": title,
         "slug": slugify(title),
         "publishedAvailable": bool(published),
@@ -135,6 +153,12 @@ def build_book_data(
         "pairs": pairs,
         "chapters": chapter_meta,
     }
+    if downloads:
+        # Just what the menu needs; the bytes ride in their own <script> blobs.
+        data["downloads"] = [
+            {"format": fmt, "filename": filename} for fmt, filename, _blob in downloads
+        ]
+    return data
 
 
 def render_book(
@@ -145,9 +169,10 @@ def render_book(
     published: dict[str, str] | None = None,
     published_note: str = "",
     glosses: dict | None = None,
+    downloads: list[Download] | None = None,
 ) -> None:
     data = build_book_data(
-        title, chapters, translations, published, published_note, glosses
+        title, chapters, translations, published, published_note, glosses, downloads
     )
 
     css = fill((TEMPLATES / "reader.css").read_text(encoding="utf-8"), {
@@ -161,6 +186,7 @@ def render_book(
         "CSS": css,
         "BOOK_DATA": script_json(data),
         "JS": (TEMPLATES / "reader.js").read_text(encoding="utf-8"),
+        "DOWNLOADS": _download_scripts(downloads),
     })
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
