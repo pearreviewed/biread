@@ -205,9 +205,11 @@ def test_incompatible_cache_needs_a_decision(project, monkeypatch, capsys):
     assert json.loads(cache_file.read_text())["schema_version"] == 1
 
 
-def test_title_names_the_downloaded_files(project):
-    project.invoke("--title", "Micromégas")
+def test_html_keeps_the_slug_but_exports_take_the_book_name(project):
+    # The hosted reader wants a clean URL; a saved EPUB wants a readable name.
+    project.invoke("--title", "Micromégas", "--epub")
     out = project.dir / "out"
-    assert (out / "Micromégas - bilingual reader.html").exists()
-    html = (out / "Micromégas - bilingual reader.html").read_text(encoding="utf-8")
+    assert (out / "micromegas.html").exists()
+    assert (out / "Micromégas - bilingual reader.epub").exists()
+    html = (out / "micromegas.html").read_text(encoding="utf-8")
     assert book_data(html)["titleFr"] == "Micromégas"

@@ -318,10 +318,10 @@ def run(args: argparse.Namespace) -> None:
         gloss_cache = open_cache(args.cache_dir / slug / "glosses.json", args.rebuild_cache)
         glosses = run_glossing(chapters, gloss_cache, cfg).glosses
 
-    # The cache is keyed by slug; the files a reader downloads are named for the
-    # book itself.
+    # The HTML keeps the slug so its hosted URL stays clean; the EPUB and PDF are
+    # named for the book, since those are the files a reader saves and shares.
     name = download_name(title)
-    output_path = args.output / f"{name}.html"
+    output_path = args.output / f"{slug}.html"
     render_book(
         title, chapters, run_result.translations, output_path,
         published, published_note, glosses,
