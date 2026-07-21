@@ -249,6 +249,26 @@ def test_shift_arrow_jumps_ten_spreads(reader):
     assert current_spread(reader) == min(before + 10, spread_count(reader))
 
 
+def test_changing_font_size_keeps_your_place(reader):
+    # Repagination once anchored on the paragraph alone, so changing the font
+    # while partway through a long paragraph (the book has a deliberately tall
+    # one) threw you back to its start — often the first spread.
+    rewind(reader)
+    for _ in range(8):
+        reader.evaluate("document.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}))")
+        reader.wait_for_timeout(240)
+    on_screen = "() => [...document.querySelectorAll('#stage-wrap [data-pair]')].map(e => Number(e.dataset.pair))"
+    before, spread_before = set(reader.evaluate(on_screen)), current_spread(reader)
+    reader.click("#font-inc")
+    reader.wait_for_timeout(800)
+    after = set(reader.evaluate(on_screen))
+    reader.click("#font-dec")          # restore the shared fixture's font
+    reader.wait_for_timeout(600)
+    assert spread_before > 1, "test should have walked past the first spread"
+    # The same paragraphs are still on screen — you kept your place.
+    assert before & after, (sorted(before), sorted(after))
+
+
 def test_english_column_is_tagged_english_for_hyphenation(reader):
     # lang drives `hyphens: auto`; inheriting lang="fr" hyphenates English
     # with French syllabification and shifts every line count.
