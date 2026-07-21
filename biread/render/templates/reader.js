@@ -513,6 +513,26 @@
     return spread ? spread.from.p : 0;
   }
 
+  // Where the reader is, as a full position — paragraph and fraction through it.
+  // Repagination anchors on this rather than the paragraph alone, so a font or
+  // window change keeps your place inside a long paragraph instead of dropping
+  // you back at its start.
+  function currentPosition() {
+    var spread = spreads[S.spreadIndex];
+    return spread ? position(spread.from.p, spread.from.f) : position(0, 0);
+  }
+
+  // The spread that holds a position: the last one that starts at or before it.
+  function spreadIndexForPosition(pos) {
+    var index = 0;
+    for (var i = 0; i < spreads.length; i++) {
+      var from = spreads[i].from;
+      if (from.p < pos.p || (from.p === pos.p && from.f <= pos.f + 1e-6)) index = i;
+      else break;
+    }
+    return index;
+  }
+
   // Judge overflow from what is actually on the page, not from what pagination
   // predicted. Pagination measures the translation, so it cannot know that the
   // published column runs longer, that a font substituted, or that a paragraph
@@ -545,12 +565,12 @@
     })();
   }
 
-  function repaginate(anchorPair) {
+  function repaginate(anchor) {
     spreads = [];
     paginated = 0;
     buildProbe();
-    ensureThroughPair(anchorPair);
-    S.spreadIndex = spreadIndexForPair(anchorPair);
+    ensureThroughPair(anchor.p);
+    S.spreadIndex = spreadIndexForPosition(anchor);
     paint();
     scheduleBackgroundPagination();
   }
@@ -1124,7 +1144,7 @@
       if (spreads.length && width === lastBox.width && height === lastBox.height) return;
       lastBox = { width: width, height: height };
 
-      var anchor = currentPair();
+      var anchor = currentPosition();
       var mobile = isMobileWidth();
       S.turn = null;
       S.fade = false;
@@ -1154,7 +1174,7 @@
     if (next === S.fontScale) return;
     S.fontScale = next;
     applyFontSize();
-    repaginate(currentPair());
+    repaginate(currentPosition());
   }
   document.getElementById('font-inc').addEventListener('click', function () { changeFontScale(0.1); });
   document.getElementById('font-dec').addEventListener('click', function () { changeFontScale(-0.1); });
