@@ -31,7 +31,8 @@ browser, or email it to someone.
   <img src="docs/screenshots/mobile.jpg" width="300"
        alt="On a narrow screen the spread folds to a single column, each French paragraph followed by its English">
   <br>
-  <sub><em>On a phone, the spread folds into a single column.</em></sub>
+  <sub><em>On a phone, the spread folds into a single column — or export an EPUB
+  with <code>--epub</code> and read it in Apple Books, Kindle, or any e-reader.</em></sub>
 </p>
 
 ## Quick start
