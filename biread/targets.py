@@ -93,12 +93,116 @@ _SPANISH_UI = {
     "damaged": "Este archivo está dañado — vuelve a generarlo con biread.",
 }
 
+_ITALIAN_UI = {
+    "copyLink": "Copia un link a questa pagina",
+    "goToPage": "Vai a una pagina",
+    "pageNumber": "Numero di pagina",
+    "blur": "Sfoca la traduzione",
+    "showTranslation": "Mostra la traduzione",
+    "translation": "Traduzione",
+    "published": "Pubblicata",
+    "aboutPublished": "Informazioni sulla traduzione pubblicata",
+    "chapters": "Capitoli",
+    "bookmark": "Aggiungi un segnalibro",
+    "removeBookmark": "Rimuovi il segnalibro",
+    "bookmarks": "Segnalibri",
+    "noBookmarks": "Ancora nessun segnalibro — tocca il nastro per salvare il tuo punto.",
+    "pageAbbr": "p.",
+    "smallerText": "Testo più piccolo",
+    "largerText": "Testo più grande",
+    "download": "Scarica questo libro",
+    "downloadTitle": "Scarica",
+    "epubSub": "Per e-reader",
+    "pdfSub": "Stampa · testo a fronte",
+    "publishedPanelTitle": "Traduzione pubblicata",
+    "publishedToggleHint": "Attiva l'interruttore per leggere la traduzione pubblicata invece di quella generata.",
+    "bringYourOwn": "Puoi leggere una traduzione pubblicata accanto a questa. Porta una copia che possiedi e passala:",
+    "privacyFoot": "Il tuo testo resta sul tuo dispositivo e non viene mai incluso nei file condivisi.",
+    "resume": "Torna a dove eri rimasto",
+    "resumeButton": "Riprendi",
+    "dismiss": "Ignora",
+    "close": "Chiudi",
+    "loading": "Apertura del libro…",
+    "damaged": "Questo file è danneggiato — rigeneralo con biread.",
+}
+
+_GERMAN_UI = {
+    "copyLink": "Link zu dieser Seite kopieren",
+    "goToPage": "Zu einer Seite springen",
+    "pageNumber": "Seitenzahl",
+    "blur": "Übersetzung verbergen",
+    "showTranslation": "Übersetzung zeigen",
+    "translation": "Übersetzung",
+    "published": "Veröffentlicht",
+    "aboutPublished": "Über die veröffentlichte Übersetzung",
+    "chapters": "Kapitel",
+    "bookmark": "Lesezeichen setzen",
+    "removeBookmark": "Lesezeichen entfernen",
+    "bookmarks": "Lesezeichen",
+    "noBookmarks": "Noch keine Lesezeichen — tippe auf das Band, um deine Stelle zu speichern.",
+    "pageAbbr": "S.",
+    "smallerText": "Kleinerer Text",
+    "largerText": "Größerer Text",
+    "download": "Dieses Buch herunterladen",
+    "downloadTitle": "Herunterladen",
+    "epubSub": "Für E-Reader",
+    "pdfSub": "Druck · nebeneinander",
+    "publishedPanelTitle": "Veröffentlichte Übersetzung",
+    "publishedToggleHint": "Schalte um, um die veröffentlichte Übersetzung statt der generierten zu lesen.",
+    "bringYourOwn": "Du kannst eine veröffentlichte Übersetzung neben dieser lesen. Bring ein eigenes Exemplar mit und füge es hinzu:",
+    "privacyFoot": "Dein Text bleibt auf deinem Gerät und wird nie in geteilte Dateien aufgenommen.",
+    "resume": "Zurück zu deiner letzten Stelle",
+    "resumeButton": "Fortsetzen",
+    "dismiss": "Verwerfen",
+    "close": "Schließen",
+    "loading": "Buch wird geöffnet…",
+    "damaged": "Diese Datei ist beschädigt — erzeuge sie mit biread neu.",
+}
+
+_PORTUGUESE_UI = {
+    "copyLink": "Copiar a ligação para esta página",
+    "goToPage": "Ir para uma página",
+    "pageNumber": "Número da página",
+    "blur": "Desfocar a tradução",
+    "showTranslation": "Mostrar a tradução",
+    "translation": "Tradução",
+    "published": "Publicada",
+    "aboutPublished": "Sobre a tradução publicada",
+    "chapters": "Capítulos",
+    "bookmark": "Marcar esta página",
+    "removeBookmark": "Remover o marcador",
+    "bookmarks": "Marcadores",
+    "noBookmarks": "Ainda não há marcadores — toca na fita para guardar o teu lugar.",
+    "pageAbbr": "p.",
+    "smallerText": "Texto mais pequeno",
+    "largerText": "Texto maior",
+    "download": "Descarregar este livro",
+    "downloadTitle": "Descarregar",
+    "epubSub": "Para leitores eletrónicos",
+    "pdfSub": "Impressão · lado a lado",
+    "publishedPanelTitle": "Tradução publicada",
+    "publishedToggleHint": "Muda o seletor para ler a tradução publicada em vez da gerada.",
+    "bringYourOwn": "Podes ler uma tradução publicada ao lado desta. Traz um exemplar teu e passa-o:",
+    "privacyFoot": "O teu texto permanece no teu dispositivo e nunca é incluído em ficheiros partilhados.",
+    "resume": "Voltar ao ponto onde paraste",
+    "resumeButton": "Retomar",
+    "dismiss": "Ignorar",
+    "close": "Fechar",
+    "loading": "A abrir o livro…",
+    "damaged": "Este ficheiro está danificado — gera-o novamente com o biread.",
+}
+
 ENGLISH = Target("english", "English", "en", "Chapter", _ENGLISH_UI)
 SPANISH = Target("spanish", "Spanish", "es", "Capítulo", _SPANISH_UI)
+ITALIAN = Target("italian", "Italian", "it", "Capitolo", _ITALIAN_UI)
+GERMAN = Target("german", "German", "de", "Kapitel", _GERMAN_UI)
+PORTUGUESE = Target("portuguese", "Portuguese", "pt", "Capítulo", _PORTUGUESE_UI)
 
 # Registry keyed by --lang value. Add a language by adding a row (and its ui
 # table); every key in _ENGLISH_UI must be present, which `_check` enforces.
-TARGETS: dict[str, Target] = {t.key: t for t in (ENGLISH, SPANISH)}
+TARGETS: dict[str, Target] = {
+    t.key: t for t in (ENGLISH, SPANISH, ITALIAN, GERMAN, PORTUGUESE)
+}
 
 DEFAULT_LANG = ENGLISH.key
 

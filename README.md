@@ -70,7 +70,8 @@ who asked for it. You only ever build the languages you choose.
 The source stays French; the translation, the glosses, the hyphenation, and the
 reader's controls all follow the target, while the *Lecteur bilingue* masthead
 stays French as the reader's signature. The languages live in
-`biread/targets.py` (English and Spanish to start) — adding another is one row.
+`biread/targets.py` — English, Spanish, Italian, German, and Portuguese so far,
+and adding another is one row.
 
 ## Reading a published translation alongside
 
