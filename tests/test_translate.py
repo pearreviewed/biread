@@ -7,6 +7,7 @@ from biread.llm.base import Completion
 from biread.translate import (
     BATCH_MAX_CHARS,
     BATCH_SIZE,
+    SYSTEM_PROMPT,
     batch,
     build_prompt,
     estimate,
@@ -14,8 +15,27 @@ from biread.translate import (
     hash_text,
     parse_response,
     pending_indices,
+    system_prompt,
     translate_book,
 )
+
+
+def test_system_prompt_defaults_to_the_english_it_shipped_with():
+    assert system_prompt("English") == SYSTEM_PROMPT
+    assert "into English for a bilingual" in SYSTEM_PROMPT
+
+
+def test_system_prompt_names_the_target_but_keeps_the_french_source():
+    spanish = system_prompt("Spanish")
+    assert "into Spanish for a bilingual" in spanish
+    assert "idiomatic Spanish prose" in spanish
+    assert "literary French prose" in spanish  # source language is unchanged
+
+
+def test_build_prompt_names_the_target_language():
+    units = flatten([Chapter(None, None, ["Bonjour."])])
+    assert "into Spanish" in build_prompt(units, {}, [0], "Spanish")
+    assert "into English" in build_prompt(units, {}, [0])  # default
 
 
 def test_flatten_includes_titles_in_reading_order(book):

@@ -25,31 +25,40 @@ BATCH_MAX_CHARS = 6000  # keeps a batch of long paragraphs inside MAX_TOKENS
 MAX_TOKENS = 8192
 CHARS_PER_TOKEN = 4  # rough heuristic, estimates only — no tokenizer call
 
-SYSTEM_PROMPT = """You are translating literary French prose into English for a bilingual \
-reading edition. The English translation is the PRIMARY reading text — it must read as \
-genuinely good, idiomatic English prose, not a literal crib.
+# Templated on the target language's name; `system_prompt("English")` is the
+# byte-for-byte prompt this shipped with. The source is always French.
+SYSTEM_PROMPT_TEMPLATE = """You are translating literary French prose into {target} for a bilingual \
+reading edition. The {target} translation is the PRIMARY reading text — it must read as \
+genuinely good, idiomatic {target} prose, not a literal crib.
 
 Rules:
 - Preserve the register, rhythm, and tone of the French. Restructure sentences freely where \
-English calls for a different shape — do not mirror French syntax mechanically.
+{target} calls for a different shape — do not mirror French syntax mechanically.
 - Do not drop or add content. Every clause in the French, including subordinate clauses, \
-must appear in the English — never merge or omit a clause for concision.
+must appear in the {target} — never merge or omit a clause for concision.
 - Keep paragraph boundaries exactly as given: one input paragraph produces exactly one \
 output paragraph. Never split or merge paragraphs.
 - For older/period texts (18th-19th century and earlier), preserve irony, deadpan, and \
 understatement rather than explaining or clarifying the joke. Keep period formality rather \
-than modernizing toward casual contemporary English.
+than modernizing toward casual contemporary {target}.
 - Use the given context (the preceding paragraph, in French and, if available, its already- \
-established English translation) to keep tense, register, and the tu/vous relationship \
+established {target} translation) to keep tense, register, and the tu/vous relationship \
 consistent with what came before — but do not translate the context itself, only the \
 numbered paragraphs.
 
 OUTPUT FORMAT — follow exactly:
 For each paragraph, output a line containing only the marker @@@N@@@ (with N the paragraph's \
-number), then the English translation on the following line(s). Then the next marker, and so \
+number), then the {target} translation on the following line(s). Then the next marker, and so \
 on. The translation text may freely contain quotation marks, guillemets, dashes, and any \
 punctuation — you do NOT need to escape anything, because this is plain text, not JSON. Output \
 nothing else: no commentary, no JSON, no code fences, no blank marker lines."""
+
+
+def system_prompt(target: str) -> str:
+    return SYSTEM_PROMPT_TEMPLATE.format(target=target)
+
+
+SYSTEM_PROMPT = system_prompt("English")
 
 RETRY_NOTE = (
     "\n\nYour previous response could not be parsed. Output ONLY the @@@N@@@ markers and "
@@ -165,7 +174,9 @@ def parse_response(raw: str) -> dict[int, str]:
     return out
 
 
-def build_prompt(units: list[Unit], translations: dict[str, str], indices: list[int]) -> str:
+def build_prompt(
+    units: list[Unit], translations: dict[str, str], indices: list[int], target: str = "English"
+) -> str:
     context = ""
     prev = indices[0] - 1
     if prev >= 0:
@@ -173,20 +184,21 @@ def build_prompt(units: list[Unit], translations: dict[str, str], indices: list[
         context = (
             "CONTEXT — preceding paragraph, for continuity only (do not translate this):\n"
             f"French: {units[prev].text}\n"
-            + (f"English (established): {established}\n\n" if established else "English: (not yet translated)\n\n")
+            + (f"{target} (established): {established}\n\n" if established
+               else f"{target}: (not yet translated)\n\n")
         )
     numbered = "\n\n".join(
         f"=== PARAGRAPH {n} ===\n{units[idx].text}" for n, idx in enumerate(indices)
     )
     return (
         context
-        + "Translate each of the following French paragraphs into English, using the "
+        + f"Translate each of the following French paragraphs into {target}, using the "
         + "@@@N@@@ output format described above:\n\n"
         + numbered
     )
 
 
-def estimate(chapters: list[Chapter], cache: Cache, cfg: Config) -> Estimate:
+def estimate(chapters: list[Chapter], cache: Cache, cfg: Config, target: str = "English") -> Estimate:
     """What a run would cost, without calling the API."""
     units = flatten(chapters)
     indices = pending_indices(units, cache)
@@ -196,7 +208,7 @@ def estimate(chapters: list[Chapter], cache: Cache, cfg: Config) -> Estimate:
     # The system prompt goes out once per batch, and each batch resends its
     # first paragraph's predecessor as continuity context.
     context_chars = sum(len(units[max(b[0] - 1, 0)].text) for b in batches)
-    input_chars = len(SYSTEM_PROMPT) * len(batches) + body_chars + context_chars
+    input_chars = len(system_prompt(target)) * len(batches) + body_chars + context_chars
 
     input_tokens = input_chars // CHARS_PER_TOKEN
     output_tokens = math.ceil(body_chars * 1.15) // CHARS_PER_TOKEN
@@ -211,13 +223,14 @@ def estimate(chapters: list[Chapter], cache: Cache, cfg: Config) -> Estimate:
 
 
 def _translate_batch(
-    client: LLMClient, units: list[Unit], translations: dict[str, str], indices: list[int]
+    client: LLMClient, units: list[Unit], translations: dict[str, str], indices: list[int],
+    target: str = "English",
 ) -> dict[int, str]:
     """One batch, with a single retry when the model ignores the output format."""
-    prompt = build_prompt(units, translations, indices)
+    prompt = build_prompt(units, translations, indices, target)
     last_error = ""
     for attempt in range(2):
-        system = SYSTEM_PROMPT + (RETRY_NOTE if attempt else "")
+        system = system_prompt(target) + (RETRY_NOTE if attempt else "")
         try:
             completion = client.complete(system, prompt, MAX_TOKENS)
         except Exception as e:  # provider SDKs raise their own hierarchies
@@ -249,9 +262,10 @@ def translate_book(
     cache: Cache,
     cfg: Config,
     on_progress: Callable[[int, int], None] | None = None,
+    target: str = "English",
 ) -> TranslationRun:
-    """Translate every uncached paragraph. Returns hash -> English for the whole
-    book, previously-cached entries included.
+    """Translate every uncached paragraph. Returns hash -> translation for the
+    whole book, previously-cached entries included.
 
     Stops early — without losing completed work, since each batch is cached as
     soon as it returns — if the running cost estimate reaches cfg.max_cost_usd.
@@ -266,7 +280,7 @@ def translate_book(
         return run
 
     for group in batch(units, indices):
-        parsed = _translate_batch(client, units, translations, group)
+        parsed = _translate_batch(client, units, translations, group, target)
         fresh = {units[idx].hash: parsed[n] for n, idx in enumerate(group)}
         translations.update(fresh)
         cache.update(fresh)

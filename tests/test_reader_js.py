@@ -15,6 +15,7 @@ import pytest
 
 from biread.cleanup import Chapter
 from biread.render import render_book
+from biread.targets import ENGLISH, SPANISH
 from biread.translate import hash_text
 
 sync_playwright = pytest.importorskip(
@@ -35,7 +36,7 @@ DL_EPUB = b"PK\x03\x04FAKE-EPUB\x00\x01\x02"
 DL_PDF = b"%PDF-1.4\nFAKE-PDF\n%%EOF"
 
 
-def build_reader(tmp_path_factory, published: bool, downloads=None):
+def build_reader(tmp_path_factory, published: bool, downloads=None, target=ENGLISH):
     paragraphs = [f"{SHORT_FR} ({n})" for n in range(24)]
     paragraphs.insert(12, TALL_FR)
     chapters = [
@@ -59,7 +60,7 @@ def build_reader(tmp_path_factory, published: bool, downloads=None):
     render_book(
         "Livre d'Essai", chapters, translations, out,
         publications if published else None, "a note" if published else "",
-        None, downloads,
+        None, downloads, target,
     )
     return out
 
@@ -514,6 +515,34 @@ def test_the_menu_lists_built_formats_and_saves_them_intact(reader_with_download
         download = info.value
         assert download.suggested_filename == filename
         assert pathlib.Path(download.path()).read_bytes() == blob
+
+
+# ---- target language ----
+
+@pytest.fixture(scope="module")
+def spanish_reader(browser, tmp_path_factory):
+    page = open_reader(browser, build_reader(tmp_path_factory, published=False, target=SPANISH))
+    yield page
+    page.close()
+
+
+def test_english_reader_uses_english_controls(reader):
+    assert reader.inner_text("#chap-btn") == "Chapters"
+    assert reader.inner_text("#bm-btn").startswith("Bookmarks")
+
+
+def test_spanish_reader_localizes_controls_and_hyphenation(spanish_reader):
+    page = spanish_reader
+    assert page.inner_text("#chap-btn") == "Capítulos"
+    assert page.inner_text("#bm-btn").startswith("Marcadores")
+    assert page.inner_text("#blur-toggle") == "Difuminar la traducción"
+    # The translated (right) column hyphenates as Spanish, not English.
+    assert page.get_attribute("#stage-wrap .page-right p.pair-en", "lang") == "es"
+
+
+def test_the_masthead_stays_french_whatever_the_target(spanish_reader):
+    # text_content, not inner_text: CSS uppercases the eyebrow for display.
+    assert spanish_reader.text_content(".header-left .eyebrow") == "Lecteur bilingue"
 
 
 # ---- gloss hover ----

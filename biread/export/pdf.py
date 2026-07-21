@@ -18,6 +18,7 @@ from pathlib import Path
 
 from ..cleanup import Chapter
 from ..errors import BireadError
+from ..targets import ENGLISH, Target
 from ..translate import hash_text
 
 ASSETS = Path(__file__).parent.parent / "assets"
@@ -32,7 +33,9 @@ def _esc(text: str) -> str:
             .replace(">", "&gt;"))
 
 
-def _print_html(title: str, chapters: list[Chapter], translations: dict[str, str]) -> str:
+def _print_html(
+    title: str, chapters: list[Chapter], translations: dict[str, str], lang_code: str = "en"
+) -> str:
     regular = _b64(ASSETS / "fonts" / "eb-garamond-400.woff2")
     italic = _b64(ASSETS / "fonts" / "eb-garamond-400-italic.woff2")
 
@@ -49,7 +52,7 @@ def _print_html(title: str, chapters: list[Chapter], translations: dict[str, str
             rows.append(
                 '<tr>'
                 f'<td class="fr" lang="fr">{_esc(paragraph)}</td>'
-                f'<td class="en" lang="en">{_esc(english)}</td>'
+                f'<td class="en" lang="{lang_code}">{_esc(english)}</td>'
                 '</tr>'
             )
 
@@ -93,6 +96,7 @@ def write_pdf(
     chapters: list[Chapter],
     translations: dict[str, str],
     output_path: Path,
+    target: Target = ENGLISH,
 ) -> None:
     try:
         from playwright.sync_api import sync_playwright
@@ -102,7 +106,7 @@ def write_pdf(
             '  pip install -e ".[browser]" && playwright install chromium'
         ) from e
 
-    html = _print_html(title, chapters, translations)
+    html = _print_html(title, chapters, translations, target.code)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     try:

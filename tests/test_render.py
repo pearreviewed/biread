@@ -14,6 +14,7 @@ from biread.render import (
     script_json,
     slugify,
 )
+from biread.targets import SPANISH
 from biread.translate import hash_text
 
 
@@ -98,6 +99,30 @@ def test_build_book_data_pairs_and_chapters(book):
 def test_missing_translations_render_as_empty(book):
     data = build_book_data("Mon Livre", book, {})
     assert all(p["en"] == "" for p in data["pairs"])
+
+
+def test_english_default_carries_english_chrome(book):
+    data = build_book_data("Mon Livre", book, {})
+    assert data["lang"] == "en"
+    assert data["chapters"][0]["enEyebrow"] == "Chapitre I".replace("Chapitre", "Chapter")
+    assert data["ui"]["chapters"] == "Chapters"
+    assert data["ui"]["bookmarks"] == "Bookmarks"
+
+
+def test_target_localizes_eyebrow_ui_and_hyphenation(book):
+    data = build_book_data("Mon Livre", book, {}, target=SPANISH)
+    assert data["lang"] == "es"                        # drives the right column's hyphenation
+    assert data["chapters"][0]["enEyebrow"] == "Capítulo I"
+    assert data["ui"]["chapters"] == "Capítulos"
+    assert data["ui"]["loading"] == "Abriendo el libro…"
+
+
+def test_the_masthead_stays_french_in_the_rendered_file(tmp_path, book):
+    out = tmp_path / "es.html"
+    render_book("Mon Livre", book, {}, out, target=SPANISH)
+    html = out.read_text(encoding="utf-8")
+    assert ">Lecteur bilingue<" in html          # masthead is not localized
+    assert "Abriendo el libro" in html           # loading is
 
 
 def test_published_column_is_carried_through(book):

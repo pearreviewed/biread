@@ -21,6 +21,7 @@ from .gloss import gloss_book
 from .llm import get_client
 from .export import write_epub, write_pdf
 from .render import download_name, render_book, slugify
+from .targets import DEFAULT_LANG, TARGETS, get_target
 from .translate import estimate, translate_book
 
 PARAGRAPH_LIMIT = 2000
@@ -31,17 +32,22 @@ EXAMPLES_SHOWN = 3
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python -m biread",
-        description="Generate a self-contained bilingual (French/English) HTML reader "
-                    "from a plain-text book.",
+        description="Generate a self-contained bilingual HTML reader (French on the left, "
+                    "your chosen language on the right) from a plain-text book.",
     )
     parser.add_argument("input", type=Path, help="path to the source French text (.txt)")
+    parser.add_argument(
+        "--lang", type=str, default=DEFAULT_LANG, choices=sorted(TARGETS),
+        help="target translation language (default: english). A non-default "
+             "language is a fresh, paid translation run, borne by whoever runs it.",
+    )
     parser.add_argument(
         "-o", "--output", type=Path, default=Path("output"),
         help="output directory (default: output/)",
     )
     parser.add_argument(
         "--published", type=Path, default=None,
-        help="a published English translation to read side by side with the generated one",
+        help="a published translation (in the target language) to read side by side with the generated one",
     )
     parser.add_argument(
         "--cache-dir", type=Path, default=Path("cache"),
@@ -139,6 +145,14 @@ def open_cache(path: Path, rebuild: bool) -> Cache:
         return Cache.rebuild(e.path)
 
 
+def cache_file(cache_dir: Path, slug: str, base: str, target) -> Path:
+    """Where a book's translation/gloss cache lives. English keeps the original
+    filename, so books built before --lang existed do not re-translate; every
+    other language gets its own file beside it, keyed by code."""
+    name = f"{base}.json" if target.key == DEFAULT_LANG else f"{base}.{target.code}.json"
+    return cache_dir / slug / name
+
+
 def resolve_published(
     path: Path, chapters: list[Chapter], translations: dict[str, str]
 ) -> tuple[dict[str, str], str]:
@@ -168,9 +182,10 @@ def resolve_published(
     return aligned, summary
 
 
-def report_gloss_estimate(chapters: list[Chapter], cache: Cache, cfg: Config) -> None:
+def report_gloss_estimate(chapters: list[Chapter], cache: Cache, cfg: Config,
+                          gloss_lang: str = "English") -> None:
     gloss_cfg = cfg.for_glossing()
-    result = estimate_gloss(chapters, cache, gloss_cfg)
+    result = estimate_gloss(chapters, cache, gloss_cfg, gloss_lang)
     print(f"\nGlossing: {result.cached} of {result.total} paragraph(s) already annotated.")
     if not result.pending:
         print("Nothing left to gloss.")
@@ -184,14 +199,14 @@ def report_gloss_estimate(chapters: list[Chapter], cache: Cache, cfg: Config) ->
               f"has run to roughly double this — read it as a floor, not a ceiling.")
 
 
-def run_glossing(chapters: list[Chapter], cache: Cache, cfg: Config):
+def run_glossing(chapters: list[Chapter], cache: Cache, cfg: Config, gloss_lang: str = "English"):
     gloss_cfg = cfg.for_glossing()
 
     def progress(done: int, total: int) -> None:
         print(f"\r  glossed {done}/{total} paragraphs…", end="", flush=True)
 
     print(f"\nGlossing the French with {gloss_cfg.model}:")
-    run = gloss_book(chapters, get_client(gloss_cfg), cache, gloss_cfg, progress)
+    run = gloss_book(chapters, get_client(gloss_cfg), cache, gloss_cfg, progress, gloss_lang)
     if run.glossed:
         print()
         if run.rescued:
@@ -216,8 +231,9 @@ def run_glossing(chapters: list[Chapter], cache: Cache, cfg: Config):
     return run
 
 
-def report_estimate(chapters: list[Chapter], cache: Cache, cfg: Config) -> None:
-    result = estimate(chapters, cache, cfg)
+def report_estimate(chapters: list[Chapter], cache: Cache, cfg: Config,
+                    target_name: str = "English") -> None:
+    result = estimate(chapters, cache, cfg, target_name)
     print(f"Translation: {result.cached} of {result.total} paragraph(s) already cached.")
     if not result.pending:
         print("Nothing left to translate.")
@@ -241,7 +257,7 @@ def report_estimate(chapters: list[Chapter], cache: Cache, cfg: Config) -> None:
         )
 
 
-def run_translation(chapters: list[Chapter], cache: Cache, cfg: Config):
+def run_translation(chapters: list[Chapter], cache: Cache, cfg: Config, target_name: str = "English"):
     if not cfg.cost_capped:
         print(
             f"Warning: no pricing on file for {cfg.model} — MAX_COST_USD cannot be "
@@ -252,7 +268,7 @@ def run_translation(chapters: list[Chapter], cache: Cache, cfg: Config):
         print(f"\r  translated {done}/{total} paragraphs…", end="", flush=True)
 
     cached = len(cache)
-    run = translate_book(chapters, get_client(cfg), cache, cfg, progress)
+    run = translate_book(chapters, get_client(cfg), cache, cfg, progress, target_name)
     if run.translated:
         print()
     else:
@@ -283,17 +299,18 @@ def run(args: argparse.Namespace) -> None:
 
     title = args.title or humanize(args.input.stem)
     slug = slugify(title)
-    cache = open_cache(args.cache_dir / slug / "translations.json", args.rebuild_cache)
+    target = get_target(args.lang)
+    cache = open_cache(cache_file(args.cache_dir, slug, "translations", target), args.rebuild_cache)
     cfg = load_config(require_key=not args.dry_run)
 
     print()
     if args.dry_run:
-        report_estimate(chapters, cache, cfg)
+        report_estimate(chapters, cache, cfg, target.name)
         if args.gloss:
             gloss_cache = open_cache(
-                args.cache_dir / slug / "glosses.json", args.rebuild_cache
+                cache_file(args.cache_dir, slug, "glosses", target), args.rebuild_cache
             )
-            report_gloss_estimate(chapters, gloss_cache, cfg)
+            report_gloss_estimate(chapters, gloss_cache, cfg, target.name)
         return
 
     if total_paragraphs > PARAGRAPH_LIMIT and not args.force:
@@ -303,10 +320,10 @@ def run(args: argparse.Namespace) -> None:
             f"use --dry-run to see what it would cost first."
         )
 
-    run_result = run_translation(chapters, cache, cfg)
+    run_result = run_translation(chapters, cache, cfg, target.name)
 
-    # After translating, not before: the generated English is what the published
-    # text gets matched against.
+    # After translating, not before: the generated translation is what the
+    # published text gets matched against.
     published, published_note = None, ""
     if args.published:
         published, published_note = resolve_published(
@@ -315,8 +332,8 @@ def run(args: argparse.Namespace) -> None:
 
     glosses = None
     if args.gloss:
-        gloss_cache = open_cache(args.cache_dir / slug / "glosses.json", args.rebuild_cache)
-        glosses = run_glossing(chapters, gloss_cache, cfg).glosses
+        gloss_cache = open_cache(cache_file(args.cache_dir, slug, "glosses", target), args.rebuild_cache)
+        glosses = run_glossing(chapters, gloss_cache, cfg, target.name).glosses
 
     # The HTML keeps the slug so its hosted URL stays clean; the EPUB and PDF are
     # named for the book, since those are the files a reader saves and shares.
@@ -326,20 +343,20 @@ def run(args: argparse.Namespace) -> None:
     downloads = []
     if args.epub:
         epub_path = args.output / f"{name}.epub"
-        write_epub(title, chapters, run_result.translations, glosses, epub_path)
+        write_epub(title, chapters, run_result.translations, glosses, epub_path, target)
         print(f"Wrote {epub_path}")
         downloads.append(("epub", epub_path.name, epub_path.read_bytes()))
 
     if args.pdf:
         pdf_path = args.output / f"{name}.pdf"
-        write_pdf(title, chapters, run_result.translations, pdf_path)
+        write_pdf(title, chapters, run_result.translations, pdf_path, target)
         print(f"Wrote {pdf_path}")
         downloads.append(("pdf", pdf_path.name, pdf_path.read_bytes()))
 
     output_path = args.output / f"{slug}.html"
     render_book(
         title, chapters, run_result.translations, output_path,
-        published, published_note, glosses, downloads,
+        published, published_note, glosses, downloads, target,
     )
     print(f"\nWrote {output_path}")
 

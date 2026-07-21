@@ -20,6 +20,7 @@ from pathlib import Path
 
 from ..cleanup import Chapter
 from ..gloss import displayable
+from ..targets import ENGLISH, Target
 from ..translate import hash_text
 
 TEMPLATES = Path(__file__).parent / "templates"
@@ -114,6 +115,7 @@ def build_book_data(
     published_note: str = "",
     glosses: dict | None = None,
     downloads: list[Download] | None = None,
+    target: Target = ENGLISH,
 ) -> dict:
     """`pairs` is a flat list of {fr, en} across the whole book, including any
     untitled leading section. `chapters[i].pair` indexes into it, marking where
@@ -126,7 +128,7 @@ def build_book_data(
                 "pair": len(pairs),
                 "frEyebrow": f"Chapitre {chapter.number}",
                 "frTitle": chapter.title or "",
-                "enEyebrow": f"Chapter {chapter.number}",
+                "enEyebrow": f"{target.chapter_word} {chapter.number}",
                 "enTitle": translations.get(hash_text(chapter.title), "") if chapter.title else "",
             })
         for paragraph in chapter.paragraphs:
@@ -152,6 +154,10 @@ def build_book_data(
         "publishedNote": published_note,
         "pairs": pairs,
         "chapters": chapter_meta,
+        # The target language: `lang` drives the translated column's hyphenation,
+        # `ui` carries every functional label the reader applies at boot.
+        "lang": target.code,
+        "ui": target.ui,
     }
     if downloads:
         # Just what the menu needs; the bytes ride in their own <script> blobs.
@@ -170,9 +176,10 @@ def render_book(
     published_note: str = "",
     glosses: dict | None = None,
     downloads: list[Download] | None = None,
+    target: Target = ENGLISH,
 ) -> None:
     data = build_book_data(
-        title, chapters, translations, published, published_note, glosses, downloads
+        title, chapters, translations, published, published_note, glosses, downloads, target
     )
 
     css = fill((TEMPLATES / "reader.css").read_text(encoding="utf-8"), {
@@ -187,6 +194,7 @@ def render_book(
         "BOOK_DATA": script_json(data),
         "JS": (TEMPLATES / "reader.js").read_text(encoding="utf-8"),
         "DOWNLOADS": _download_scripts(downloads),
+        "UI_LOADING": escape_html(target.ui["loading"]),
     })
 
     output_path.parent.mkdir(parents=True, exist_ok=True)

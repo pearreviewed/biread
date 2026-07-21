@@ -20,6 +20,24 @@
     epub: { title: 'EPUB', sub: 'For e-readers' },
     pdf: { title: 'PDF', sub: 'Print · side by side' }
   };
+  // Every functional label comes from the target-language table in the book
+  // data; LANG is the translated column's language, for hyphenation. The markup
+  // ships English as a fallback, tagged with data-i18n keys.
+  var UI = DATA.ui || {};
+  var LANG = DATA.lang || 'en';
+  function i18n(key) { return UI[key] != null ? UI[key] : ''; }
+  function applyStaticLabels() {
+    var set = function (attr, apply) {
+      var nodes = document.querySelectorAll('[' + attr + ']');
+      for (var i = 0; i < nodes.length; i++) {
+        var value = i18n(nodes[i].getAttribute(attr));
+        if (value) apply(nodes[i], value);
+      }
+    };
+    set('data-i18n', function (n, v) { n.textContent = v; });
+    set('data-i18n-aria', function (n, v) { n.setAttribute('aria-label', v); });
+    set('data-i18n-title', function (n, v) { n.setAttribute('title', v); });
+  }
   // Below this the two columns get too cramped to read and the reader falls back
   // to a single stacked column. Kept low enough that a partly-sized laptop window
   // still gets the two-page spread — only phones and very narrow windows stack.
@@ -184,7 +202,7 @@
     // the English column inherits lang="fr" from <html> and gets hyphenated
     // with French syllabification ("mee-ting" instead of "meet-ing") — wrong
     // typography, and wrong line counts feeding back into pagination.
-    p.lang = side === 'en' ? 'en' : 'fr';
+    p.lang = side === 'en' ? LANG : 'fr';
     p.textContent = text;
     // A paragraph resumed from the previous page is not a new paragraph, so it
     // starts flush rather than indented.
@@ -897,7 +915,7 @@
     ribbon.style.transform = 'translateX(-50%)';
     ribbon.setAttribute('role', 'button');
     ribbon.setAttribute('tabindex', '0');
-    ribbon.setAttribute('aria-label', 'Remove bookmark');
+    ribbon.setAttribute('aria-label', i18n('removeBookmark'));
     ribbon.addEventListener('click', function (e) { e.stopPropagation(); toggleBookmark(); });
     ribbon.addEventListener('keydown', function (e) {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); toggleBookmark(); }
@@ -1012,7 +1030,7 @@
     var on = bookmarkOnSpread(S.spreadIndex) >= 0;
     var star = document.getElementById('bm-star');
     star.setAttribute('aria-pressed', on ? 'true' : 'false');
-    star.setAttribute('aria-label', on ? 'Remove bookmark' : 'Bookmark this spread');
+    star.setAttribute('aria-label', on ? i18n('removeBookmark') : i18n('bookmark'));
     var path = document.getElementById('bm-star-path');
     path.setAttribute('fill', on ? '#8a3f42' : 'transparent');
     path.setAttribute('stroke', on ? '#8a3f42' : '#a98f78');
@@ -1144,7 +1162,7 @@
   document.getElementById('blur-toggle').addEventListener('click', function () {
     S.blurEnglish = !S.blurEnglish;
     S.activePair = -1;
-    this.textContent = S.blurEnglish ? 'Show translation' : 'Blur translation';
+    this.textContent = S.blurEnglish ? i18n('showTranslation') : i18n('blur');
     var nodes = document.querySelectorAll('.pair-en');
     for (var i = 0; i < nodes.length; i++) nodes[i].classList.toggle('blurred', S.blurEnglish);
   });
@@ -1234,7 +1252,7 @@
     document.getElementById('bm-btn').classList.toggle('active', S.bmOpen);
     document.getElementById('info-btn').classList.toggle('active', S.infoOpen);
     document.getElementById('bm-btn').textContent =
-      'Signets' + (S.bookmarks.length ? ' · ' + S.bookmarks.length : '');
+      i18n('bookmarks') + (S.bookmarks.length ? ' · ' + S.bookmarks.length : '');
     var dl = document.getElementById('dl-btn');
     if (dl) {
       dl.classList.toggle('active', S.dlOpen);
@@ -1251,7 +1269,7 @@
   function renderDownloadMenu() {
     var pop = popover();
     pop.classList.add('dl-menu');
-    pop.appendChild(popoverTitle('Download'));
+    pop.appendChild(popoverTitle(i18n('downloadTitle')));
     DOWNLOADS.forEach(function (entry) {
       var meta = DOWNLOAD_LABELS[entry.format] ||
         { title: String(entry.format).toUpperCase(), sub: '' };
@@ -1262,7 +1280,7 @@
       title.textContent = meta.title;
       var sub = document.createElement('div');
       sub.className = 'sub';
-      sub.textContent = meta.sub;
+      sub.textContent = i18n(entry.format + 'Sub') || meta.sub;
       row.appendChild(title);
       row.appendChild(sub);
       row.addEventListener('click', function () { download(entry); });
@@ -1273,7 +1291,7 @@
 
   function renderChapterList() {
     var pop = popover();
-    pop.appendChild(popoverTitle('Chapitres'));
+    pop.appendChild(popoverTitle(i18n('chapters')));
     var current = chapterForPair(currentPair());
     CHAPTERS.forEach(function (chapter) {
       var row = document.createElement('button');
@@ -1298,11 +1316,11 @@
 
   function renderBookmarkList() {
     var pop = popover();
-    pop.appendChild(popoverTitle('Signets'));
+    pop.appendChild(popoverTitle(i18n('bookmarks')));
     if (!S.bookmarks.length) {
       var empty = document.createElement('div');
       empty.className = 'popover-empty';
-      empty.textContent = 'No bookmarks yet — tap the star to save your place.';
+      empty.textContent = i18n('noBookmarks');
       pop.appendChild(empty);
       return pop;
     }
@@ -1316,7 +1334,7 @@
       go.className = 'popover-row' + (spreadIndex === S.spreadIndex ? ' active' : '');
       var ref = document.createElement('span');
       ref.className = 'page-ref';
-      ref.textContent = 'p. ' + (spreadIndex + 1);
+      ref.textContent = i18n('pageAbbr') + ' ' + (spreadIndex + 1);
       var title = document.createElement('span');
       title.className = 'chapter-ref';
       title.textContent = chapter ? chapter.frTitle : '';
@@ -1330,7 +1348,7 @@
 
       var remove = document.createElement('button');
       remove.className = 'bm-remove';
-      remove.setAttribute('aria-label', 'Remove bookmark');
+      remove.setAttribute('aria-label', i18n('removeBookmark'));
       remove.textContent = '×';
       remove.addEventListener('click', function (e) {
         e.stopPropagation();
@@ -1352,13 +1370,13 @@
 
     var close = document.createElement('button');
     close.className = 'info-close';
-    close.setAttribute('aria-label', 'Close');
+    close.setAttribute('aria-label', i18n('close'));
     close.textContent = '×';
     close.addEventListener('click', function () { S.infoOpen = false; renderOverlays(); });
 
     var title = document.createElement('div');
     title.className = 'info-title';
-    title.textContent = 'Published translation';
+    title.textContent = i18n('publishedPanelTitle');
     var rule = document.createElement('div');
     rule.className = 'info-rule';
     var body = document.createElement('div');
@@ -1372,18 +1390,15 @@
     panel.appendChild(body);
 
     if (PUBLISHED) {
-      body.textContent = DATA.publishedNote ||
-        'Switch the toggle to read the published translation instead of the generated one.';
-      foot.textContent = 'Your text stays on your machine and is never included in shared files.';
+      body.textContent = DATA.publishedNote || i18n('publishedToggleHint');
+      foot.textContent = i18n('privacyFoot');
       panel.appendChild(foot);
     } else {
-      body.textContent =
-        'You can read a published translation alongside this one. Bring a copy you own ' +
-        'and pass it in:';
+      body.textContent = i18n('bringYourOwn');
       var command = document.createElement('div');
       command.className = 'info-cmd';
       command.textContent = 'python -m biread french.txt --published english.txt';
-      foot.textContent = 'Your text stays on your machine and is never included in shared files.';
+      foot.textContent = i18n('privacyFoot');
       panel.appendChild(command);
       panel.appendChild(foot);
     }
@@ -1397,7 +1412,7 @@
     banner.className = 'resume-banner';
 
     var text = document.createElement('span');
-    text.textContent = 'Return to where you left off';
+    text.textContent = i18n('resume');
     var highlight = document.createElement('span');
     highlight.className = 'hl';
     highlight.textContent = chapter && chapter.frTitle ? ' — ' + chapter.frTitle : '';
@@ -1405,7 +1420,7 @@
 
     var resume = document.createElement('button');
     resume.className = 'resume-go';
-    resume.textContent = 'Resume';
+    resume.textContent = i18n('resumeButton');
     resume.addEventListener('click', function () {
       var target = S.resumePair;
       S.resumePair = null;
@@ -1415,7 +1430,7 @@
 
     var dismiss = document.createElement('button');
     dismiss.className = 'resume-x';
-    dismiss.setAttribute('aria-label', 'Dismiss');
+    dismiss.setAttribute('aria-label', i18n('dismiss'));
     dismiss.textContent = '×';
     dismiss.addEventListener('click', function () { S.resumePair = null; renderOverlays(); });
 
@@ -1427,6 +1442,7 @@
 
   // ---------- boot ----------
   function boot() {
+    applyStaticLabels();
     var storedBookmarks = lsGet('bookmarks');
     if (storedBookmarks && Array.isArray(storedBookmarks.pairs)) {
       S.bookmarks = storedBookmarks.pairs.filter(function (p) {

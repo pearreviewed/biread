@@ -19,6 +19,7 @@ from pathlib import Path
 
 from ..cleanup import Chapter
 from ..gloss import GlossUnit, displayable
+from ..targets import ENGLISH, Target
 from ..translate import hash_text
 
 CONTAINER_XML = """<?xml version="1.0" encoding="UTF-8"?>
@@ -88,7 +89,7 @@ def _note_html(note_id: str, ref_id: str, unit: GlossUnit) -> str:
             f'<p><a href="#{ref_id}">↩</a> {"".join(parts)}</p></aside>')
 
 
-def _chapter_html(chapter: Chapter, translations, glosses) -> str:
+def _chapter_html(chapter: Chapter, translations, glosses, lang_code: str = "en") -> str:
     ids = count(1)
     body: list[str] = []
     notes: list[str] = []
@@ -105,7 +106,7 @@ def _chapter_html(chapter: Chapter, translations, glosses) -> str:
         body.append(f'<p class="fr" lang="fr">{french}</p>')
         english = translations.get(key, "")
         if english:
-            body.append(f'<p class="en" lang="en">{_esc(english)}</p>')
+            body.append(f'<p class="en" lang="{lang_code}">{_esc(english)}</p>')
 
     return (
         '<?xml version="1.0" encoding="UTF-8"?>\n'
@@ -133,7 +134,7 @@ def _nav_html(title: str, chapters: list[Chapter], files: list[str]) -> str:
     )
 
 
-def _opf(title: str, book_id: str, files: list[str]) -> str:
+def _opf(title: str, book_id: str, files: list[str], lang_code: str = "en") -> str:
     modified = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     manifest = [
         '    <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>',
@@ -150,7 +151,7 @@ def _opf(title: str, book_id: str, files: list[str]) -> str:
         f'    <dc:identifier id="book-id">urn:uuid:{book_id}</dc:identifier>\n'
         f"    <dc:title>{_esc(title)}</dc:title>\n"
         "    <dc:language>fr</dc:language>\n"
-        "    <dc:language>en</dc:language>\n"
+        f"    <dc:language>{lang_code}</dc:language>\n"
         f'    <meta property="dcterms:modified">{modified}</meta>\n'
         "  </metadata>\n"
         "  <manifest>\n" + "\n".join(manifest) + "\n  </manifest>\n"
@@ -165,6 +166,7 @@ def write_epub(
     translations: dict[str, str],
     glosses: dict[str, list[GlossUnit]] | None,
     output_path: Path,
+    target: Target = ENGLISH,
 ) -> None:
     glosses = glosses or {}
     files = [f"chapter{i}.xhtml" for i in range(len(chapters))]
@@ -179,7 +181,7 @@ def write_epub(
         z.writestr("META-INF/container.xml", CONTAINER_XML)
         z.writestr("OEBPS/style.css", STYLESHEET)
         z.writestr("OEBPS/nav.xhtml", _nav_html(title, chapters, files))
-        z.writestr("OEBPS/content.opf", _opf(title, book_id, files))
+        z.writestr("OEBPS/content.opf", _opf(title, book_id, files, target.code))
         for chapter, name in zip(chapters, files):
-            z.writestr(f"OEBPS/{name}", _chapter_html(chapter, translations, glosses))
+            z.writestr(f"OEBPS/{name}", _chapter_html(chapter, translations, glosses, target.code))
     tmp.replace(output_path)

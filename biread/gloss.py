@@ -38,13 +38,18 @@ CHARS_PER_TOKEN = 4
 #: invisible separators it is obvious in a terminal when a response goes wrong.
 FIELD = "¦"
 
-SYSTEM_PROMPT = f"""You are annotating literary {LANGUAGE.name} prose for a bilingual \
+# The gloss's explanation language follows the target; `gloss_system_prompt("English")`
+# is the byte-for-byte prompt this shipped with, so RULES_VERSION (below) is
+# unchanged for English and existing gloss caches stay valid. The source stays
+# French (LANGUAGE), and so do the segmentation rules.
+def gloss_system_prompt(gloss_lang: str = "English") -> str:
+    return f"""You are annotating literary {LANGUAGE.name} prose for a bilingual \
 reading edition. Divide each paragraph into hover units and explain each one in its context.
 
 {LANGUAGE.gloss_rules}
 
 FOR EACH UNIT, one line, fields separated by {FIELD}:
-surface {FIELD} part of speech {FIELD} English gloss {FIELD} inf=… {FIELD} pc=…
+surface {FIELD} part of speech {FIELD} {gloss_lang} gloss {FIELD} inf=… {FIELD} pc=…
 The last two appear only on verbs, per the rules above. A passé simple verb carries both:
 il disséqua {FIELD} verb {FIELD} dissected {FIELD} inf=disséquer {FIELD} pc=il a disséqué
 un jeune homme {FIELD} noun phrase {FIELD} a young man
@@ -58,6 +63,9 @@ OUTPUT FORMAT — follow exactly:
 For each paragraph, a line containing only the marker @@@N@@@ (N the paragraph's number), \
 then that paragraph's unit lines. Then the next marker. Output nothing else: no \
 commentary, no numbering, no blank lines between units."""
+
+
+SYSTEM_PROMPT = gloss_system_prompt("English")
 
 RETRY_NOTE = (
     f"\n\nYour previous response could not be used. Copy each surface exactly as it "
@@ -279,7 +287,7 @@ def build_prompt(units: list[Unit], indices: list[int]) -> str:
     return "Divide each paragraph below into hover units:\n\n" + numbered
 
 
-def estimate(chapters: list[Chapter], cache: Cache, cfg: Config):
+def estimate(chapters: list[Chapter], cache: Cache, cfg: Config, gloss_lang: str = "English"):
     from .translate import Estimate
 
     units = body_units(chapters)
@@ -287,7 +295,7 @@ def estimate(chapters: list[Chapter], cache: Cache, cfg: Config):
     batches = list(batch(units, pending, max_chars=BATCH_CHARS))
     body_chars = sum(len(units[i].text) for i in pending)
 
-    input_tokens = (len(SYSTEM_PROMPT) * len(batches) + body_chars) // CHARS_PER_TOKEN
+    input_tokens = (len(gloss_system_prompt(gloss_lang)) * len(batches) + body_chars) // CHARS_PER_TOKEN
     # Every unit costs its surface again plus a gloss, a part of speech and
     # sometimes two verb forms. Calibrated against a real Micromégas run rather
     # than guessed: the first estimate used 3.5 and came in at a third of the
@@ -329,11 +337,11 @@ def chunks(text: str, limit: int = RESCUE_CHARS) -> list[tuple[int, str]]:
     return out
 
 
-def _gloss_alone(client: LLMClient, text: str) -> list[GlossUnit] | None:
+def _gloss_alone(client: LLMClient, text: str, gloss_lang: str = "English") -> list[GlossUnit] | None:
     """One passage, on its own. None if it will not anchor."""
     prompt = build_prompt([Unit("", text)], [0])
     try:
-        completion = client.complete(SYSTEM_PROMPT, prompt, MAX_TOKENS)
+        completion = client.complete(gloss_system_prompt(gloss_lang), prompt, MAX_TOKENS)
     except Exception:
         return None
     if completion.truncated:
@@ -345,7 +353,7 @@ def _gloss_alone(client: LLMClient, text: str) -> list[GlossUnit] | None:
     return anchor(text, parse_units(blocks.get(0, "")))
 
 
-def rescue(client: LLMClient, text: str) -> list[GlossUnit] | None:
+def rescue(client: LLMClient, text: str, gloss_lang: str = "English") -> list[GlossUnit] | None:
     """A paragraph the batch could not anchor, tried again with less to track.
 
     Alone first — most failures are the model losing its place across a batch,
@@ -354,7 +362,7 @@ def rescue(client: LLMClient, text: str) -> list[GlossUnit] | None:
     text, so drift stays inside the sentence that caused it instead of costing
     the paragraph its other eighty units.
     """
-    located = _gloss_alone(client, text)
+    located = _gloss_alone(client, text, gloss_lang)
     if located:
         return located
 
@@ -364,19 +372,19 @@ def rescue(client: LLMClient, text: str) -> list[GlossUnit] | None:
 
     out: list[GlossUnit] = []
     for offset, piece in pieces:
-        found = _gloss_alone(client, piece)
+        found = _gloss_alone(client, piece, gloss_lang)
         if found:
             out.extend(replace(u, start=u.start + offset, end=u.end + offset) for u in found)
     return out or None
 
 
 def _gloss_batch(
-    client: LLMClient, units: list[Unit], indices: list[int]
+    client: LLMClient, units: list[Unit], indices: list[int], gloss_lang: str = "English"
 ) -> dict[int, list[GlossUnit]]:
     """One batch, retried once when a segmentation cannot be anchored."""
     prompt = build_prompt(units, indices)
     for attempt in range(2):
-        system = SYSTEM_PROMPT + (RETRY_NOTE if attempt else "")
+        system = gloss_system_prompt(gloss_lang) + (RETRY_NOTE if attempt else "")
         try:
             completion = client.complete(system, prompt, MAX_TOKENS)
         except Exception as e:
@@ -407,6 +415,7 @@ def gloss_book(
     cache: Cache,
     cfg: Config,
     on_progress: Callable[[int, int], None] | None = None,
+    gloss_lang: str = "English",
 ) -> GlossRun:
     """Gloss every uncached body paragraph.
 
@@ -436,7 +445,7 @@ def gloss_book(
 
     failed: list[Unit] = []
     for group in batch(units, pending, max_chars=BATCH_CHARS):
-        anchored = _gloss_batch(client, units, group)
+        anchored = _gloss_batch(client, units, group, gloss_lang)
         for n, index in enumerate(group):
             located = anchored.get(n)
             if located:
@@ -450,7 +459,7 @@ def gloss_book(
             return run
 
     for unit in failed:
-        located = rescue(client, unit.text) if not run.stopped_at_cap else None
+        located = rescue(client, unit.text, gloss_lang) if not run.stopped_at_cap else None
         if located:
             keep(unit, located)
             run.rescued += 1

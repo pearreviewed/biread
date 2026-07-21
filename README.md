@@ -25,7 +25,8 @@ python -m biread book.txt -o output/
 | Flag | What it does |
 | --- | --- |
 | `-o, --output DIR` | Where to write the HTML (default `output/`) |
-| `--published FILE` | Also show a published English translation you already own |
+| `--lang LANG` | Language to translate into (default `english`); a non-default language is a fresh, paid translation run |
+| `--published FILE` | Also show a published translation (in the target language) you already own |
 | `--title TEXT` | Title in the reader header (default: from the filename) |
 | `--gloss` | Annotate the French for hover translation (costs extra; see `--dry-run`) |
 | `--epub` | Also write a reflowable EPUB, glosses as tap-to-reveal notes |
@@ -50,6 +51,25 @@ set `PRICE_PER_MTOK` in `.env` — otherwise biread warns and runs uncapped.
 
 `cache/` is the expensive, rebuildable asset. Back it up by copying the
 directory; it is plain JSON.
+
+## Choosing the translation language
+
+The right-hand column is English by default. Pass `--lang` to build into another
+language instead:
+
+```sh
+python -m biread french.txt --lang spanish
+```
+
+Each book is built into one language, and **the cost falls on whoever runs the
+build**, with their own key. The default English build is unchanged; nothing
+generates other languages on its own. Someone who wants a Spanish edition runs
+biread themselves and pays for their own translation — not you.
+
+The source stays French; the translation, the glosses, the hyphenation, and the
+reader's controls all follow the target, while the *Lecteur bilingue* masthead
+stays French as the reader's signature. The languages live in
+`biread/targets.py` (English and Spanish to start) — adding another is one row.
 
 ## Reading a published translation alongside
 
