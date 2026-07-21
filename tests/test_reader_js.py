@@ -290,6 +290,40 @@ def test_bookmarks_persist_as_a_position_in_the_book(reader):
     reader.click("#bm-star")
 
 
+def test_a_bookmark_does_not_bleed_onto_the_preceding_spread(reader):
+    # A chapter's first spread starts a fresh paragraph, and the spread before it
+    # ends exactly at that paragraph's first character — the boundary where the
+    # bookmark ribbon used to appear a second time when you scrolled back.
+    reader.evaluate("() => localStorage.clear()")
+    rewind(reader)
+    heading = "#stage-wrap .page-left .chapter-heading"
+    for _ in range(30):
+        if current_spread(reader) > 1 and reader.locator(heading).count() > 0:
+            break
+        reader.keyboard.press("ArrowRight")
+        reader.wait_for_timeout(360)
+    at_chapter = current_spread(reader)
+    assert at_chapter > 1 and reader.locator(heading).count() > 0
+
+    reader.click("#bm-star")
+    reader.wait_for_timeout(300)
+    assert reader.get_attribute("#bm-star", "aria-pressed") == "true"
+
+    reader.keyboard.press("ArrowLeft")
+    reader.wait_for_timeout(700)
+    assert current_spread(reader) == at_chapter - 1
+    assert reader.get_attribute("#bm-star", "aria-pressed") == "false", \
+        "the bookmark bled onto the preceding spread"
+    assert reader.locator("#stage-wrap .ribbon").count() == 0
+
+    # Remove the bookmark so the shared fixture is left clean (in memory + URL).
+    reader.keyboard.press("ArrowRight")
+    reader.wait_for_timeout(700)
+    reader.click("#bm-star")
+    reader.wait_for_timeout(200)
+    reader.evaluate("() => localStorage.clear()")
+
+
 def test_narrow_viewport_switches_to_the_stacked_layout(browser, tmp_path_factory):
     page = open_reader(browser, build_reader(tmp_path_factory, published=False))
     assert page.locator("#stage-wrap .book-desk").count() == 1
