@@ -249,7 +249,13 @@
   }
 
   function spreadCoversPair(spread, pair) {
-    return !!spread && spread.from.p <= pair && pair <= spread.to.p;
+    if (!spread || spread.from.p > pair) return false;
+    // `to` is the exclusive end — it is where the next spread begins. The
+    // paragraph at to.p sits on this spread only when the spread stops partway
+    // through it (to.f > 0); when to.f is 0 that paragraph opens the next spread,
+    // not this one. Without this the spread before a bookmark, whose `to` lands
+    // on the bookmarked paragraph's first character, also lit up the ribbon.
+    return pair < spread.to.p || (pair === spread.to.p && spread.to.f > 0);
   }
 
   function dividerNode() {
