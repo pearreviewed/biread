@@ -13,6 +13,13 @@ browser, or email it to someone.
 </p>
 
 <p align="center">
+  <img src="docs/screenshots/chapter.jpg" width="860"
+       alt="A chapter opening: the eyebrow 'Chapitre I' and its title on the left page, 'Chapter I' and the English title on the right, above the first paragraphs">
+  <br>
+  <sub><em>Each chapter opens on a fresh spread, its heading facing its translation.</em></sub>
+</p>
+
+<p align="center">
   <img src="docs/screenshots/gloss.jpg" width="860"
        alt="Hovering a French word shows a tooltip with its translation, part of speech, infinitive, and passé composé">
   <br>
