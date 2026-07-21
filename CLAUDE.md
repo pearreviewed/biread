@@ -37,10 +37,16 @@ ends. A resumed paragraph starts flush, not indented. *(Built.)*
 
 > ok in th elocal host the book is so squished and narrow what the heck
 
-**The book keeps book proportions at any window size.** Width follows height, so
-a short window makes the book smaller rather than squatter; type and page
-margins scale with it so line length stays roughly constant in characters.
-*(Built.)*
+**The book keeps book proportions at any window size, and fills the page.** The
+spread is sized (in JS, `sizeBook`) to the largest **7:5** box that fits the
+stage both ways — height-bound on a wide window, width-bound on a tall one,
+capped at 1500px on a huge screen — so it fills ~78% of a laptop instead of
+stranding in the middle, and the ratio never flattens. Width still follows
+height on a short window; type and page margins scale with the book, so line
+length stays roughly constant. *(Built. The earlier height-only 1.22 spread was
+the reason it was "squished and narrow": it left ~230px of desk each side on a
+1440 laptop and squared off to 1.08 on a 1080p screen, because a bare max-width
+capped the width while the height kept growing.)*
 
 ### Alignment
 

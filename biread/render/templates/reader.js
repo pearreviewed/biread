@@ -17,6 +17,12 @@
   // to a single stacked column. Kept low enough that a partly-sized laptop window
   // still gets the two-page spread — only phones and very narrow windows stack.
   var MOBILE_BREAKPOINT = 640;
+  // The open-book spread is sized to the biggest box of this aspect that fits the
+  // stage both ways (see sizeBook). 7:5 is two ~0.7 pages — a real open book — and
+  // fills a wide laptop far better than a squarer spread without over-long lines.
+  var SPREAD_RATIO = 7 / 5;
+  var WIDTH_FILL = 0.94;   // leave a little desk at the sides on a wide-short window
+  var MAX_BOOK_W = 1500;   // absolute cap, so the book stays a book on a huge screen
   var TURN_MS = 600;
   var FADE_MS = 150;
   var STORE_VERSION = 2;
@@ -72,15 +78,33 @@
 
   // Type scales with the book, so a smaller book keeps the same number of
   // characters per line instead of turning into a narrow ribbon of text.
-  // 1060px of book — the widest it goes — lands on the design's 20px.
+  // 1060px of book lands on the design's 20px; the cap lets a wide-screen spread
+  // grow a little more instead of flattening into over-long lines.
   function fpx() {
     var width = view.book ? view.book.getBoundingClientRect().width : 1060;
-    var base = Math.max(15, Math.min(21, width / 53));
+    var base = Math.max(15, Math.min(23, width / 53));
     return Math.round(base * S.fontScale);
   }
 
   function applyFontSize() {
     document.documentElement.style.setProperty('--fpx', fpx() + 'px');
+  }
+
+  // Size the desktop spread to the largest SPREAD_RATIO box that fits the stage
+  // both ways: height-bound on a wide window (fills the height, centred with a
+  // little desk either side), width-bound on a tall one, capped on a huge screen.
+  // Height is recomputed from the final width, so no cap can flatten the ratio.
+  // Mobile is one stacked column, left to CSS.
+  function sizeBook() {
+    if (!view.book || S.mobile) return;
+    var stage = document.getElementById('stage-wrap');
+    var cs = getComputedStyle(stage);
+    var availW = stage.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    var availH = stage.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+    if (availW < 1 || availH < 1) return;
+    var w = Math.min(availW * WIDTH_FILL, availH * SPREAD_RATIO, MAX_BOOK_W);
+    view.book.style.width = w + 'px';
+    view.book.style.height = w / SPREAD_RATIO + 'px';
   }
 
   // Measure the stage rather than trusting window.innerWidth, which some
@@ -1049,12 +1073,14 @@
     if (host && !host.contains(e.relatedTarget)) clearActive(Number(host.dataset.pair));
   });
 
-  // Watch the book's own box rather than the window. Pagination depends on that
-  // box and nothing else, so this reacts to exactly the changes that matter —
-  // including the reader booting before the browser has laid anything out,
-  // which would otherwise measure a zero-width page and put one paragraph on
-  // every spread. It also ignores the resize events mobile browsers fire when
-  // the URL bar hides without changing the box.
+  // Watch the stage rather than the window. The book's size is derived from the
+  // stage's box (sizeBook) and nothing else, so this reacts to exactly the
+  // changes that matter — the header wrapping, the window resizing, and the
+  // reader booting before the browser has laid anything out, which would
+  // otherwise measure a zero-width page and put one paragraph on every spread.
+  // It also ignores the resize events mobile browsers fire when the URL bar
+  // hides without changing the box. The stage element is stable across remounts,
+  // so it is observed once.
   var layoutTimer = null;
   var layoutObserver = null;
   var lastBox = { width: 0, height: 0 };
@@ -1063,16 +1089,14 @@
     clearTimeout(layoutTimer);
     layoutTimer = setTimeout(function () {
       if (!S.ready) return;
-      var box = view.book.getBoundingClientRect();
-      var width = Math.round(box.width);
-      var height = Math.round(box.height);
+      var stage = document.getElementById('stage-wrap');
+      var width = Math.round(stage.clientWidth);
+      var height = Math.round(stage.clientHeight);
       if (!width || !height) return;
       // Skip only when there is a laid-out book to keep: an empty `spreads`
       // means pagination never got a usable box, so retry even at the same size.
       if (spreads.length && width === lastBox.width && height === lastBox.height) return;
       lastBox = { width: width, height: height };
-      measureHeader();
-      applyFontSize(); // the book resized, so the type scales with it
 
       var anchor = currentPair();
       var mobile = isMobileWidth();
@@ -1082,8 +1106,10 @@
       if (mobile !== S.mobile) {
         S.mobile = mobile;
         mount();
-        watchLayout();
       }
+      measureHeader();
+      sizeBook();      // the stage changed, so re-fit the book to it
+      applyFontSize(); // then scale the type to the book's new width
       repaginate(anchor);
     }, 120);
   }
@@ -1092,7 +1118,7 @@
     if (!window.ResizeObserver) return;
     if (layoutObserver) layoutObserver.disconnect();
     layoutObserver = new ResizeObserver(onLayoutChange);
-    layoutObserver.observe(view.book);
+    layoutObserver.observe(document.getElementById('stage-wrap'));
   }
 
   window.addEventListener('resize', onLayoutChange);
@@ -1355,7 +1381,8 @@
     measureHeader();
     S.mobile = isMobileWidth();
     mount();
-    applyFontSize(); // after mount: the size is derived from the book's own box
+    sizeBook();      // give the book its box before anything measures against it
+    applyFontSize(); // after sizeBook: the type is derived from the book's width
     buildProbe();
     paginateNextSection(); // first section synchronously so the book opens now
     S.ready = true;
@@ -1370,10 +1397,10 @@
     scheduleBackgroundPagination();
 
     // Record what we just laid out against. If it was nothing — a book opened
-    // before the browser sized the viewport — the watcher sees the real box
-    // arrive and repaginates.
-    var box = view.book.getBoundingClientRect();
-    lastBox = { width: Math.round(box.width), height: Math.round(box.height) };
+    // before the browser sized the viewport — the watcher sees the real stage
+    // box arrive and repaginates.
+    var stage = document.getElementById('stage-wrap');
+    lastBox = { width: Math.round(stage.clientWidth), height: Math.round(stage.clientHeight) };
     watchLayout();
   }
 
