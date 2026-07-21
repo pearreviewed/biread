@@ -726,6 +726,20 @@
     return el;
   }
 
+  // A verb-form line: a muted label, then the form itself. The label leads with
+  // a middot — the reader's own separator — so "inf · être" reads as a citation,
+  // not the prose "from être".
+  function formLine(label, value) {
+    var el = document.createElement('div');
+    el.className = 'tip-form';
+    var tag = document.createElement('span');
+    tag.className = 'tip-form-label';
+    tag.textContent = label + ' · ';
+    el.appendChild(tag);
+    el.appendChild(document.createTextNode(value));
+    return el;
+  }
+
   function showTip(span) {
     hideTip();
     var parts = span.dataset.unit.split(':');
@@ -738,8 +752,8 @@
     if (unit[2]) tip.appendChild(line('tip-pos', unit[2]));
     tip.appendChild(line('tip-gloss', unit[3]));
     // Only verbs carry these, and only when they say something the surface does not.
-    if (unit[4]) tip.appendChild(line('tip-form', 'from ' + unit[4]));
-    if (unit[5]) tip.appendChild(line('tip-form', 'passé composé: ' + unit[5]));
+    if (unit[4]) tip.appendChild(formLine('inf', unit[4]));
+    if (unit[5]) tip.appendChild(formLine('passé composé', unit[5]));
     document.body.appendChild(tip);
 
     var target = span.getBoundingClientRect();

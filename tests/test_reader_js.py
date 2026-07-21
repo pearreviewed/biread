@@ -696,8 +696,8 @@ def test_hover_shows_the_gloss_with_the_verb_forms(glossed):
     assert "il se leva" in tip
     assert "verb" in tip
     assert "he rose" in tip
-    assert "from se lever" in tip          # infinitive, verbs only
-    assert "passé composé: il s'est levé" in tip
+    assert "inf · se lever" in tip          # infinitive, verbs only
+    assert "passé composé · il s'est levé" in tip
 
 
 def test_a_non_verb_shows_no_verb_lines(glossed):
@@ -705,7 +705,7 @@ def test_a_non_verb_shows_no_verb_lines(glossed):
     glossed.wait_for_selector(".tip", timeout=3000)
     tip = glossed.inner_text(".tip")
     assert "on the table" in tip
-    assert "from " not in tip
+    assert "inf ·" not in tip
     assert "passé composé" not in tip
 
 
