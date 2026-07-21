@@ -7,6 +7,26 @@ the right, paginated at runtime like a real book.
 The output is one file. No server, no network, no build step — open it in a
 browser, or email it to someone.
 
+<p align="center">
+  <img src="docs/screenshots/spread.jpg" width="860"
+       alt="A two-page spread: the French text on the left page, its English translation on the right">
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/gloss.jpg" width="860"
+       alt="Hovering a French word shows a tooltip with its translation, part of speech, infinitive, and passé composé">
+  <br>
+  <sub><em>Hover any word for its translation in context — with the infinitive and, for a
+  passé simple verb, the passé composé.</em></sub>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/mobile.jpg" width="300"
+       alt="On a narrow screen the spread folds to a single column, each French paragraph followed by its English">
+  <br>
+  <sub><em>On a phone, the spread folds into a single column.</em></sub>
+</p>
+
 ## Quick start
 
 ```sh
