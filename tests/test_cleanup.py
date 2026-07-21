@@ -212,7 +212,8 @@ def test_the_source_citation_header_is_not_body_text():
     paragraphs = [p for c in chapters for p in c.paragraphs]
     assert not any("Garnier" in p for p in paragraphs)
     assert not any("HISTOIRE PHILOSOPHIQUE" in p for p in paragraphs)
-    assert paragraphs[0] == "(1752)"
+    # The book opens on its first real sentence, not the header or the date.
+    assert paragraphs[0] == "Dans une de ces planètes il y avait un jeune homme."
     assert [r.kind for r in removed].count("Source citation header") == 1
 
 
@@ -228,3 +229,19 @@ def test_a_book_with_no_header_keeps_its_first_paragraph():
     plain = "CHAPITRE I.\nLE DÉPART\n\nIl monta l'escalier sans rien dire.\n"
     paragraphs = [p for c in clean(plain)[0] for p in c.paragraphs]
     assert paragraphs == ["Il monta l'escalier sans rien dire."]
+
+
+def test_a_bare_year_in_the_front_matter_is_dropped():
+    # "(1752)" is the work's date, apparatus — not the book's first paragraph.
+    text = "(1752)\n\nCHAPITRE I.\nLE DÉPART\n\nDans une de ces planètes.\n"
+    chapters, removed = clean(text)
+    paragraphs = [p for c in chapters for p in c.paragraphs]
+    assert paragraphs == ["Dans une de ces planètes."]
+    assert any(r.kind == "Publication date" for r in removed)
+
+
+def test_a_year_in_parentheses_inside_prose_is_kept():
+    # Once real text has been kept, a parenthesised year is the author's own.
+    text = "CHAPITRE I.\nLE DÉPART\n\nIl la publia (1752) sans un mot.\n"
+    paragraphs = [p for c in clean(text)[0] for p in c.paragraphs]
+    assert paragraphs == ["Il la publia (1752) sans un mot."]

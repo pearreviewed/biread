@@ -49,6 +49,12 @@ BARE_PAGE_NUMBER_RE = re.compile(r"^\[?\d{1,4}\]?$")
 # could be anything, but prose does not carry "(p. 105-122)".
 SOURCE_CITATION_RE = re.compile(r"\(\s*pp?\.\s*\d+(\s*[-–—]\s*\d+)?\s*\)")
 
+# A bare year in parentheses standing alone in the front matter — "(1752)" — is
+# the work's date, apparatus like the citation above it, not the book's opening
+# line. Only stripped before any real text is kept; a parenthesised year inside
+# prose is the author's own.
+PUBLICATION_DATE_RE = re.compile(r"^\(\s*\d{3,4}\s*\)$")
+
 # Wikisource marks each footnote with an upwards arrow linking back to its
 # reference. Spelled as an escape because the bare glyph is easy to mistake for
 # other arrows in an editor. Written U+2191.
@@ -168,6 +174,9 @@ def _blocks(text: str) -> tuple[list[list[str]], list[Removal]]:
         # the author's own.
         if not out and any(SOURCE_CITATION_RE.search(ln) for ln in lines):
             removed.append(Removal("Source citation header", " ".join(lines)))
+            continue
+        if not out and len(lines) == 1 and PUBLICATION_DATE_RE.match(lines[0]):
+            removed.append(Removal("Publication date", lines[0]))
             continue
         # Judged on the whole block, not its first line: a footnote is usually
         # hard-wrapped, and dropping only its opening line would strand the
