@@ -34,7 +34,8 @@ def _esc(text: str) -> str:
 
 
 def _print_html(
-    title: str, chapters: list[Chapter], translations: dict[str, str], lang_code: str = "en"
+    title: str, chapters: list[Chapter], translations: dict[str, str],
+    lang_code: str = "en", author: str = "",
 ) -> str:
     regular = _b64(ASSETS / "fonts" / "eb-garamond-400.woff2")
     italic = _b64(ASSETS / "fonts" / "eb-garamond-400-italic.woff2")
@@ -67,6 +68,7 @@ def _print_html(
 body {{ font-family: 'EB Garamond', Georgia, serif; font-size: 10.5pt; line-height: 1.42;
   color: #201a12; background: #fff; margin: 0; }}
 h1.book {{ text-align: center; font-size: 22pt; margin: 0 0 4pt; }}
+.author {{ text-align: center; font-size: 13pt; color: #5a4f3d; margin: 0 0 6pt; }}
 .byline {{ text-align: center; color: #8a7551; letter-spacing: .18em;
   text-transform: uppercase; font-size: 8pt; margin-bottom: 20pt; }}
 table {{ width: 100%; border-collapse: collapse; }}
@@ -83,6 +85,7 @@ h2 {{ font-size: 14pt; margin: 2pt 0 8pt; break-after: avoid; }}
 </style></head>
 <body>
 <h1 class="book">{_esc(title)}</h1>
+{f'<div class="author">{_esc(author)}</div>' if author else ''}
 <div class="byline">Lecteur bilingue</div>
 <table>
 {chr(10).join(rows)}
@@ -97,6 +100,7 @@ def write_pdf(
     translations: dict[str, str],
     output_path: Path,
     target: Target = ENGLISH,
+    author: str = "",
 ) -> None:
     try:
         from playwright.sync_api import sync_playwright
@@ -106,7 +110,7 @@ def write_pdf(
             '  pip install -e ".[browser]" && playwright install chromium'
         ) from e
 
-    html = _print_html(title, chapters, translations, target.code)
+    html = _print_html(title, chapters, translations, target.code, author)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     try:

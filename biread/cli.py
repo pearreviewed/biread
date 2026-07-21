@@ -58,6 +58,10 @@ def build_parser() -> argparse.ArgumentParser:
         help="book title for the reader header (default: derived from the filename)",
     )
     parser.add_argument(
+        "--author", type=str, default=None,
+        help="the book's author, written into the EPUB metadata and the PDF title page",
+    )
+    parser.add_argument(
         "--gloss", action="store_true",
         help="also annotate the French for hover translation (costs extra; see --dry-run)",
     )
@@ -298,6 +302,7 @@ def run(args: argparse.Namespace) -> None:
     report_structure(chapters)
 
     title = args.title or humanize(args.input.stem)
+    author = args.author or ""
     slug = slugify(title)
     target = get_target(args.lang)
     cache = open_cache(cache_file(args.cache_dir, slug, "translations", target), args.rebuild_cache)
@@ -343,13 +348,13 @@ def run(args: argparse.Namespace) -> None:
     downloads = []
     if args.epub:
         epub_path = args.output / f"{name}.epub"
-        write_epub(title, chapters, run_result.translations, glosses, epub_path, target)
+        write_epub(title, chapters, run_result.translations, glosses, epub_path, target, author)
         print(f"Wrote {epub_path}")
         downloads.append(("epub", epub_path.name, epub_path.read_bytes()))
 
     if args.pdf:
         pdf_path = args.output / f"{name}.pdf"
-        write_pdf(title, chapters, run_result.translations, pdf_path, target)
+        write_pdf(title, chapters, run_result.translations, pdf_path, target, author)
         print(f"Wrote {pdf_path}")
         downloads.append(("pdf", pdf_path.name, pdf_path.read_bytes()))
 

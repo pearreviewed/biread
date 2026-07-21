@@ -134,7 +134,8 @@ def _nav_html(title: str, chapters: list[Chapter], files: list[str]) -> str:
     )
 
 
-def _opf(title: str, book_id: str, files: list[str], lang_code: str = "en") -> str:
+def _opf(title: str, book_id: str, files: list[str], lang_code: str = "en",
+         author: str = "") -> str:
     modified = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     manifest = [
         '    <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>',
@@ -144,13 +145,21 @@ def _opf(title: str, book_id: str, files: list[str], lang_code: str = "en") -> s
     for i, f in enumerate(files):
         manifest.append(f'    <item id="ch{i}" href="{f}" media-type="application/xhtml+xml"/>')
         spine.append(f'    <itemref idref="ch{i}"/>')
+    # The book's own author, marked with the MARC "aut" role so a library shelves
+    # it correctly. Omitted entirely when unknown, rather than left blank.
+    creator = (
+        f'    <dc:creator id="creator">{_esc(author)}</dc:creator>\n'
+        '    <meta refines="#creator" property="role" scheme="marc:relators">aut</meta>\n'
+        if author else ""
+    )
     return (
         '<?xml version="1.0" encoding="UTF-8"?>\n'
         '<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="book-id">\n'
         '  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">\n'
         f'    <dc:identifier id="book-id">urn:uuid:{book_id}</dc:identifier>\n'
         f"    <dc:title>{_esc(title)}</dc:title>\n"
-        "    <dc:language>fr</dc:language>\n"
+        + creator
+        + "    <dc:language>fr</dc:language>\n"
         f"    <dc:language>{lang_code}</dc:language>\n"
         f'    <meta property="dcterms:modified">{modified}</meta>\n'
         "  </metadata>\n"
@@ -167,6 +176,7 @@ def write_epub(
     glosses: dict[str, list[GlossUnit]] | None,
     output_path: Path,
     target: Target = ENGLISH,
+    author: str = "",
 ) -> None:
     glosses = glosses or {}
     files = [f"chapter{i}.xhtml" for i in range(len(chapters))]
@@ -181,7 +191,7 @@ def write_epub(
         z.writestr("META-INF/container.xml", CONTAINER_XML)
         z.writestr("OEBPS/style.css", STYLESHEET)
         z.writestr("OEBPS/nav.xhtml", _nav_html(title, chapters, files))
-        z.writestr("OEBPS/content.opf", _opf(title, book_id, files, target.code))
+        z.writestr("OEBPS/content.opf", _opf(title, book_id, files, target.code, author))
         for chapter, name in zip(chapters, files):
             z.writestr(f"OEBPS/{name}", _chapter_html(chapter, translations, glosses, target.code))
     tmp.replace(output_path)

@@ -169,3 +169,46 @@ def test_write_pdf_produces_a_real_pdf(tmp_path):
     data = out.read_bytes()
     assert data[:5] == b"%PDF-"
     assert len(data) > 2000
+
+
+# ---- the book's author ----
+
+def test_epub_records_the_author_in_its_metadata(tmp_path):
+    chapters, translations, glosses = book_with_gloss()
+    out = tmp_path / "b.epub"
+    write_epub("Micromégas", chapters, translations, glosses, out, author="Voltaire")
+
+    opf = zipfile.ZipFile(out).read("OEBPS/content.opf").decode("utf-8")
+    assert "<dc:creator" in opf and "Voltaire" in opf
+    assert 'property="role"' in opf and ">aut<" in opf   # marked as the author
+    minidom.parseString(opf)   # still well-formed
+
+
+def test_epub_omits_the_creator_when_no_author_is_given(tmp_path):
+    chapters, translations, glosses = book_with_gloss()
+    out = tmp_path / "b.epub"
+    write_epub("Micromégas", chapters, translations, glosses, out)   # no author
+    assert "<dc:creator" not in zipfile.ZipFile(out).read("OEBPS/content.opf").decode()
+
+
+def test_an_author_with_xml_hostile_characters_stays_well_formed(tmp_path):
+    chapters, translations, glosses = book_with_gloss()
+    out = tmp_path / "b.epub"
+    write_epub("T", chapters, translations, glosses, out, author="Dumas & <fils>")
+    opf = zipfile.ZipFile(out).read("OEBPS/content.opf").decode()
+    assert "&amp;" in opf and "&lt;fils&gt;" in opf
+    minidom.parseString(opf)
+
+
+def test_pdf_shows_the_author_on_the_title_page(tmp_path):
+    chapters = [Chapter("I", None, [FR1])]
+    html = _print_html("Micromégas", chapters, {hash_text(FR1): "x"}, author="Voltaire")
+    assert '<div class="author">Voltaire</div>' in html
+    # and it renders between the title and the "Lecteur bilingue" byline
+    assert html.index("Micromégas") < html.index("Voltaire") < html.index("Lecteur bilingue")
+
+
+def test_pdf_has_no_author_line_without_one(tmp_path):
+    chapters = [Chapter("I", None, [FR1])]
+    html = _print_html("Micromégas", chapters, {hash_text(FR1): "x"})
+    assert 'class="author"' not in html
