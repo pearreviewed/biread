@@ -1,0 +1,41 @@
+name: tests
+
+# Run the suite on every push to main and on every pull request, so a change —
+# yours or a contributor's — is checked before it is merged. The tests need no
+# network and no API key, so there are no secrets to configure.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  # The fast path: the ~200 Python tests, across the oldest and a current Python.
+  # The browser tests skip themselves here — Playwright is not installed — so this
+  # job stays quick and gives the green check most changes need.
+  python:
+    name: python ${{ matrix.python }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: pip install -e ".[dev]"
+      - run: pytest -q
+
+  # The slow path: the reader driven in a real headless Chromium, plus the PDF
+  # export it renders. Separate so it never holds up the fast check.
+  browser:
+    name: browser
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[browser]"
+      - run: python -m playwright install --with-deps chromium
+      - run: pytest tests/test_reader_js.py tests/test_export.py -q
