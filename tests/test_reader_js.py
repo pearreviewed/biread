@@ -8,6 +8,8 @@ and none of them are reachable without a rendering engine.
 Requires `pip install -e ".[browser]"` plus `playwright install chromium`;
 skipped entirely when that is not present.
 """
+import re
+
 import pytest
 
 from biread.cleanup import Chapter
@@ -374,6 +376,53 @@ def test_junk_in_the_field_does_nothing(reader):
     reader.press("#counter-input", "Enter")
     reader.wait_for_timeout(300)
     assert current_spread(reader) == before
+
+
+# ---- shareable position in the URL ----
+
+def test_turning_a_page_updates_the_url_without_growing_history(reader):
+    rewind(reader)
+    before = reader.evaluate("history.length")
+    reader.evaluate("document.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}))")
+    reader.wait_for_timeout(650)
+    assert re.match(r"^#p\d+$", reader.evaluate("location.hash")), "URL should carry the page"
+    # replaceState, not pushState: Back must still leave the book, not walk it.
+    assert reader.evaluate("history.length") == before
+
+
+def test_opening_a_link_lands_on_that_page_and_skips_the_resume_banner(browser, tmp_path_factory):
+    # A shared link means "take me here", so it wins over any saved position
+    # and goes straight there rather than offering to resume.
+    path = build_reader(tmp_path_factory, published=False)
+    page = browser.new_page(viewport={"width": 1280, "height": 900})
+    page.goto(path.as_uri() + "#p8")
+    page.wait_for_function(
+        "() => { const c = document.getElementById('counter');"
+        "return c && c.textContent && !c.textContent.includes('+'); }",
+        timeout=15000,
+    )
+    page.wait_for_timeout(400)
+    on_spread = page.evaluate("""() => {
+      const els = [...document.querySelectorAll('#stage-wrap [data-pair]')].map(e => Number(e.dataset.pair));
+      return { min: Math.min(...els), max: Math.max(...els) };
+    }""")
+    assert on_spread["min"] <= 8 <= on_spread["max"], "the linked pair should be on the open spread"
+    assert not page.is_visible(".resume-banner")
+    page.close()
+
+
+def test_the_copy_link_button_copies_a_url_with_the_page(reader):
+    rewind(reader)
+    reader.evaluate("document.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}))")
+    reader.wait_for_timeout(650)
+    copied = reader.evaluate("""async () => {
+      let got = null;
+      navigator.clipboard.writeText = t => { got = t; return Promise.resolve(); };
+      document.getElementById('link-btn').click();
+      await new Promise(r => setTimeout(r, 100));
+      return got;
+    }""")
+    assert copied and re.search(r"#p\d+$", copied), copied
 
 
 # ---- gloss hover ----

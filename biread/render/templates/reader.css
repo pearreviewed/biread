@@ -40,6 +40,13 @@ button:focus-visible { outline: 2px solid rgba(200,175,130,.85); outline-offset:
 .counter:empty { visibility: hidden; }
 .counter-input { color: #f4ead0; background: rgba(120,95,55,.16); border: 1px solid rgba(200,175,130,.55); outline: none; }
 
+/* Copy a link to the current page. The address bar already tracks the page, so
+   this is the discoverable way to hand it to another device. */
+.link-btn { display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 8px; border: 1px solid transparent; background: none; color: #7d6e52; position: relative; }
+.link-btn:hover { color: #c8b891; border-color: rgba(180,150,100,.28); }
+.link-btn.copied { color: #b9c99a; }
+.link-btn.copied::after { content: 'Link copied'; position: absolute; top: calc(100% + 6px); right: 0; white-space: nowrap; font-size: 12px; letter-spacing: .04em; color: #cdbf9d; background: #211b14; border-radius: 6px; padding: 4px 8px; box-shadow: 0 8px 22px rgba(0,0,0,.5); animation: xfade .16s ease-out; }
+
 .btn-pill { font-size: 14px; color: #e4d7ba; background: rgba(120,95,55,.16); border: 1px solid rgba(180,150,100,.28); border-radius: 999px; padding: 7px 16px; }
 .segmented-row { display: flex; align-items: center; gap: 6px; }
 .segmented { display: flex; align-items: stretch; border: 1px solid rgba(180,150,100,.28); border-radius: 999px; overflow: hidden; }

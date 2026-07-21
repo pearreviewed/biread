@@ -526,7 +526,21 @@
   function turning() { return !!S.turn || S.fade; }
 
   function persistPosition() {
-    lsSet('last', { v: STORE_VERSION, pair: currentPair() });
+    var pair = currentPair();
+    lsSet('last', { v: STORE_VERSION, pair: pair });
+    // Keep the address bar on the current page, without adding a history entry
+    // (Back still leaves the book, not walks it backwards). Copy the URL, open
+    // it on another device, and it lands here — the one thing local storage
+    // cannot do, done with no server and no account.
+    try { history.replaceState(null, '', '#p' + pair); } catch (e) {}
+  }
+
+  // A page number carried in the URL, from a link someone shared or reopened.
+  function pageFromHash() {
+    var m = /#p(\d+)/.exec(location.hash || '');
+    if (!m) return null;
+    var pair = parseInt(m[1], 10);
+    return pair >= 0 && pair < PAIRS.length ? pair : null;
   }
 
   function goToSpread(index, animate) {
@@ -881,6 +895,33 @@
 
   counterLabel.addEventListener('click', openFinder);
   counterInput.addEventListener('blur', closeFinder);
+
+  // Copy a link to the current page. The URL already carries it (persistPosition
+  // keeps #p current), so this is just the address bar, handed over on purpose.
+  var linkButton = document.getElementById('link-btn');
+  var linkFlash = null;
+  linkButton.addEventListener('click', function () {
+    persistPosition(); // make sure the URL matches this exact page first
+    var url = location.href;
+    var confirm = function () {
+      linkButton.classList.add('copied');
+      clearTimeout(linkFlash);
+      linkFlash = setTimeout(function () { linkButton.classList.remove('copied'); }, 1600);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url).then(confirm, function () { prompt('Copy this link:', url); });
+    } else {
+      prompt('Copy this link:', url);
+    }
+  });
+
+  // A #p link pasted into an already-open book should navigate too, not just one
+  // opened fresh. replaceState (how the URL is kept current) never fires this, so
+  // there is no loop.
+  window.addEventListener('hashchange', function () {
+    var pair = pageFromHash();
+    if (pair != null && pair !== currentPair()) goToPair(pair, false);
+  });
   counterInput.addEventListener('keydown', function (e) {
     // While typing, arrows and space belong to the field, not to the book.
     e.stopPropagation();
@@ -1289,6 +1330,9 @@
     var storedPosition = lsGet('last');
     var resumePair =
       storedPosition && typeof storedPosition.pair === 'number' ? storedPosition.pair : 0;
+    // A shared link says "take me here", so it wins over the local memory and
+    // goes straight there rather than offering to resume.
+    var linkedPair = pageFromHash();
 
     measureHeader();
     S.mobile = isMobileWidth();
@@ -1298,7 +1342,11 @@
     paginateNextSection(); // first section synchronously so the book opens now
     S.ready = true;
     S.spreadIndex = 0;
-    if (resumePair > 0 && resumePair < PAIRS.length) S.resumePair = resumePair;
+    if (linkedPair != null) {
+      goToPair(linkedPair, false);
+    } else if (resumePair > 0 && resumePair < PAIRS.length) {
+      S.resumePair = resumePair;
+    }
     paint();
     renderOverlays();
     scheduleBackgroundPagination();
