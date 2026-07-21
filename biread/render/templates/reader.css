@@ -132,8 +132,19 @@ p.pair-en { color: #4b4335; }
 p.pair-en.blurred { filter: blur(5px); }
 .xfade { animation: xfade .32s ease; }
 
-.page-num { position: absolute; bottom: calc(var(--fpx) * 1.05); left: calc(var(--fpx) * 2.9); font-size: 13px; letter-spacing: .2em; color: #9c8a66; }
+/* The same folio sits at the outer bottom corner of both pages, so a glance
+   confirms the French left and the translated right are one page in two
+   languages, not two facing pages. The outer top corner names each page's
+   language: FR on the left, the target code on the right. */
+.page-num { position: absolute; bottom: calc(var(--fpx) * 1.05); font-size: 13px; letter-spacing: .2em; color: #9c8a66; }
+.page-num-left { left: calc(var(--fpx) * 2.9); }
+.page-num-right { right: calc(var(--fpx) * 2.9); }
 .page-num-mobile { position: absolute; bottom: calc(var(--fpx)); right: calc(var(--fpx) * 1.5); font-size: 13px; letter-spacing: .2em; color: #9c8a66; }
+.page-corner { position: absolute; top: calc(var(--fpx) * 1.05); font-size: 9px; letter-spacing: .3em; text-transform: uppercase; color: #9c8a66; transition: filter .34s ease; }
+.page-corner-left { left: calc(var(--fpx) * 2.9); }
+.page-corner-right { right: calc(var(--fpx) * 2.9); }
+/* Veil the translation-side tag with its column when blur is on. */
+.page-corner.blurred { filter: blur(3px); }
 
 .mobile-pair { padding: 4px 12px; margin: 0 -12px; }
 .mobile-pair .pair-fr { margin: 0 0 .35em; padding: 0; }

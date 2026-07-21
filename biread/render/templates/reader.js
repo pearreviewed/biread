@@ -25,6 +25,10 @@
   // ships English as a fallback, tagged with data-i18n keys.
   var UI = DATA.ui || {};
   var LANG = DATA.lang || 'en';
+  // The corner tags. The source is always French — the masthead and the left
+  // column's lang say so — and the target follows the build's language.
+  var SOURCE_TAG = 'FR';
+  var TARGET_TAG = (LANG.split('-')[0] || 'en').toUpperCase();
   function i18n(key) { return UI[key] != null ? UI[key] : ''; }
   function applyStaticLabels() {
     var set = function (attr, apply) {
@@ -821,11 +825,24 @@
     return inner;
   }
 
-  function pageNumber(index, mobile) {
+  function pageNumber(index, mobile, side) {
     var num = document.createElement('div');
-    num.className = mobile ? 'page-num-mobile' : 'page-num';
+    num.className = mobile ? 'page-num-mobile' : 'page-num page-num-' + side;
     num.textContent = String(index + 1);
     return num;
+  }
+
+  // A discreet running head naming the page's language: FR on the French left,
+  // the target code on the translated right. Desktop only — the stacked mobile
+  // column interleaves both languages, so a single side tag would not fit it.
+  function cornerTag(lang) {
+    var isSource = lang === 'fr';
+    var tag = document.createElement('div');
+    tag.className = 'page-corner page-corner-' + (isSource ? 'left' : 'right');
+    tag.textContent = isSource ? SOURCE_TAG : TARGET_TAG;
+    // The translation-side tag is veiled with its column while blur is on.
+    if (!isSource && S.blurEnglish) tag.classList.add('blurred');
+    return tag;
   }
 
   function paintDesk(options) {
@@ -837,13 +854,16 @@
     var leftInner = pageInner(false);
     fillColumn(leftInner, spreads[leftIndex], 'fr', chapterStartingSpread(leftIndex));
     view.left.appendChild(leftInner);
-    view.left.appendChild(pageNumber(leftIndex, false));
+    view.left.appendChild(cornerTag('fr'));
+    view.left.appendChild(pageNumber(leftIndex, false, 'left'));
     markOverflow(view.left);
 
     view.right.textContent = '';
     var rightInner = pageInner(options && options.xfade);
     fillColumn(rightInner, spreads[rightIndex], 'en', chapterStartingSpread(rightIndex));
     view.right.appendChild(rightInner);
+    view.right.appendChild(cornerTag('en'));
+    view.right.appendChild(pageNumber(rightIndex, false, 'right'));
     markOverflow(view.right);
 
     var existing = document.getElementById('leaf');
@@ -898,7 +918,8 @@
       var inner = pageInner(false);
       fillColumn(inner, spreads[index], lang, chapterStartingSpread(index));
       page.appendChild(inner);
-      if (lang === 'fr') page.appendChild(pageNumber(index, false));
+      page.appendChild(cornerTag(lang));
+      page.appendChild(pageNumber(index, false, lang === 'fr' ? 'left' : 'right'));
       return page;
     }
 
@@ -1189,7 +1210,7 @@
     S.blurEnglish = !S.blurEnglish;
     S.activePair = -1;
     this.textContent = S.blurEnglish ? i18n('showTranslation') : i18n('blur');
-    var nodes = document.querySelectorAll('.pair-en');
+    var nodes = document.querySelectorAll('.pair-en, .page-corner-right');
     for (var i = 0; i < nodes.length; i++) nodes[i].classList.toggle('blurred', S.blurEnglish);
   });
 

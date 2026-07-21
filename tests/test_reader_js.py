@@ -276,6 +276,46 @@ def test_english_column_is_tagged_english_for_hyphenation(reader):
     assert reader.get_attribute("#stage-wrap .page-right p.pair-en", "lang") == "en"
 
 
+def test_both_pages_carry_the_same_folio(reader):
+    # The spread is one page in two languages, not two facing pages, so the
+    # French left and the translated right show the same number — that is how
+    # the reader confirms the two columns are the same place.
+    rewind(reader)
+    left = reader.inner_text("#stage-wrap .page-left .page-num")
+    right = reader.inner_text("#stage-wrap .page-right .page-num")
+    assert left == right == str(current_spread(reader))
+    # One folio per page, at the outer corner of each (left page → left, right
+    # page → right), so the pair frames the spread symmetrically.
+    assert reader.locator("#stage-wrap .page-left .page-num-left").count() == 1
+    assert reader.locator("#stage-wrap .page-right .page-num-right").count() == 1
+
+
+def test_corner_tags_name_each_page_language(reader):
+    assert reader.inner_text("#stage-wrap .page-left .page-corner") == "FR"
+    assert reader.inner_text("#stage-wrap .page-right .page-corner") == "EN"
+
+
+def test_blur_veils_the_translation_side_tag_only(reader):
+    def blurred(side):
+        cls = reader.get_attribute(f"#stage-wrap .page-{side} .page-corner", "class") or ""
+        return "blurred" in cls
+
+    rewind(reader)
+    reader.click("#blur-toggle")
+    reader.wait_for_timeout(200)
+    # The translation is hidden, so its tag is veiled with it; the French source
+    # tag stays crisp.
+    assert blurred("right") and not blurred("left")
+    # It stays veiled across a page turn (the tag is repainted each spread)...
+    reader.keyboard.press("ArrowRight")
+    reader.wait_for_timeout(700)
+    assert blurred("right")
+    # ...and clears when blur is switched off, leaving the fixture clean.
+    reader.click("#blur-toggle")
+    reader.wait_for_timeout(200)
+    assert not blurred("right")
+
+
 def test_bookmarks_persist_as_a_position_in_the_book(reader):
     reader.evaluate("localStorage.clear()")
     reader.click("#bm-star")
@@ -592,6 +632,9 @@ def test_spanish_reader_localizes_controls_and_hyphenation(spanish_reader):
     assert page.inner_text("#blur-toggle") == "Difuminar la traducción"
     # The translated (right) column hyphenates as Spanish, not English.
     assert page.get_attribute("#stage-wrap .page-right p.pair-en", "lang") == "es"
+    # The corner tag follows the target too: FR stays on the source, ES on the right.
+    assert page.inner_text("#stage-wrap .page-left .page-corner") == "FR"
+    assert page.inner_text("#stage-wrap .page-right .page-corner") == "ES"
 
 
 def test_the_masthead_stays_french_whatever_the_target(spanish_reader):
