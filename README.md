@@ -112,10 +112,20 @@ collide.
 
 Because saving is entirely client-side, **hosting is just static files** —
 GitHub Pages, an S3 bucket, or a file on disk all behave the same. Anyone who
-opens the page gets their own autosaving copy, no backend and no sign-in. If you
-ever did want progress to follow a reader *between* devices, that is the one
-thing local storage cannot do — it needs a server and some notion of identity,
-which is a different project from this one.
+opens the page gets their own autosaving copy, no backend and no sign-in.
+
+### Carrying your place to another device
+
+The address bar always points at the current page (`…/book.html#p42`), updated
+silently as you read. That link *is* your position, so it travels where local
+storage cannot: copy it — the link button by the page counter does this and
+flashes *Link copied* — and open it on a phone to land on the same page. It
+carries the page, not your bookmarks, and only reaches another device if the
+book is hosted at a shared URL rather than a local file. Opening such a link
+goes straight there, ahead of any saved position. Full cross-device *sync* — a
+shared, always-current place with bookmarks and no copying — is the one thing
+that still needs a server and an identity, which is a different project from
+this one.
 
 ## Adding a format
 
