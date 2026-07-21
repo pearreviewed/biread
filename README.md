@@ -8,8 +8,8 @@ The output is one file. No server, no network, no build step — open it in a
 browser, or email it to someone.
 
 <p align="center">
-  <img src="docs/screenshots/spread.jpg" width="860"
-       alt="A two-page spread: the French text on the left page, its English translation on the right">
+  <img src="docs/screenshots/reader.jpg" width="880"
+       alt="The reader: a header with translation, blur, chapters, bookmarks, font size and download controls, above a two-page spread with French on the left and English on the right">
 </p>
 
 <p align="center">
