@@ -295,25 +295,26 @@ def test_corner_tags_name_each_page_language(reader):
     assert reader.inner_text("#stage-wrap .page-right .page-corner") == "EN"
 
 
-def test_blur_veils_the_translation_side_tag_only(reader):
-    def blurred(side):
-        cls = reader.get_attribute(f"#stage-wrap .page-{side} .page-corner", "class") or ""
-        return "blurred" in cls
+def test_blur_hides_the_translation_side_tag_and_folio(reader):
+    def opacity(side, part):
+        return reader.eval_on_selector(
+            f"#stage-wrap .page-{side} .{part}", "e => getComputedStyle(e).opacity")
 
     rewind(reader)
     reader.click("#blur-toggle")
-    reader.wait_for_timeout(200)
-    # The translation is hidden, so its tag is veiled with it; the French source
-    # tag stays crisp.
-    assert blurred("right") and not blurred("left")
-    # It stays veiled across a page turn (the tag is repainted each spread)...
+    reader.wait_for_timeout(600)  # let the fade finish
+    # On the hidden translation side, both the language tag and the folio fade
+    # away so the page gives nothing away; the French source side keeps its marks.
+    assert opacity("right", "page-corner") == "0" and opacity("right", "page-num") == "0"
+    assert opacity("left", "page-corner") == "1" and opacity("left", "page-num") == "1"
+    # Stays hidden across a page turn (each spread is repainted)...
     reader.keyboard.press("ArrowRight")
     reader.wait_for_timeout(700)
-    assert blurred("right")
-    # ...and clears when blur is switched off, leaving the fixture clean.
+    assert opacity("right", "page-corner") == "0" and opacity("right", "page-num") == "0"
+    # ...and comes back when blur is switched off, leaving the fixture clean.
     reader.click("#blur-toggle")
-    reader.wait_for_timeout(200)
-    assert not blurred("right")
+    reader.wait_for_timeout(600)
+    assert opacity("right", "page-corner") == "1" and opacity("right", "page-num") == "1"
 
 
 def test_bookmarks_persist_as_a_position_in_the_book(reader):
