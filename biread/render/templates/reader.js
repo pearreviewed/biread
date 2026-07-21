@@ -525,22 +525,29 @@
   // ---------- navigation ----------
   function turning() { return !!S.turn || S.fade; }
 
-  function persistPosition() {
-    var pair = currentPair();
-    lsSet('last', { v: STORE_VERSION, pair: pair });
-    // Keep the address bar on the current page, without adding a history entry
-    // (Back still leaves the book, not walks it backwards). Copy the URL, open
-    // it on another device, and it lands here — the one thing local storage
-    // cannot do, done with no server and no account.
-    try { history.replaceState(null, '', '#p' + pair); } catch (e) {}
+  // The URL carries the whole reading state — the page, and the bookmarks with
+  // it — so a copied link restores both on another device. "#p<page>", then, if
+  // any, "b<page>.<page>…". Written with replaceState so the bar stays current
+  // without adding history entries (Back still leaves the book).
+  function writeUrl() {
+    var hash = '#p' + currentPair();
+    if (S.bookmarks.length) hash += 'b' + S.bookmarks.join('.');
+    try { history.replaceState(null, '', hash); } catch (e) {}
   }
 
-  // A page number carried in the URL, from a link someone shared or reopened.
-  function pageFromHash() {
-    var m = /#p(\d+)/.exec(location.hash || '');
+  function persistPosition() {
+    lsSet('last', { v: STORE_VERSION, pair: currentPair() });
+    writeUrl();
+  }
+
+  // The reading state a link carries, or null if the URL holds none.
+  function stateFromHash() {
+    var m = /#p(\d+)(?:b([\d.]+))?/.exec(location.hash || '');
     if (!m) return null;
+    var valid = function (p) { return typeof p === 'number' && p >= 0 && p < PAIRS.length; };
     var pair = parseInt(m[1], 10);
-    return pair >= 0 && pair < PAIRS.length ? pair : null;
+    var marks = m[2] ? m[2].split('.').map(Number).filter(valid) : [];
+    return { pair: valid(pair) ? pair : null, bookmarks: marks };
   }
 
   function goToSpread(index, animate) {
@@ -919,8 +926,8 @@
   // opened fresh. replaceState (how the URL is kept current) never fires this, so
   // there is no loop.
   window.addEventListener('hashchange', function () {
-    var pair = pageFromHash();
-    if (pair != null && pair !== currentPair()) goToPair(pair, false);
+    var s = stateFromHash();
+    if (s && s.pair != null && s.pair !== currentPair()) goToPair(s.pair, false);
   });
   counterInput.addEventListener('keydown', function (e) {
     // While typing, arrows and space belong to the field, not to the book.
@@ -960,6 +967,7 @@
 
   function saveBookmarks() {
     lsSet('bookmarks', { v: STORE_VERSION, pairs: S.bookmarks });
+    writeUrl(); // the link carries bookmarks, so keep it current as they change
     updateBookmarkStar();
     paintRibbon();
     renderOverlays();
@@ -1331,8 +1339,15 @@
     var resumePair =
       storedPosition && typeof storedPosition.pair === 'number' ? storedPosition.pair : 0;
     // A shared link says "take me here", so it wins over the local memory and
-    // goes straight there rather than offering to resume.
-    var linkedPair = pageFromHash();
+    // goes straight there rather than offering to resume. Any bookmarks it
+    // carries are merged in — non-destructive, so the reader keeps their own.
+    var linked = stateFromHash();
+    if (linked && linked.bookmarks.length) {
+      var union = {};
+      S.bookmarks.concat(linked.bookmarks).forEach(function (p) { union[p] = 1; });
+      S.bookmarks = Object.keys(union).map(Number).sort(function (a, b) { return a - b; });
+      lsSet('bookmarks', { v: STORE_VERSION, pairs: S.bookmarks });
+    }
 
     measureHeader();
     S.mobile = isMobileWidth();
@@ -1342,8 +1357,8 @@
     paginateNextSection(); // first section synchronously so the book opens now
     S.ready = true;
     S.spreadIndex = 0;
-    if (linkedPair != null) {
-      goToPair(linkedPair, false);
+    if (linked && linked.pair != null) {
+      goToPair(linked.pair, false);
     } else if (resumePair > 0 && resumePair < PAIRS.length) {
       S.resumePair = resumePair;
     }

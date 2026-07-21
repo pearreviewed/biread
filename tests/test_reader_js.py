@@ -411,6 +411,45 @@ def test_opening_a_link_lands_on_that_page_and_skips_the_resume_banner(browser, 
     page.close()
 
 
+def _fresh(browser, path):
+    page = browser.new_page(viewport={"width": 1280, "height": 900})
+    page.goto(path.as_uri())
+    page.wait_for_function(
+        "() => { const c = document.getElementById('counter');"
+        "return c && c.textContent && !c.textContent.includes('+'); }", timeout=15000)
+    return page
+
+
+def test_a_bookmark_writes_itself_into_the_url(browser, tmp_path_factory):
+    page = _fresh(browser, build_reader(tmp_path_factory, published=False))
+    page.evaluate("() => localStorage.clear()")
+    page.evaluate("() => document.getElementById('bm-star').click()")  # add one here
+    page.wait_for_timeout(200)
+    assert re.match(r"^#p\d+b\d", page.evaluate("location.hash")), page.evaluate("location.hash")
+    page.close()
+
+
+def test_a_link_carries_bookmarks_and_restores_them_non_destructively(browser, tmp_path_factory):
+    # The reader wanted bookmarks to travel too, so the link holds them.
+    path = build_reader(tmp_path_factory, published=False)
+    page = _fresh(browser, path)
+    slug = page.evaluate("() => JSON.parse(document.getElementById('book-data').textContent).slug")
+    # a bookmark already on this device, and an incoming link carrying two more.
+    # Set both, then a real reload so boot reads the hash (a same-document hash
+    # change would not re-run it).
+    page.evaluate("([slug]) => { localStorage.setItem('biread:' + slug + ':bookmarks',"
+                  " JSON.stringify({v:2, pairs:[9]})); location.hash = '#p2b3.6'; }", [slug])
+    page.reload()
+    page.wait_for_function(
+        "() => { const c = document.getElementById('counter');"
+        "return c && c.textContent && !c.textContent.includes('+'); }", timeout=15000)
+    page.wait_for_timeout(400)
+    saved = page.evaluate("([slug]) => JSON.parse(localStorage.getItem('biread:' + slug + ':bookmarks')).pairs", [slug])
+    assert sorted(saved) == [3, 6, 9], saved   # union of the link's and the device's
+    assert not page.is_visible(".resume-banner")
+    page.close()
+
+
 def test_the_copy_link_button_copies_a_url_with_the_page(reader):
     rewind(reader)
     reader.evaluate("document.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}))")
