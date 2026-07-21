@@ -200,3 +200,7 @@ rendering engine. Those tests skip unless the browser extra is installed:
 pip install -e ".[browser]" && playwright install chromium
 pytest tests/test_reader_js.py
 ```
+
+## License
+
+[MIT](LICENSE) — use it, change it, ship it; just keep the copyright notice.

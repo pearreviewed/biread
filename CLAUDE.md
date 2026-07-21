@@ -176,8 +176,9 @@ Recorded because the reasoning matters more than the outcome.
   JS, but mobile did not), so a short landscape phone could squash.
 - **The EPUB and PDF are validated structurally, not in the wild.** No one has
   opened the EPUB in Apple Books or Kindle, or printed the PDF, in a test.
-- **Nothing packages it for release.** No LICENSE, no CI, no contributing
-  notes — needed before open-sourcing, none of it written.
+- **Not published yet.** LICENSE (MIT) and CI (GitHub Actions) are in place, but
+  there are no contributing notes, and the repo has no remote — it has never
+  been pushed, so CI has not actually run against a real GitHub yet.
 
 ---
 
