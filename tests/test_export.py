@@ -108,3 +108,64 @@ def test_over_broad_units_are_filtered_from_the_export_too(tmp_path):
 
     _, files = read_epub(out)
     assert 'epub:type="noteref"' not in files["OEBPS/chapter0.xhtml"]
+
+
+# ---- PDF: the print layout (HTML generation is pure; rendering needs a browser) ----
+
+from biread.export.pdf import _print_html
+
+
+def test_pdf_puts_french_and_english_in_aligned_columns():
+    chapters = [Chapter("I", "Le Départ", [FR1])]
+    html = _print_html("Essai", chapters, {hash_text(FR1): "He was called Micromégas."})
+    # one table row, French cell then English cell
+    assert '<td class="fr"' in html and '<td class="en"' in html
+    assert html.index('class="fr"') < html.index('class="en"')
+    assert "He was called Micromégas." in html
+
+
+def test_pdf_carries_no_glosses():
+    # PDF drops glosses on purpose; footnotes would crowd a printed page.
+    chapters = [Chapter("I", None, [FR1])]
+    html = _print_html("Essai", chapters, {hash_text(FR1): "x"})
+    assert "noteref" not in html and "footnote" not in html
+
+
+def test_pdf_escapes_xml_hostile_text():
+    chapters = [Chapter("I", None, [FR2])]
+    html = _print_html("Essai", chapters, {hash_text(FR2): "a < b & c"})
+    assert "&lt;" in html and "&amp;" in html
+    assert "< &" not in html.split("<body>")[1]  # no raw hostile chars in the body
+
+
+def test_pdf_headings_span_both_columns():
+    chapters = [Chapter("IV", "Le Titre", ["Une phrase."])]
+    html = _print_html("Essai", chapters, {})
+    assert 'colspan="2"' in html
+    assert "Le Titre" in html and "Chapitre IV" in html
+
+
+# ---- PDF rendering itself needs Chromium; skipped without the [browser] extra ----
+
+import pytest
+
+try:
+    import playwright.sync_api  # noqa: F401
+    HAS_BROWSER = True
+except ImportError:
+    HAS_BROWSER = False
+
+
+@pytest.mark.skipif(not HAS_BROWSER, reason="PDF export needs the [browser] extra")
+def test_write_pdf_produces_a_real_pdf(tmp_path):
+    from biread.export import write_pdf
+    chapters = [Chapter("I", "Le Départ", ["Une phrase française.", "Une autre phrase."])]
+    translations = {
+        hash_text("Une phrase française."): "A French sentence.",
+        hash_text("Une autre phrase."): "Another sentence.",
+    }
+    out = tmp_path / "b.pdf"
+    write_pdf("Essai", chapters, translations, out)
+    data = out.read_bytes()
+    assert data[:5] == b"%PDF-"
+    assert len(data) > 2000

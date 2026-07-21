@@ -184,7 +184,10 @@ biread/
   cleanup.py      raw text -> chapters of clean paragraphs
   translate.py    paragraphs -> English, batched and cached
   align.py        a published translation -> matched to the French by content
+  gloss.py        per-paragraph hover units; width judged at render, not cache
+  language.py     what glossing needs to know about the source language
   render/         book -> one HTML file (templates/ holds the real reader)
+  export/         static copies: epub.py (reflowable), pdf.py (print, headless Chromium)
   llm/            one thin client per provider
   cache.py        content-hash JSON cache, merges on write
   config.py       environment, models, pricing

@@ -27,6 +27,9 @@ python -m biread book.txt -o output/
 | `-o, --output DIR` | Where to write the HTML (default `output/`) |
 | `--published FILE` | Also show a published English translation you already own |
 | `--title TEXT` | Title in the reader header (default: from the filename) |
+| `--gloss` | Annotate the French for hover translation (costs extra; see `--dry-run`) |
+| `--epub` | Also write a reflowable EPUB, glosses as tap-to-reveal notes |
+| `--pdf` | Also write a print PDF, French and English side by side (needs `[browser]`) |
 | `--cache-dir DIR` | Where translation caches live (default `cache/`) |
 | `--dry-run` | Report uncached work and an estimated cost, then stop |
 | `--force` | Proceed with books above 2,000 paragraphs |
@@ -130,6 +133,23 @@ path is not the same on two machines.
 What is left, and genuinely needs a server, is silent *sync* — two devices
 staying current without anyone copying a link. That is a different project from
 this one.
+
+## Exporting to EPUB and PDF
+
+The reader is one interactive HTML file; `--epub` and `--pdf` write static
+copies for reading elsewhere. Neither calls the API — they transform text that
+is already generated and cached — but each keeps only what its medium can hold.
+
+- **`--epub`** is a reflowable e-book for Kindle, Apple Books, or a phone.
+  E-readers paginate for themselves, so there is no two-page spread: the French
+  and English interleave, paragraph by paragraph. A glossed word becomes an
+  EPUB 3 footnote — Apple Books reveals it on a tap, others show a note at the
+  chapter's end. Built with the standard library, no extra dependency.
+- **`--pdf`** is for print: the French and English side by side in two columns,
+  aligned paragraph by paragraph, matching the reader's type. Glosses are left
+  out — footnotes for every hover would bury the page. It is printed by headless
+  Chromium, so it needs the `[browser]` extra:
+  `pip install -e ".[browser]" && playwright install chromium`.
 
 ## Adding a format
 

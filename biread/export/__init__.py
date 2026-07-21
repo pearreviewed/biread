@@ -7,5 +7,6 @@ tap-to-reveal notes; PDF fixes the two-page spread and leaves the glosses out,
 since footnotes would crowd a printed page.
 """
 from .epub import write_epub
+from .pdf import write_pdf
 
-__all__ = ["write_epub"]
+__all__ = ["write_epub", "write_pdf"]

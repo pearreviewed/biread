@@ -19,7 +19,7 @@ from .extract import get_extractor
 from .gloss import estimate as estimate_gloss
 from .gloss import gloss_book
 from .llm import get_client
-from .export import write_epub
+from .export import write_epub, write_pdf
 from .render import render_book, slugify
 from .translate import estimate, translate_book
 
@@ -58,6 +58,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--epub", action="store_true",
         help="also write a reflowable EPUB with the glosses as tap-to-reveal notes",
+    )
+    parser.add_argument(
+        "--pdf", action="store_true",
+        help="also write a print PDF, French and English side by side (needs the [browser] extra)",
     )
     parser.add_argument(
         "--dry-run", action="store_true",
@@ -325,6 +329,11 @@ def run(args: argparse.Namespace) -> None:
         epub_path = args.output / f"{slug}.epub"
         write_epub(title, chapters, run_result.translations, glosses, epub_path)
         print(f"Wrote {epub_path}")
+
+    if args.pdf:
+        pdf_path = args.output / f"{slug}.pdf"
+        write_pdf(title, chapters, run_result.translations, pdf_path)
+        print(f"Wrote {pdf_path}")
 
 
 def main(argv: list[str] | None = None) -> None:
