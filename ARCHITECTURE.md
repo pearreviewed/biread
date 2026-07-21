@@ -27,10 +27,10 @@ exit codes).
 
 Only two stages cost money — `translate.py` and `gloss.py`, because only they
 call a model. Everything else is pure transformation of text you already have,
-which is why `--dry-run`, the exports, and re-rendering are all free. That cost
-falls on whoever runs the build: a book in a non-default `--lang` is a fresh
-translation, paid by the person who asks for it — a reader who wants another
-language runs biread themselves, with their own key, not the maintainer.
+which is why `--dry-run`, the exports, and re-rendering are all free. Every
+language is self-serve: a book in a non-default `--lang` is a fresh translation,
+so the reader who would like one builds it from the same French source on their
+own key. Each edition is created, and paid for, by whoever wants it.
 
 ## How the stages fit
 

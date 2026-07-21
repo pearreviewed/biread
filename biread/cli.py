@@ -38,8 +38,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("input", type=Path, help="path to the source French text (.txt)")
     parser.add_argument(
         "--lang", type=str, default=DEFAULT_LANG, choices=sorted(TARGETS),
-        help="target translation language (default: english). A non-default "
-             "language is a fresh, paid translation run, borne by whoever runs it.",
+        help="target translation language (default: english). Each language is a "
+             "fresh translation, built on the key of whoever runs it.",
     )
     parser.add_argument(
         "-o", "--output", type=Path, default=Path("output"),

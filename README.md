@@ -25,7 +25,7 @@ python -m biread book.txt -o output/
 | Flag | What it does |
 | --- | --- |
 | `-o, --output DIR` | Where to write the HTML (default `output/`) |
-| `--lang LANG` | Language to translate into (default `english`); a non-default language is a fresh, paid translation run |
+| `--lang LANG` | Language to translate into (default `english`); each language is a fresh translation, built on the runner's own key |
 | `--published FILE` | Also show a published translation (in the target language) you already own |
 | `--title TEXT` | Title in the reader header (default: from the filename) |
 | `--gloss` | Annotate the French for hover translation (costs extra; see `--dry-run`) |
@@ -61,10 +61,11 @@ language instead:
 python -m biread french.txt --lang spanish
 ```
 
-Each book is built into one language, and **the cost falls on whoever runs the
-build**, with their own key. The default English build is unchanged; nothing
-generates other languages on its own. Someone who wants a Spanish edition runs
-biread themselves and pays for their own translation — not you.
+Each book is built into a single language, and every language is **self-serve**:
+someone who would like an edition builds it themselves — from the same French
+source, on their own key. The English build is untouched, nothing generates other
+languages on its own, and a new language is created, and paid for, by the reader
+who asked for it. You only ever build the languages you choose.
 
 The source stays French; the translation, the glosses, the hyphenation, and the
 reader's controls all follow the target, while the *Lecteur bilingue* masthead
