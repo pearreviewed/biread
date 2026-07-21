@@ -7,6 +7,7 @@ from biread.cleanup import Chapter
 from biread.render import (
     build_book_data,
     escape_html,
+    download_name,
     fill,
     render_book,
     script_json,
@@ -26,6 +27,18 @@ def test_slugify():
     assert slugify("Micromégas") == "micromegas"
     assert slugify("Les Fleurs du Mal!") == "les-fleurs-du-mal"
     assert slugify("日本語") == "book"
+
+
+def test_download_name_keeps_the_title_readable():
+    # Unlike the slug, the download name keeps accents and spaces.
+    assert download_name("Micromégas") == "Micromégas - bilingual reader"
+    assert download_name("Les Fleurs du Mal") == "Les Fleurs du Mal - bilingual reader"
+
+
+def test_download_name_strips_only_filesystem_hostile_characters():
+    assert download_name('A/B: "C"?') == "AB C - bilingual reader"
+    assert download_name("  spaced   out  ") == "spaced out - bilingual reader"
+    assert download_name("") == "book - bilingual reader"
 
 
 def test_fill_substitutes_placeholders():

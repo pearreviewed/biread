@@ -61,6 +61,19 @@ def slugify(title: str) -> str:
     return re.sub(r"[^a-zA-Z0-9]+", "-", ascii_title).strip("-").lower() or "book"
 
 
+#: Characters no filesystem or download will accept, plus control codes.
+_UNSAFE_FILENAME = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
+
+
+def download_name(title: str) -> str:
+    """The name the reader, EPUB and PDF are saved under: the title itself, kept
+    readable — accents and spaces and all — with the illegal characters removed,
+    then " - bilingual reader" so a download says what it is."""
+    safe = _UNSAFE_FILENAME.sub("", title)
+    safe = re.sub(r"\s+", " ", safe).strip().rstrip(".") or "book"
+    return f"{safe} - bilingual reader"
+
+
 def escape_html(text: str) -> str:
     return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 

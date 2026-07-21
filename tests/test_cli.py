@@ -57,7 +57,7 @@ def project(tmp_path, monkeypatch, config, make_client):
         "source": source,
         "client": client,
         "invoke": staticmethod(invoke),
-        "html": lambda: (tmp_path / "out" / "micromegas.html").read_text(encoding="utf-8"),
+        "html": lambda: next((tmp_path / "out").glob("*.html")).read_text(encoding="utf-8"),
     })
 
 
@@ -188,7 +188,7 @@ def test_large_books_need_force(project, monkeypatch, capsys):
     assert "safety limit" in capsys.readouterr().err
 
     project.invoke("--force")
-    assert (project.dir / "out" / "micromegas.html").exists()
+    assert list((project.dir / "out").glob("*.html"))
 
 
 def test_incompatible_cache_needs_a_decision(project, monkeypatch, capsys):
@@ -205,7 +205,9 @@ def test_incompatible_cache_needs_a_decision(project, monkeypatch, capsys):
     assert json.loads(cache_file.read_text())["schema_version"] == 1
 
 
-def test_title_overrides_the_filename(project):
+def test_title_names_the_downloaded_files(project):
     project.invoke("--title", "Micromégas")
-    html = (project.dir / "out" / "micromegas.html").read_text(encoding="utf-8")
+    out = project.dir / "out"
+    assert (out / "Micromégas - bilingual reader.html").exists()
+    html = (out / "Micromégas - bilingual reader.html").read_text(encoding="utf-8")
     assert book_data(html)["titleFr"] == "Micromégas"

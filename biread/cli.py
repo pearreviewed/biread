@@ -20,7 +20,7 @@ from .gloss import estimate as estimate_gloss
 from .gloss import gloss_book
 from .llm import get_client
 from .export import write_epub, write_pdf
-from .render import render_book, slugify
+from .render import download_name, render_book, slugify
 from .translate import estimate, translate_book
 
 PARAGRAPH_LIMIT = 2000
@@ -318,7 +318,10 @@ def run(args: argparse.Namespace) -> None:
         gloss_cache = open_cache(args.cache_dir / slug / "glosses.json", args.rebuild_cache)
         glosses = run_glossing(chapters, gloss_cache, cfg).glosses
 
-    output_path = args.output / f"{slug}.html"
+    # The cache is keyed by slug; the files a reader downloads are named for the
+    # book itself.
+    name = download_name(title)
+    output_path = args.output / f"{name}.html"
     render_book(
         title, chapters, run_result.translations, output_path,
         published, published_note, glosses,
@@ -326,12 +329,12 @@ def run(args: argparse.Namespace) -> None:
     print(f"\nWrote {output_path}")
 
     if args.epub:
-        epub_path = args.output / f"{slug}.epub"
+        epub_path = args.output / f"{name}.epub"
         write_epub(title, chapters, run_result.translations, glosses, epub_path)
         print(f"Wrote {epub_path}")
 
     if args.pdf:
-        pdf_path = args.output / f"{slug}.pdf"
+        pdf_path = args.output / f"{name}.pdf"
         write_pdf(title, chapters, run_result.translations, pdf_path)
         print(f"Wrote {pdf_path}")
 
