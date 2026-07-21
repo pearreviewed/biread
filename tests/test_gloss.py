@@ -456,3 +456,22 @@ def test_displayable_drops_the_coordinated_unit_and_keeps_its_neighbours():
     ])))
     shown = displayable(text, units)
     assert [text[u.start:u.end] for u in shown] == ["Les États", "sont petits"]
+
+
+# ---- modal verbs and intensifiers are grammatical, not extra content ----
+
+def test_a_modal_verb_does_not_count_as_a_second_content_word():
+    # "il faut avouer", "on peut faire" are one verb idea, not verb + object.
+    for surface in ["il faut avouer", "on peut faire", "il ne peut", "veut contredire"]:
+        assert not over_broad(surface, "verb"), surface
+
+
+def test_an_intensifier_stays_with_what_it_modifies():
+    for surface in ["un livre fort curieux", "gens toujours utiles", "fort plaisante"]:
+        assert not over_broad(surface, "noun phrase"), surface
+
+
+def test_recovering_intensifiers_does_not_reopen_two_nouns():
+    # The point of the recovery is to keep genuine two-noun phrases out.
+    for surface in ["au-delà de nos usages", "citoyens de la terre", "la force de son esprit"]:
+        assert over_broad(surface, "noun phrase"), surface

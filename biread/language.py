@@ -49,7 +49,7 @@ dans sur sous par pour avec sans chez vers entre depuis pendant contre selon
 avant après derrière devant près loin jusque jusqu malgré parmi outre dès hors sauf
 ne n pas plus jamais rien personne aucun aucune nul nulle guère point
 très bien trop peu assez tant si beaucoup autant moins environ davantage
-quant autour
+quant autour fort toujours souvent
 suis es est sommes êtes sont étais était étions étiez étaient
 fus fut fûmes fûtes furent serai seras sera serons serez seront
 serais serait serions seriez seraient sois soit soyons soyez soient
@@ -58,6 +58,11 @@ ai as avons avez ont avais avait avions aviez avaient
 eus eut eûmes eûtes eurent aurai auras aura aurons aurez auront
 aurais aurait aurions auriez auraient aie aies ait ayons ayez aient
 eu avoir ayant
+peut peux peuvent pouvait pouvais pouvaient pourra purent pu
+faut fallait faudra fallu
+veut veux veulent voulait voulais voulaient voulut voulu
+doit dois doivent devait devais devaient dut dû
+va vas vont allait allais allaient
 deux trois quatre cinq six sept huit neuf dix onze douze treize quatorze
 quinze seize vingt trente quarante cinquante soixante cent cents
 mille million millions milliard milliards premier première second seconde demi
