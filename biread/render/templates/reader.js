@@ -843,6 +843,9 @@
     var num = document.createElement('div');
     num.className = mobile ? 'page-num-mobile' : 'page-num page-num-' + side;
     num.textContent = String(index + 1);
+    // The translated side's folio hides with its column while blur is on, like
+    // its language tag — nothing on the right gives the hidden page away.
+    if (side === 'right' && S.blurEnglish) num.classList.add('blurred');
     return num;
   }
 
@@ -854,7 +857,7 @@
     var tag = document.createElement('div');
     tag.className = 'page-corner page-corner-' + (isSource ? 'left' : 'right');
     tag.textContent = isSource ? SOURCE_TAG : TARGET_TAG;
-    // The translation-side tag is veiled with its column while blur is on.
+    // The translation-side tag hides with its column while blur is on.
     if (!isSource && S.blurEnglish) tag.classList.add('blurred');
     return tag;
   }
@@ -1224,7 +1227,7 @@
     S.blurEnglish = !S.blurEnglish;
     S.activePair = -1;
     this.textContent = S.blurEnglish ? i18n('showTranslation') : i18n('blur');
-    var nodes = document.querySelectorAll('.pair-en, .page-corner-right');
+    var nodes = document.querySelectorAll('.pair-en, .page-corner-right, .page-num-right');
     for (var i = 0; i < nodes.length; i++) nodes[i].classList.toggle('blurred', S.blurEnglish);
   });
 
