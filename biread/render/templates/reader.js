@@ -1861,14 +1861,29 @@
   // bytes are read here, on click, not at load — that is why they sit in their
   // own <script> rather than in the book data.
   var DOWNLOAD_MIME = { epub: 'application/epub+zip', pdf: 'application/pdf' };
-  function download(entry) {
-    var blob = document.getElementById('dl-' + entry.format);
+
+  // Hand over the edition the reader has open: a book built with a published
+  // translation carries both, so the download follows the source toggle. Falls
+  // back to the AI edition, which is always present.
+  function downloadEntryFor(format) {
+    var pick = function (source) {
+      for (var i = 0; i < DOWNLOADS.length; i++) {
+        if (DOWNLOADS[i].format === format && DOWNLOADS[i].source === source) return DOWNLOADS[i];
+      }
+      return null;
+    };
+    return pick(S.source) || pick('translation');
+  }
+  function download(format) {
+    var entry = downloadEntryFor(format);
+    if (!entry) return;
+    var blob = document.getElementById('dl-' + format + '-' + entry.source);
     if (!blob) return;
     var binary = atob(blob.textContent.replace(/\s+/g, ''));
     var bytes = new Uint8Array(binary.length);
     for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
     var url = URL.createObjectURL(
-      new Blob([bytes], { type: DOWNLOAD_MIME[entry.format] || 'application/octet-stream' })
+      new Blob([bytes], { type: DOWNLOAD_MIME[format] || 'application/octet-stream' })
     );
     var link = document.createElement('a');
     link.href = url;
@@ -1922,9 +1937,12 @@
     var pop = popover();
     pop.classList.add('dl-menu');
     pop.appendChild(popoverTitle(i18n('downloadTitle')));
-    DOWNLOADS.forEach(function (entry) {
-      var meta = DOWNLOAD_LABELS[entry.format] ||
-        { title: String(entry.format).toUpperCase(), sub: '' };
+    // One row per format, even when a format carries both editions — which one
+    // saves is decided at click time by the open source, not by the menu.
+    var formats = [];
+    DOWNLOADS.forEach(function (e) { if (formats.indexOf(e.format) === -1) formats.push(e.format); });
+    formats.forEach(function (format) {
+      var meta = DOWNLOAD_LABELS[format] || { title: String(format).toUpperCase(), sub: '' };
       var row = document.createElement('button');
       row.className = 'popover-row';
       var title = document.createElement('div');
@@ -1932,10 +1950,10 @@
       title.textContent = meta.title;
       var sub = document.createElement('div');
       sub.className = 'sub';
-      sub.textContent = i18n(entry.format + 'Sub') || meta.sub;
+      sub.textContent = i18n(format + 'Sub') || meta.sub;
       row.appendChild(title);
       row.appendChild(sub);
-      row.addEventListener('click', function () { download(entry); });
+      row.addEventListener('click', function () { download(format); });
       pop.appendChild(row);
     });
     return pop;

@@ -170,9 +170,9 @@ def test_render_is_deterministic(tmp_path, book):
     assert first.read_bytes() == second.read_bytes()
 
 
-def _blob(html, fmt):
+def _blob(html, fmt, source="translation"):
     match = re.search(
-        rf'<script type="application/octet-stream" id="dl-{fmt}">(.*?)</script>',
+        rf'<script type="application/octet-stream" id="dl-{fmt}-{source}">(.*?)</script>',
         html, re.S,
     )
     return match.group(1) if match else None
@@ -182,20 +182,37 @@ def test_downloads_embed_as_lazy_blobs(tmp_path, book):
     epub, pdf = b"PK\x03\x04epub-bytes", b"%PDF-1.4 pdf-bytes"
     out = tmp_path / "x.html"
     render_book("Mon Livre", book, {}, out,
-                downloads=[("epub", "Mon Livre.epub", epub), ("pdf", "Mon Livre.pdf", pdf)])
+                downloads=[("epub", "translation", "Mon Livre.epub", epub),
+                           ("pdf", "translation", "Mon Livre.pdf", pdf)])
     html = out.read_text(encoding="utf-8")
 
     # The menu metadata rides in the book data; the bytes do not.
     data = book_data_from(html)
     assert data["downloads"] == [
-        {"format": "epub", "filename": "Mon Livre.epub"},
-        {"format": "pdf", "filename": "Mon Livre.pdf"},
+        {"format": "epub", "source": "translation", "filename": "Mon Livre.epub"},
+        {"format": "pdf", "source": "translation", "filename": "Mon Livre.pdf"},
     ]
     # Each blob sits in its own script and decodes back to exactly the input.
     assert base64.b64decode(_blob(html, "epub")) == epub
     assert base64.b64decode(_blob(html, "pdf")) == pdf
     # The base64 is not dumped into the JSON that is parsed on every open.
     assert base64.b64encode(pdf).decode() not in json.dumps(data)
+
+
+def test_both_editions_embed_when_a_published_translation_is_built(tmp_path, book):
+    ai, pub = b"PK\x03\x04ai-epub", b"PK\x03\x04published-epub"
+    out = tmp_path / "x.html"
+    render_book("Mon Livre", book, {}, out, downloads=[
+        ("epub", "translation", "Mon Livre (AI translation).epub", ai),
+        ("epub", "published", "Mon Livre (published translation).epub", pub),
+    ])
+    html = out.read_text(encoding="utf-8")
+
+    data = book_data_from(html)
+    assert [d["source"] for d in data["downloads"]] == ["translation", "published"]
+    # Each edition rides in its own source-tagged blob.
+    assert base64.b64decode(_blob(html, "epub", "translation")) == ai
+    assert base64.b64decode(_blob(html, "epub", "published")) == pub
 
 
 def test_a_plain_build_has_no_download_control(tmp_path, book):
@@ -211,7 +228,8 @@ def test_a_plain_build_has_no_download_control(tmp_path, book):
 def test_a_download_blob_cannot_close_its_script(tmp_path, book):
     # base64 has no '<', so even bytes spelling "</script>" cannot end the tag.
     out = tmp_path / "x.html"
-    render_book("Livre", book, {}, out, downloads=[("epub", "L.epub", b"</script>bytes")])
+    render_book("Livre", book, {}, out,
+                downloads=[("epub", "translation", "L.epub", b"</script>bytes")])
     blob = _blob(out.read_text(encoding="utf-8"), "epub")
     assert "<" not in blob
     assert base64.b64decode(blob) == b"</script>bytes"

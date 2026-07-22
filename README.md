@@ -32,7 +32,8 @@ browser, or email it to someone.
        alt="On a narrow screen the spread folds to a single column, each French paragraph followed by its English">
   <br>
   <sub><em>On a phone, the spread folds into a single column — or export an EPUB
-  with <code>--epub</code> and read it in Apple Books, Kindle, or any e-reader.</em></sub>
+  with <code>--epub</code> and read the spread in Apple Books (best on a tablet
+  or in landscape).</em></sub>
 </p>
 
 ## Quick start
@@ -58,7 +59,7 @@ python -m biread book.txt -o output/
 | `--title TEXT` | Title in the reader header (default: from the filename) |
 | `--gloss` | Annotate the French for hover translation (costs extra; see `--dry-run`) |
 | `--revise` | Let a reader correct the AI translation in the reader — by hand, or on their own key |
-| `--epub` | Also write a reflowable EPUB, glosses as tap-to-reveal notes |
+| `--epub` | Also write a fixed-layout EPUB: the French and English as a locked spread, like the reader (needs `[browser]`) |
 | `--pdf` | Also write a print PDF, French and English side by side (needs `[browser]`) |
 | `--cache-dir DIR` | Where translation caches live (default `cache/`) |
 | `--dry-run` | Report uncached work and an estimated cost, then stop |
@@ -227,11 +228,19 @@ The reader is one interactive HTML file; `--epub` and `--pdf` write static
 copies for reading elsewhere. Neither calls the API — they transform text that
 is already generated and cached — but each keeps only what its medium can hold.
 
-- **`--epub`** is a reflowable e-book for Kindle, Apple Books, or a phone.
-  E-readers paginate for themselves, so there is no two-page spread: the French
-  and English interleave, paragraph by paragraph. A glossed word becomes an
-  EPUB 3 footnote — Apple Books reveals it on a tap, others show a note at the
-  chapter's end. Built with the standard library, no extra dependency.
+- **`--epub`** is a fixed-layout e-book that keeps the reader's open-book spread:
+  the French on the left page, the English on the right, locked together. It is
+  paginated at build time by the reader's own algorithm — both columns break at
+  the same point, so a split paragraph meets again where it ends — which means it
+  measures the type in headless Chromium and needs the `[browser]` extra (below).
+  It best fits a tablet or a Mac in landscape; a phone in portrait shows one page
+  at a time. Glosses are left out — a tap target on every phrase turns the page
+  into a wall of links and buries the text (the same reason the PDF drops them);
+  hover-glossing stays in the on-screen reader.
+- **Built with `--published`?** Each format is written twice — one edition from
+  the AI translation, one from the published one — and the reader's download hands
+  over whichever translation you have open, so the file matches the page you were
+  reading. The two are named `… (AI translation)` and `… (published translation)`.
 - **`--pdf`** is for print: the French and English side by side in two columns,
   aligned paragraph by paragraph, matching the reader's type. Glosses are left
   out — footnotes for every hover would bury the page. It is printed by headless

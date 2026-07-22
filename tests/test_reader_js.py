@@ -34,6 +34,7 @@ TALL_EN = " ".join(f"{SHORT_EN} [en-{n}]" for n in range(90))
 # marker bytes are enough to prove the right file came back intact.
 DL_EPUB = b"PK\x03\x04FAKE-EPUB\x00\x01\x02"
 DL_PDF = b"%PDF-1.4\nFAKE-PDF\n%%EOF"
+DL_EPUB_PUB = b"PK\x03\x04FAKE-EPUB-PUBLISHED\x00\x01\x02"
 
 
 def build_reader(tmp_path_factory, published: bool, downloads=None, target=ENGLISH, revise=False):
@@ -103,7 +104,20 @@ def reader_with_published(browser, tmp_path_factory):
 def reader_with_downloads(browser, tmp_path_factory):
     page = open_reader(browser, build_reader(
         tmp_path_factory, published=False,
-        downloads=[("epub", "Livre.epub", DL_EPUB), ("pdf", "Livre.pdf", DL_PDF)]))
+        downloads=[("epub", "translation", "Livre.epub", DL_EPUB),
+                   ("pdf", "translation", "Livre.pdf", DL_PDF)]))
+    yield page
+    page.close()
+
+
+@pytest.fixture(scope="module")
+def reader_with_both_editions(browser, tmp_path_factory):
+    # A book built with a published translation carries two EPUB editions; the
+    # download follows the source toggle.
+    page = open_reader(browser, build_reader(
+        tmp_path_factory, published=True,
+        downloads=[("epub", "translation", "Livre (AI translation).epub", DL_EPUB),
+                   ("epub", "published", "Livre (published translation).epub", DL_EPUB_PUB)]))
     yield page
     page.close()
 
@@ -658,6 +672,37 @@ def test_the_menu_lists_built_formats_and_saves_them_intact(reader_with_download
         download = info.value
         assert download.suggested_filename == filename
         assert pathlib.Path(download.path()).read_bytes() == blob
+
+
+def _save_epub(page):
+    page.click("#dl-btn")
+    page.wait_for_selector(".popover.dl-menu", timeout=3000)
+    with page.expect_download() as info:
+        page.click(".dl-menu .popover-row:has(.eyebrow-sm:text-is('EPUB'))")
+    return info.value
+
+
+def test_the_download_follows_the_open_translation_source(reader_with_both_editions):
+    page = reader_with_both_editions
+    # One EPUB row, even though two editions are embedded.
+    page.click("#dl-btn")
+    page.wait_for_selector(".popover.dl-menu", timeout=3000)
+    labels = page.eval_on_selector_all(
+        ".dl-menu .popover-row .eyebrow-sm", "els => els.map(e => e.textContent)")
+    assert labels == ["EPUB"]
+    page.click("#dl-btn")  # close
+
+    # Reading the AI translation → the AI edition saves.
+    page.click("#seg-translation")
+    ai = _save_epub(page)
+    assert ai.suggested_filename == "Livre (AI translation).epub"
+    assert pathlib.Path(ai.path()).read_bytes() == DL_EPUB
+
+    # Switch to the published translation → the published edition saves.
+    page.click("#seg-published")
+    pub = _save_epub(page)
+    assert pub.suggested_filename == "Livre (published translation).epub"
+    assert pathlib.Path(pub.path()).read_bytes() == DL_EPUB_PUB
 
 
 # ---- target language ----

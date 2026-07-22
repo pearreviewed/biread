@@ -6,6 +6,12 @@ import pytest
 from biread import cli
 from biread.cleanup import Removal
 
+try:
+    import playwright.sync_api  # noqa: F401
+    HAS_BROWSER = True
+except ImportError:
+    HAS_BROWSER = False
+
 FRENCH = """CHAPITRE I.
 Le Départ
 
@@ -220,11 +226,30 @@ def test_no_revise_config_without_the_flag(project):
     assert "revise" not in book_data(project.html())
 
 
+@pytest.mark.skipif(not HAS_BROWSER, reason="--epub export needs the [browser] extra")
 def test_html_keeps_the_slug_but_exports_take_the_book_name(project):
     # The hosted reader wants a clean URL; a saved EPUB wants a readable name.
+    # --epub now paginates in headless Chromium, so this needs the browser extra.
     project.invoke("--title", "Micromégas", "--epub")
     out = project.dir / "out"
     assert (out / "micromegas.html").exists()
     assert (out / "Micromégas - bilingual reader.epub").exists()
     html = (out / "micromegas.html").read_text(encoding="utf-8")
     assert book_data(html)["titleFr"] == "Micromégas"
+
+
+@pytest.mark.skipif(not HAS_BROWSER, reason="--epub export needs the [browser] extra")
+def test_a_published_build_writes_both_marked_editions(project):
+    # With a published translation, each format is built twice — AI and published —
+    # so the download can follow whichever the reader has open.
+    published = project.dir / "english.txt"
+    published.write_text(PUBLISHED, encoding="utf-8")
+    project.invoke("--title", "Micromégas", "--published", str(published), "--epub")
+
+    out = project.dir / "out"
+    assert (out / "Micromégas (AI translation) - bilingual reader.epub").exists()
+    assert (out / "Micromégas (published translation) - bilingual reader.epub").exists()
+    # the reader offers both, tagged by source, under one EPUB row
+    downloads = book_data(project.html())["downloads"]
+    assert [(d["format"], d["source"]) for d in downloads] == [
+        ("epub", "translation"), ("epub", "published")]

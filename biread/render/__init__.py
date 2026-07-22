@@ -107,19 +107,22 @@ def _b64(path: Path) -> str:
 
 
 # A file the reader can download: (format id, saved filename, its bytes).
-Download = tuple[str, str, bytes]
+#: (format, source, filename, bytes). `source` is "translation" or "published":
+#: a book built with a published translation carries both editions, and the
+#: reader hands over whichever the reader has open.
+Download = tuple[str, str, str, bytes]
 
 
 def _download_scripts(downloads: list[Download] | None) -> str:
-    """One base64 <script> blob per built format, read only when the reader
+    """One base64 <script> blob per built edition, read only when the reader
     downloads it. Kept out of the book data so a multi-megabyte PDF is not parsed
     on every open. base64 has no `<`, so it cannot close the script early."""
     if not downloads:
         return ""
     return "\n".join(
-        f'<script type="application/octet-stream" id="dl-{fmt}">'
+        f'<script type="application/octet-stream" id="dl-{fmt}-{source}">'
         f'{base64.b64encode(blob).decode("ascii")}</script>'
-        for fmt, _filename, blob in downloads
+        for fmt, source, _filename, blob in downloads
     )
 
 
@@ -186,7 +189,8 @@ def build_book_data(
     if downloads:
         # Just what the menu needs; the bytes ride in their own <script> blobs.
         data["downloads"] = [
-            {"format": fmt, "filename": filename} for fmt, filename, _blob in downloads
+            {"format": fmt, "source": source, "filename": filename}
+            for fmt, source, filename, _blob in downloads
         ]
     if revise:
         # No key and no cost live here — only which endpoint a reader's own key

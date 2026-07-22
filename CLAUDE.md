@@ -165,6 +165,7 @@ two at once. `--dry-run` needs no API key.
 | Translation language — how far does localization reach? | Content **and** the full reader UI, except the `Lecteur bilingue` masthead, which stays French as the reader's signature. A curated, extensible `Target` table (`targets.py`) holds each language's name, hyphenation code, chapter word, and UI strings; adding a language is one row. |
 | Revise — how does a reader fix an off translation, and who pays? | In the reader: **Edit** by hand (key-free) or **Regenerate** on the reader's **own** key — never the builder's — on the book's build provider, so a fix keeps the translation's voice. A fix is a private, reversible local override; it crosses browsers via a dedicated *edits link* kept separate from the page link. |
 | Revise — automatic cross-device sync? | Spec'd (sign-in accounts) and **parked**; the shipped rung is the edits link. Full local+server design in `design-reference/revise-spec.md`. |
+| EPUB — reflowable with tap glosses, or the reader's locked spread? | The **locked spread** (fixed-layout): French left, English right, like the reader. The reflowable version put the French and English in one interleaved column and turned every glossed phrase into an EPUB footnote, which **Apple Books paints blue** — the whole page went blue and unreadable, and it did not look like the reader. Fixed-layout is paginated at build time by the reader's own algorithm (in headless Chromium, so `--epub` now needs `[browser]`), and **drops glosses** — same reason the PDF does. Best on a tablet or a Mac; a phone shows one page at a time. |
 
 ## Reversals
 
@@ -180,6 +181,14 @@ Recorded because the reasoning matters more than the outcome.
   punishes size asymmetry, but a translator splitting one long paragraph into a
   dozen dialogue lines makes the published fragment smaller *by construction*.
   Chapitre II was discarding 15 of 23 real paragraphs as unmatchable.
+- **The reflowable EPUB with tap-to-reveal glosses** was built, shipped, and
+  reverted. Two faults, seen in Apple Books: glossing every phrase makes every
+  phrase a footnote link, which Apple Books renders in hyperlink **blue** — the
+  whole French page turned blue and unreadable; and a reflowable book cannot hold
+  the reader's French-left/English-right spread, so it read as one interleaved
+  column, not the book. Replaced by a fixed-layout spread with no glosses. The
+  cost is that `--epub` now needs the browser engine (it paginates by measuring)
+  and is best on a tablet or desktop — accepted, because the spread is the point.
 
 ---
 
@@ -200,8 +209,11 @@ Recorded because the reasoning matters more than the outcome.
   phone-width reader gets no glosses.
 - `.book-mobile` still has a fixed width (the desktop spread's sizing moved to
   JS, but mobile did not), so a short landscape phone could squash.
-- **The EPUB and PDF are validated structurally, not in the wild.** No one has
-  opened the EPUB in Apple Books or Kindle, or printed the PDF, in a test.
+- **The EPUB and PDF are validated structurally and eyeballed, not tested across
+  readers.** The fixed-layout EPUB has been opened in Apple Books (the spread
+  faces up, the title page opens the book); no one has checked it on Kindle or
+  another reader, or printed the PDF, in a test. Fixed-layout support varies by
+  reader — Apple Books is the target.
 - **Revise crosses browsers by a link, not by sync.** Corrections live
   per-browser; the *edits link* carries them across, but automatic cross-device
   sync needs a server and is parked (`design-reference/revise-spec.md`). On mobile
@@ -225,7 +237,7 @@ biread/
   gloss.py        per-paragraph hover units; width judged at render, not cache
   language.py     what glossing needs to know about the source language
   render/         book -> one HTML file (templates/ holds the real reader)
-  export/         static copies: epub.py (reflowable), pdf.py (print, headless Chromium)
+  export/         static copies: epub.py (fixed-layout spread), pdf.py (print) — both headless Chromium
   llm/            one thin client per provider
   cache.py        content-hash JSON cache, merges on write
   config.py       environment, models, pricing
@@ -243,10 +255,13 @@ selector must be scoped to `#stage-wrap`.
 ## Tests
 
 ```sh
-pip install -e ".[dev]" && pytest              # 230 Python tests, no network
+pip install -e ".[dev]" && pytest              # ~230 Python tests, no network
 pip install -e ".[browser]" && playwright install chromium
-pytest tests/test_reader_js.py                 # 50 browser tests
+pytest tests/test_reader_js.py                 # 54 browser tests
 ```
+
+The EPUB and PDF export tests also need `[browser]` — the exporters paginate and
+print in headless Chromium — and skip themselves without it.
 
 The reader's expensive bugs have all been layout and timing — pagination
 measured against a box that was not laid out yet, a drag target destroyed

@@ -60,9 +60,10 @@ own key. Each edition is created, and paid for, by whoever wants it.
 - **`render/`** — inlines the fonts and paper texture, serialises the book to
   JSON, and substitutes both into `reader.{html,css,js}`. Pagination is **not**
   here — it happens in the browser at runtime, against the real page box.
-- **`export/`** — `epub.py` (reflowable, glosses as tap-to-reveal notes, built
-  with the standard library) and `pdf.py` (fixed two-column print, headless
-  Chromium). Both reuse the same in-memory book; neither calls the API.
+- **`export/`** — `epub.py` (a fixed-layout spread, French left / English right,
+  paginated in headless Chromium with the reader's own algorithm; no glosses) and
+  `pdf.py` (fixed two-column print, also headless Chromium). Both reuse the same
+  in-memory book and need the `[browser]` extra; neither calls the API.
 
 ## Three things worth knowing early
 

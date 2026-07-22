@@ -72,7 +72,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--epub", action="store_true",
-        help="also write a reflowable EPUB with the glosses as tap-to-reveal notes",
+        help="also write a fixed-layout EPUB: the French and English as a locked "
+             "spread, like the reader (needs the browser engine, as --pdf does)",
     )
     parser.add_argument(
         "--pdf", action="store_true",
@@ -349,19 +350,36 @@ def run(args: argparse.Namespace) -> None:
     # named for the book, since those are the files a reader saves and shares.
     # They are written first so the reader can embed them behind its download
     # control — the book stays one self-contained, shareable file.
-    name = download_name(title)
-    downloads = []
-    if args.epub:
-        epub_path = args.output / f"{name}.epub"
-        write_epub(title, chapters, run_result.translations, glosses, epub_path, target, author)
-        print(f"Wrote {epub_path}")
-        downloads.append(("epub", epub_path.name, epub_path.read_bytes()))
+    #
+    # When a published translation is present, each format is built twice — once
+    # from the AI translation, once from the published one (published where it
+    # matches, AI where it doesn't, exactly as the reader's "Published" view). The
+    # download then hands over whichever edition the reader has open. With no
+    # published translation there is only the one edition, named plainly.
+    editions = [("translation", run_result.translations, "")]
+    if published:
+        published_column = {**run_result.translations,
+                            **{k: v for k, v in published.items() if v}}
+        editions = [("translation", run_result.translations, " (AI translation)"),
+                    ("published", published_column, " (published translation)")]
 
-    if args.pdf:
-        pdf_path = args.output / f"{name}.pdf"
-        write_pdf(title, chapters, run_result.translations, pdf_path, target, author)
-        print(f"Wrote {pdf_path}")
-        downloads.append(("pdf", pdf_path.name, pdf_path.read_bytes()))
+    downloads = []
+    for source, column, marker in editions:
+        # A fixed-layout spread with no glosses — the French left, the translation
+        # right, like the reader. Both formats measure the type in headless
+        # Chromium, so they need the browser engine. The book's own title stays on
+        # the page; the marker only distinguishes the saved files.
+        name = download_name(f"{title}{marker}")
+        if args.epub:
+            epub_path = args.output / f"{name}.epub"
+            write_epub(title, chapters, column, epub_path, target, author)
+            print(f"Wrote {epub_path}")
+            downloads.append(("epub", source, epub_path.name, epub_path.read_bytes()))
+        if args.pdf:
+            pdf_path = args.output / f"{name}.pdf"
+            write_pdf(title, chapters, column, pdf_path, target, author)
+            print(f"Wrote {pdf_path}")
+            downloads.append(("pdf", source, pdf_path.name, pdf_path.read_bytes()))
 
     # --revise ships the reader a way to correct the translation on the reader's
     # own key; the build only records which model that would be, never a key or a
