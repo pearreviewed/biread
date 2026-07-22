@@ -32,10 +32,12 @@ parked). The same correction bundle flows through all three, so nothing here is 
 
 ## The problem
 
-The generated English is usually good, but occasionally a phrase lands wrong —
-"got wind of it" where the French wants "caught wind of it." A reader should be
-able to select that phrase, say what's off, and get it fixed, or just type the
-fix themselves. **The person who built the book must never pay for this.** A
+The reading experience is the whole point — biread is read by people who care
+about the prose. The generated English is usually good, but occasionally a phrase
+lands wrong — "got wind of it" where the French wants "caught wind of it" — and
+one false phrase pulls a careful reader out of the book. A reader should be able
+to select that phrase, say what's off, and get it fixed, or just type the fix
+themselves. **The person who built the book must never pay for this.** A
 correction is an LLM call, and the shipped reader is one static file with no
 backend, so the spend can only land on the *reader's* own key.
 

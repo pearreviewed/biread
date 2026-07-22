@@ -102,10 +102,11 @@ reader combined.
 
 > sometimes the llm translation is off like genrating got wind of it vs caught wind of it i dont want the user stuck with sentences that rub the, the wrong way ... a person can select a part in the ai translation ... and get a button option to regenerate it maybe with feedback what is wrong but again i dont wanna pay for it
 
-**`--revise` lets a reader fix the AI translation in place.** Select a phrase in
-the generated column and a small panel offers **Edit** (type the fix by hand — no
-key, no cost) and **Regenerate** (rewrite the span in context, with an optional
-"what's wrong" note). Regenerate calls a model, so it runs on the **reader's own
+**`--revise` lets a reader fix the AI translation in place** — because the reading
+experience is the point, and a reader who loves the prose should not be stuck with
+a phrase that rings false. Select a phrase in the generated column and a small
+panel offers **Edit** (type the fix by hand — no key, no cost) and **Regenerate**
+(rewrite the span in context, with an optional "what's wrong" note). Regenerate calls a model, so it runs on the **reader's own
 key**, never the builder's, using the provider the book was built with; a reader
 without that key still gets the hand-edit.
 

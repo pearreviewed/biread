@@ -147,10 +147,17 @@ window or changing the font size.
 
 ## Correcting the translation
 
-The generated English is the primary reading text, and mostly it earns that —
-but a phrase lands wrong now and then, *got wind of* where you wanted *caught
-wind of*. Build with `--revise` and a reader can fix it in place: select the
-phrase in the AI column and a small panel offers two ways to set it right.
+biread is for readers who care about the prose — reading a French book for the
+pleasure of the language, with a translation at their elbow. The generated
+English is genuinely good and carries most of the book, but it is not a human
+literary translator, and for a reader who notices such things a single phrase
+that rings false — *got wind of* where the ear wanted *caught wind of* — is
+enough to break the spell.
+
+`--revise` hands that reader the pen. Any line can be made to read the way they
+would have it, so the reading stays unbroken and the text becomes, quietly,
+theirs. Select the phrase in the AI column and a small panel offers two ways to
+set it right.
 
 <p align="center">
   <img src="docs/screenshots/revise.jpg" width="880"
