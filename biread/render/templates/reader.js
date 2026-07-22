@@ -384,9 +384,16 @@
     var first = true;
     eachPart(spread, function (p, from, to, continued) {
       if (!first) target.appendChild(dividerNode());
-      target.appendChild(mobilePairNode(
+      var pairBox = mobilePairNode(
         p, textSpan(PAIRS[p].fr, from, to), textSpan(englishText(p), from, to), continued
-      ));
+      );
+      // The stacked layout is correctable too — record the slice's offsets on its
+      // English paragraph, exactly as the two-page layout does.
+      if (REVISE && S.source === 'translation') {
+        var enNode = pairBox.querySelector('.pair-en');
+        if (enNode) markEnNode(enNode, p, from, to);
+      }
+      target.appendChild(pairBox);
       first = false;
     });
   }
@@ -880,7 +887,7 @@
   }
 
   function onEnSelection() {
-    if (!REVISE || reviseBusy || S.mobile) return;
+    if (!REVISE || reviseBusy) return;
     if (S.source !== 'translation' || S.blurEnglish) return;
     var sel = window.getSelection();
     if (!sel || sel.isCollapsed || !sel.rangeCount) return;

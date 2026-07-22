@@ -990,6 +990,29 @@ def test_a_real_drag_selects_english_without_turning_the_page(browser, revise_pa
     page.close()
 
 
+def test_the_correction_control_works_on_the_narrow_layout(browser, revise_path):
+    # A narrow window — or a hosted panel — uses the stacked layout; correcting a
+    # line must work there too, not only on the wide two-page spread.
+    page = browser.new_page(viewport={"width": 520, "height": 820})
+    page.goto(revise_path.as_uri())
+    page.wait_for_function(
+        "() => { const c = document.getElementById('counter');"
+        "return c && c.textContent && !c.textContent.includes('+'); }", timeout=15000)
+    assert page.locator("#stage-wrap .book-mobile").count() == 1, "expected the stacked layout"
+    box = page.eval_on_selector(
+        "#stage-wrap .pair-en",
+        "e => { const r = e.getBoundingClientRect(); return {x:r.x,y:r.y,w:r.width,h:r.height}; }")
+    y = box["y"] + box["h"] / 2
+    page.mouse.move(box["x"] + 12, y)
+    page.mouse.down()
+    page.mouse.move(box["x"] + min(120, box["w"] - 15), y, steps=12)
+    page.mouse.up()
+    page.wait_for_timeout(250)
+    assert page.locator(".revise").count() > 0, \
+        "selecting English on the narrow layout should raise the control"
+    page.close()
+
+
 def test_a_plain_click_still_turns_the_page(browser, revise_path):
     page = _fresh(browser, revise_path)
     page.evaluate("() => localStorage.clear()")
