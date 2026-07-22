@@ -25,6 +25,9 @@
   // ships English as a fallback, tagged with data-i18n keys.
   var UI = DATA.ui || {};
   var LANG = DATA.lang || 'en';
+  // Reader-side correction of the AI translation (opt-in --revise). Null unless
+  // the build embedded it; every branch below is a no-op when it stays null.
+  var REVISE = (DATA.revise && DATA.revise.enabled) ? DATA.revise : null;
   // The corner tags. The source is always French — the masthead and the left
   // column's lang say so — and the target follows the build's language.
   var SOURCE_TAG = 'FR';
@@ -105,6 +108,14 @@
   var transitionTimer = null;
   var probe = {};
   var view = {}; // the mounted book: page nodes, ribbon host
+  // Reader corrections to the generated English, keyed by source hash, plus the
+  // reader's own key (in memory) and the floating correction UI's live state.
+  var overrides = {};
+  var apiKey = '';
+  var reviseCtl = null;
+  var keyPanel = null;
+  var reviseTarget = null;
+  var reviseBusy = false;
 
   // Type scales with the book, so a smaller book keeps the same number of
   // characters per line instead of turning into a narrow ribbon of text.
@@ -172,10 +183,52 @@
     try { localStorage.setItem(lsKey(k), JSON.stringify(v)); } catch (e) {}
   }
 
+  // Corrections are per book (slug-namespaced, like bookmarks). The key is per
+  // provider, not per book — a reader's Anthropic key works for any Anthropic
+  // edition — and lives in localStorage when remembered, sessionStorage when not.
+  function loadOverrides() {
+    var stored = lsGet('overrides');
+    overrides = stored && stored.byHash ? stored.byHash : {};
+  }
+  function saveOverrides() {
+    lsSet('overrides', { v: STORE_VERSION, byHash: overrides });
+  }
+  function hasOverride(i) {
+    var h = PAIRS[i].h;
+    return !!(h && overrides[h] && overrides[h].base === PAIRS[i].en);
+  }
+  function keyName() { return 'biread:revise-key:' + (REVISE ? REVISE.provider : ''); }
+  function loadKey() {
+    try { return localStorage.getItem(keyName()) || sessionStorage.getItem(keyName()) || ''; }
+    catch (e) { return ''; }
+  }
+  function storeKey(key, remember) {
+    try {
+      localStorage.removeItem(keyName());
+      sessionStorage.removeItem(keyName());
+      if (key) (remember ? localStorage : sessionStorage).setItem(keyName(), key);
+    } catch (e) {}
+  }
+
   // ---------- content ----------
   function englishText(i) {
     if (S.source === 'published' && PAIRS[i].pub) return PAIRS[i].pub;
-    return PAIRS[i].en;
+    return generatedEnglish(i);
+  }
+
+  // The generated English with any reader correction applied. Both painting and
+  // pagination read the AI translation through this, so a fix changes what is
+  // measured and the page reflows to fit it. An override applies only while the
+  // built-in translation still matches what it was made against, so a rebuild
+  // that retranslates the paragraph drops a now-stale fix rather than pasting it
+  // onto different prose. The published column never routes through here.
+  function generatedEnglish(i) {
+    var pair = PAIRS[i];
+    if (REVISE && pair.h) {
+      var ov = overrides[pair.h];
+      if (ov && ov.base === pair.en) return ov.text;
+    }
+    return pair.en;
   }
 
   function headingNode(chapter, lang) {
@@ -317,9 +370,11 @@
         target.appendChild(glossedNode(p, from, to, continued));
         return;
       }
-      target.appendChild(
-        paragraphNode(p, side, textSpan(englishText(p), from, to), continued)
-      );
+      var node = paragraphNode(p, side, textSpan(englishText(p), from, to), continued);
+      // Only the AI column is correctable, so record the slice's offsets and the
+      // revert mark only while reading it — never on the published text.
+      if (REVISE && S.source === 'translation') markEnNode(node, p, from, to);
+      target.appendChild(node);
     });
   }
 
@@ -347,11 +402,11 @@
   // The published column scrolls instead, on the pages where it runs long.
   function measurementColumns() {
     if (S.mobile) {
-      return [{ mobile: true, english: function (i) { return PAIRS[i].en; } }];
+      return [{ mobile: true, english: function (i) { return generatedEnglish(i); } }];
     }
     return [
       { side: 'fr', text: function (i) { return PAIRS[i].fr; } },
-      { side: 'en', text: function (i) { return PAIRS[i].en; } }
+      { side: 'en', text: function (i) { return generatedEnglish(i); } }
     ];
   }
 
@@ -787,6 +842,455 @@
     span.classList.add('pinned');
   }, true);
 
+  // ---------- revise ----------
+  // Correct the AI translation in place: select a phrase, then rewrite it on the
+  // reader's OWN key or type the fix by hand. A fix is a local override (above);
+  // nothing here runs, and no key field appears, unless the build passed --revise.
+  var PROVIDER_LABEL = {
+    anthropic: 'Anthropic', openai: 'OpenAI', openrouter: 'OpenRouter', ollama: 'Ollama'
+  };
+  function providerLabel() {
+    return REVISE ? (PROVIDER_LABEL[REVISE.provider] || REVISE.provider) : '';
+  }
+  function reviseText(key) { return i18n(key).replace('{provider}', providerLabel()); }
+
+  // Record the visible slice's offsets into the full generated text (so a
+  // selection maps back to the whole paragraph), and, on a corrected paragraph,
+  // a revert mark. The mark is absolutely positioned, so it never affects the
+  // measured height. Called only in the live paint — the probe never sees it.
+  function markEnNode(node, i, from, to) {
+    var range = spanRange(generatedEnglish(i), from, to);
+    node.dataset.enFrom = range[0];
+    node.dataset.enTo = range[1];
+    if (!hasOverride(i)) return;
+    node.classList.add('revised');
+    var undo = document.createElement('button');
+    undo.type = 'button';
+    undo.className = 'revise-undo';
+    undo.textContent = '↺';
+    undo.title = i18n('reviseUndo');
+    undo.setAttribute('aria-label', i18n('reviseUndo'));
+    undo.addEventListener('click', function (e) { e.stopPropagation(); revertRevision(i); });
+    node.appendChild(undo);
+  }
+
+  function closestEn(target) {
+    var el = target.nodeType === 1 ? target : target.parentElement;
+    return el && el.closest ? el.closest('.pair-en') : null;
+  }
+
+  function onEnSelection() {
+    if (!REVISE || reviseBusy || S.mobile) return;
+    if (S.source !== 'translation' || S.blurEnglish) return;
+    var sel = window.getSelection();
+    if (!sel || sel.isCollapsed || !sel.rangeCount) return;
+    var text = sel.toString();
+    if (!text.trim()) return;
+    var range = sel.getRangeAt(0);
+    var stage = document.getElementById('stage-wrap');
+    if (!stage.contains(range.commonAncestorContainer)) return;
+    var node = closestEn(range.commonAncestorContainer);
+    if (!node || node.dataset.enFrom == null) return;
+    if (!node.contains(range.startContainer) || !node.contains(range.endContainer)) return;
+    var pre = document.createRange();
+    pre.selectNodeContents(node);
+    try { pre.setEnd(range.startContainer, range.startOffset); }
+    catch (e) { return; }
+    var start = Number(node.dataset.enFrom) + pre.toString().length;
+    showReviseControl(Number(node.dataset.pair), start, start + text.length,
+      range.getBoundingClientRect());
+  }
+
+  function reviseButton(key, fn, primary) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'revise-btn' + (primary ? ' primary' : '');
+    b.textContent = i18n(key);
+    b.addEventListener('click', fn);
+    return b;
+  }
+
+  function showReviseControl(i, start, end, rect) {
+    hideRevise();
+    reviseTarget = { i: i, start: start, end: end };
+    var ctl = document.createElement('div');
+    ctl.className = 'revise';
+    ctl.addEventListener('mousedown', function (e) { e.stopPropagation(); });
+    ctl.addEventListener('click', function (e) { e.stopPropagation(); });
+
+    var note = document.createElement('input');
+    note.type = 'text';
+    note.className = 'revise-note';
+    note.placeholder = i18n('reviseNotePlaceholder');
+    note.addEventListener('keydown', function (e) {
+      e.stopPropagation();
+      if (e.key === 'Enter') runRewrite();
+      else if (e.key === 'Escape') hideRevise();
+    });
+    ctl.appendChild(note);
+    ctl._note = note;
+
+    var row = document.createElement('div');
+    row.className = 'revise-row';
+    row.appendChild(reviseButton('reviseEdit', startManualEdit));
+    row.appendChild(reviseButton('reviseRegenerate', runRewrite, true));
+    ctl.appendChild(row);
+
+    var foot = document.createElement('div');
+    foot.className = 'revise-foot';
+    var keyBtn = document.createElement('button');
+    keyBtn.type = 'button';
+    keyBtn.className = 'revise-link';
+    keyBtn.textContent = i18n('reviseKeyManage');
+    keyBtn.addEventListener('click', openKeyPanel);
+    foot.appendChild(keyBtn);
+    if (hasOverride(i)) {
+      var undo = document.createElement('button');
+      undo.type = 'button';
+      undo.className = 'revise-link';
+      undo.textContent = i18n('reviseUndo');
+      undo.addEventListener('click', function () { revertRevision(i); });
+      foot.appendChild(undo);
+    }
+    ctl.appendChild(foot);
+
+    document.body.appendChild(ctl);
+    reviseCtl = ctl;
+    positionBy(ctl, rect);
+  }
+
+  // Manual edit: turn the span into an editable field, no key and no call. This
+  // is your example's shortest path — a reader who knows the fix just types it.
+  function startManualEdit() {
+    if (!reviseTarget) return;
+    var current = generatedEnglish(reviseTarget.i).slice(reviseTarget.start, reviseTarget.end);
+    reviseCtl.textContent = '';
+    var input = document.createElement('textarea');
+    input.className = 'revise-edit';
+    input.rows = 2;
+    input.value = current;
+    input.addEventListener('mousedown', function (e) { e.stopPropagation(); });
+    input.addEventListener('keydown', function (e) {
+      e.stopPropagation();
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); saveManualEdit(input.value); }
+      else if (e.key === 'Escape') hideRevise();
+    });
+    reviseCtl.appendChild(input);
+    var row = document.createElement('div');
+    row.className = 'revise-row';
+    row.appendChild(reviseButton('reviseCancel', hideRevise));
+    row.appendChild(reviseButton('reviseSave', function () { saveManualEdit(input.value); }, true));
+    reviseCtl.appendChild(row);
+    input.focus();
+    input.select();
+  }
+  function saveManualEdit(value) {
+    if (reviseTarget) applyRevision(reviseTarget.i, reviseTarget.start, reviseTarget.end, value.trim());
+  }
+
+  function runRewrite() {
+    if (!reviseTarget || reviseBusy) return;
+    if (!apiKey) { openKeyPanel(); return; } // offsets are held in reviseTarget, not the DOM selection
+    var i = reviseTarget.i, start = reviseTarget.start, end = reviseTarget.end;
+    var note = reviseCtl && reviseCtl._note ? reviseCtl._note.value.trim() : '';
+    var full = generatedEnglish(i);
+    var prompts = revisePrompts(PAIRS[i].fr, full, full.slice(start, end), note);
+    setReviseBusy(true);
+    providerRequest(apiKey, prompts.system, prompts.user).then(function (out) {
+      setReviseBusy(false);
+      var revised = cleanSpan(out);
+      if (revised) applyRevision(i, start, end, revised);
+      else showReviseError();
+    }, function () {
+      setReviseBusy(false);
+      showReviseError();
+    });
+  }
+
+  function cleanSpan(text) {
+    var t = (text || '').trim();
+    if (t.length > 1 && /^["'“‘]/.test(t) && /["'”’]$/.test(t)) {
+      t = t.slice(1, -1).trim();
+    }
+    return t;
+  }
+
+  function applyRevision(i, start, end, revised) {
+    if (!revised || !PAIRS[i].h) return;
+    var full = generatedEnglish(i);
+    overrides[PAIRS[i].h] = { base: PAIRS[i].en, text: full.slice(0, start) + revised + full.slice(end) };
+    saveOverrides();
+    updateEditsButton();
+    hideRevise();
+    repaginate(currentPosition());
+  }
+  function revertRevision(i) {
+    if (PAIRS[i].h) { delete overrides[PAIRS[i].h]; saveOverrides(); }
+    updateEditsButton();
+    hideRevise();
+    repaginate(currentPosition());
+  }
+
+  function setReviseBusy(busy) {
+    reviseBusy = busy;
+    if (!reviseCtl) return;
+    var fields = reviseCtl.querySelectorAll('button, input, textarea');
+    for (var i = 0; i < fields.length; i++) fields[i].disabled = busy;
+    reviseStatus(busy ? i18n('reviseWorking') : '', false);
+  }
+  function showReviseError() { reviseStatus(i18n('reviseError'), true); }
+  function reviseStatus(text, isError) {
+    if (!reviseCtl) return;
+    var status = reviseCtl.querySelector('.revise-status');
+    if (!text) { if (status) status.remove(); return; }
+    if (!status) {
+      status = document.createElement('div');
+      status.className = 'revise-status';
+      reviseCtl.appendChild(status);
+    }
+    status.classList.toggle('error', !!isError);
+    status.textContent = text;
+  }
+
+  function hideRevise() {
+    if (reviseCtl) { reviseCtl.remove(); reviseCtl = null; }
+    reviseTarget = null;
+    reviseBusy = false;
+  }
+
+  function positionBy(el, rect) {
+    var box = el.getBoundingClientRect();
+    var left = rect.left + rect.width / 2 - box.width / 2;
+    left = Math.max(8, Math.min(left, window.innerWidth - box.width - 8));
+    var above = rect.top - box.height - 8;
+    el.style.left = left + 'px';
+    el.style.top = (above >= 8 ? above : rect.bottom + 8) + 'px';
+  }
+
+  // The key-entry panel reuses the ⓘ panel's look. The key is sent only to the
+  // provider's own endpoint (providerRequest) and, when remembered, kept only in
+  // this browser. No token, price, or spend figure appears anywhere.
+  function openKeyPanel() {
+    closeKeyPanel();
+    if (reviseCtl) reviseCtl.hidden = true; // one panel at a time — keep it light
+    var panel = document.createElement('div');
+    panel.className = 'info-panel revise-key' + (S.mobile ? ' mobile' : '');
+    panel.addEventListener('mousedown', function (e) { e.stopPropagation(); });
+    panel.addEventListener('click', function (e) { e.stopPropagation(); });
+
+    var close = document.createElement('button');
+    close.type = 'button';
+    close.className = 'info-close';
+    close.textContent = '×';
+    close.setAttribute('aria-label', i18n('close'));
+    close.addEventListener('click', closeKeyPanel);
+    panel.appendChild(close);
+
+    var title = document.createElement('div');
+    title.className = 'info-title';
+    title.textContent = i18n('reviseKeyTitle');
+    var rule = document.createElement('div');
+    rule.className = 'info-rule';
+    var body = document.createElement('div');
+    body.className = 'info-body';
+    body.textContent = reviseText('reviseKeyBody');
+    panel.appendChild(title);
+    panel.appendChild(rule);
+    panel.appendChild(body);
+
+    var input = document.createElement('input');
+    input.type = 'password';
+    input.className = 'revise-key-input';
+    input.autocomplete = 'off';
+    input.placeholder = reviseText('reviseKeyPlaceholder');
+    input.value = apiKey;
+    input.addEventListener('mousedown', function (e) { e.stopPropagation(); });
+    input.addEventListener('keydown', function (e) {
+      e.stopPropagation();
+      if (e.key === 'Enter') commit();
+    });
+    panel.appendChild(input);
+
+    var remember = document.createElement('label');
+    remember.className = 'revise-remember';
+    var cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = true;
+    remember.appendChild(cb);
+    remember.appendChild(document.createTextNode(' ' + i18n('reviseRemember')));
+    panel.appendChild(remember);
+
+    var row = document.createElement('div');
+    row.className = 'revise-row';
+    var forget = reviseButton('reviseForget', function () {
+      apiKey = '';
+      storeKey('', false);
+      input.value = '';
+      input.focus();
+    });
+    var save = reviseButton('reviseSave', commit, true);
+    row.appendChild(forget);
+    row.appendChild(save);
+    panel.appendChild(row);
+
+    function commit() {
+      apiKey = input.value.trim();
+      storeKey(apiKey, cb.checked);
+      closeKeyPanel();
+      if (apiKey && reviseTarget) runRewrite();
+    }
+
+    document.body.appendChild(panel);
+    keyPanel = panel;
+    input.focus();
+  }
+  function closeKeyPanel() {
+    if (keyPanel) { keyPanel.remove(); keyPanel = null; }
+    if (reviseCtl) reviseCtl.hidden = false;
+  }
+
+  // One browser-side client, shaped by the wire style the build recorded. The
+  // endpoint is embedded only by --revise, so a plain book carries no URL at all;
+  // the key rides only on the request to that endpoint, and nowhere else.
+  function providerRequest(key, system, user) {
+    var style = REVISE.style, url = REVISE.endpoint, headers, body;
+    if (!url) return Promise.reject(new Error('no endpoint'));
+    if (style === 'anthropic') {
+      headers = {
+        'content-type': 'application/json', 'x-api-key': key,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      };
+      body = {
+        model: REVISE.model, max_tokens: 1024, system: system,
+        messages: [{ role: 'user', content: user }]
+      };
+    } else {
+      // OpenAI-compatible (openai, openrouter) and Ollama share a messages shape;
+      // only the auth header and the local streaming flag differ.
+      headers = { 'content-type': 'application/json' };
+      if (style !== 'ollama') headers.authorization = 'Bearer ' + key;
+      body = {
+        model: REVISE.model,
+        messages: [{ role: 'system', content: system }, { role: 'user', content: user }]
+      };
+      if (style === 'ollama') body.stream = false;
+    }
+    return fetch(url, { method: 'POST', headers: headers, body: JSON.stringify(body) })
+      .then(readResponse(style));
+  }
+
+  function readResponse(kind) {
+    return function (res) {
+      if (!res.ok) throw new Error('http ' + res.status);
+      return res.json().then(function (data) {
+        if (kind === 'anthropic') {
+          return (data.content || []).filter(function (b) { return b.type === 'text'; })
+            .map(function (b) { return b.text; }).join('');
+        }
+        if (kind === 'ollama') return (data.message && data.message.content) || '';
+        return (data.choices && data.choices[0] && data.choices[0].message
+          && data.choices[0].message.content) || '';
+      });
+    };
+  }
+
+  // A targeted-edit prompt: the model rewrites ONLY the selected span, with the
+  // French source as the ground truth and the whole translation as context.
+  function revisePrompts(paragraphFr, paragraphEn, span, note) {
+    var target = (REVISE && REVISE.target) || 'English';
+    var system = 'You are refining one short span inside an existing ' + target +
+      ' literary translation of a French text. You are given the French source, the ' +
+      'current ' + target + ' translation, and one selected span of that translation to ' +
+      'rewrite. Return ONLY the rewritten span — the exact replacement text, with no ' +
+      'quotation marks, no explanation, and no surrounding words. Keep the same register ' +
+      'and tense; change only what is needed so the span reads as natural, idiomatic ' +
+      target + ' faithful to the French. If the reader says what is wrong, honor it.';
+    var user = 'French source:\n' + paragraphFr +
+      '\n\nCurrent ' + target + ' translation:\n' + paragraphEn +
+      '\n\nSelected span to rewrite:\n' + span +
+      (note ? '\n\nWhat is wrong: ' + note : '') +
+      '\n\nReturn only the rewritten span.';
+    return { system: system, user: user };
+  }
+
+  // ---- carry corrections between browsers, as a link ----
+  // A separate link from "copy link to this page" on purpose: the page link is
+  // for sharing where you are, so a reader's private edits must never ride it.
+  // This one carries the corrections in its own #e= fragment and loads them when
+  // the link is opened. A file:// link reaches only other browsers on the same
+  // machine (a path is not portable across devices); a hosted book's link travels
+  // anywhere. base64 is URL-safed; a heavily-edited book makes a long link.
+  function encodeEdits(obj) {
+    var b64 = btoa(unescape(encodeURIComponent(JSON.stringify(obj))));
+    return b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+  function decodeEdits(s) {
+    var b64 = s.replace(/-/g, '+').replace(/_/g, '/');
+    while (b64.length % 4) b64 += '=';
+    return JSON.parse(decodeURIComponent(escape(atob(b64))));
+  }
+  function buildEditsLink() {
+    return location.href.split('#')[0] + '#e=' + encodeEdits(overrides);
+  }
+  function importEditsFromHash() {
+    var m = /[#&]e=([A-Za-z0-9\-_]+)/.exec(location.hash || '');
+    if (m) {
+      try {
+        var incoming = decodeEdits(m[1]);
+        for (var k in incoming) {
+          if (incoming[k] && typeof incoming[k].text === 'string'
+              && typeof incoming[k].base === 'string') overrides[k] = incoming[k];
+        }
+        saveOverrides();
+      } catch (e) {}
+      // Drop the payload from the URL so it is neither re-imported nor re-shared.
+      try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
+    }
+  }
+  function updateEditsButton() {
+    var btn = document.getElementById('edits-btn');
+    if (!btn) return;
+    var has = false;
+    for (var k in overrides) { if (overrides[k]) { has = true; break; } }
+    btn.hidden = !has;
+  }
+
+  if (REVISE) {
+    // Read the selection after the browser has settled it.
+    document.getElementById('stage-wrap').addEventListener('mouseup', function () {
+      setTimeout(onEnSelection, 0);
+    });
+    // A press outside the control (or panel) dismisses it — but not mid-request,
+    // and the key panel counts as part of the control, so using it never drops
+    // the pending selection the rewrite still needs.
+    document.addEventListener('mousedown', function (e) {
+      if (reviseBusy) return;
+      var inside = e.target.closest && e.target.closest('.revise, .revise-key');
+      if (reviseCtl && !inside) hideRevise();
+      if (keyPanel && !inside) closeKeyPanel();
+    }, true);
+
+    // Copy the reader's corrections as their own link (see above).
+    var editsBtn = document.getElementById('edits-btn');
+    if (editsBtn) {
+      var editsFlash = null;
+      editsBtn.addEventListener('click', function () {
+        var url = buildEditsLink();
+        var done = function () {
+          editsBtn.classList.add('copied');
+          clearTimeout(editsFlash);
+          editsFlash = setTimeout(function () { editsBtn.classList.remove('copied'); }, 1600);
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(url).then(done, function () { prompt('Copy your edits link:', url); });
+        } else {
+          prompt('Copy your edits link:', url);
+        }
+      });
+    }
+  }
+
   // ---------- mounting ----------
   function mount() {
     var wrap = document.getElementById('stage-wrap');
@@ -826,6 +1330,7 @@
   function paint(options) {
     if (!S.ready) return;
     hideTip(); // the span it was anchored to is about to be replaced
+    if (REVISE) hideRevise(); // the selection it was anchored to is about to be replaced
     updateCounter();
     updateBookmarkStar();
     view.book.style.opacity = S.fade ? '0' : '1';
@@ -1043,6 +1548,14 @@
   // opened fresh. replaceState (how the URL is kept current) never fires this, so
   // there is no loop.
   window.addEventListener('hashchange', function () {
+    // An edits link pasted into an already-open book imports and reflows, rather
+    // than being read as page navigation.
+    if (REVISE && /[#&]e=/.test(location.hash || '')) {
+      importEditsFromHash();
+      updateEditsButton();
+      if (S.ready) repaginate(currentPosition());
+      return;
+    }
     var s = stateFromHash();
     if (s && s.pair != null && s.pair !== currentPair()) goToPair(s.pair, false);
   });
@@ -1103,6 +1616,12 @@
   // ---------- input ----------
   function onBookClick(e) {
     if (turning()) return;
+    // A drag that selected text, or a click on a revert mark, is not a page turn.
+    if (REVISE) {
+      var sel = window.getSelection();
+      if (sel && !sel.isCollapsed && sel.toString().trim()) return;
+      if (e.target.closest && e.target.closest('.revise-undo')) return;
+    }
     var box = e.currentTarget.getBoundingClientRect();
     step(e.clientX > box.left + box.width / 2 ? 1 : -1);
   }
@@ -1131,7 +1650,7 @@
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     // Typing into a field is never page navigation, whatever the key.
     if (e.target && e.target.tagName === 'INPUT') return;
-    if (e.key === 'Escape') { hideTip(); closeOverlays(); return; }
+    if (e.key === 'Escape') { hideTip(); if (REVISE) { hideRevise(); closeKeyPanel(); } closeOverlays(); return; }
     var inControl = e.target && e.target.closest && e.target.closest('button, [role="button"]');
     if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') {
       if (e.key === ' ' && inControl) return; // let Space activate the focused control
@@ -1519,6 +2038,7 @@
   // ---------- boot ----------
   function boot() {
     applyStaticLabels();
+    if (REVISE) { loadOverrides(); apiKey = loadKey(); importEditsFromHash(); updateEditsButton(); }
     var storedBookmarks = lsGet('bookmarks');
     if (storedBookmarks && Array.isArray(storedBookmarks.pairs)) {
       S.bookmarks = storedBookmarks.pairs.filter(function (p) {

@@ -66,6 +66,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="also annotate the French for hover translation (costs extra; see --dry-run)",
     )
     parser.add_argument(
+        "--revise", action="store_true",
+        help="let a reader correct the AI translation in the reader — by hand, or "
+             "rewritten on their own API key (never yours; nothing is called at build)",
+    )
+    parser.add_argument(
         "--epub", action="store_true",
         help="also write a reflowable EPUB with the glosses as tap-to-reveal notes",
     )
@@ -358,12 +363,21 @@ def run(args: argparse.Namespace) -> None:
         print(f"Wrote {pdf_path}")
         downloads.append(("pdf", pdf_path.name, pdf_path.read_bytes()))
 
+    # --revise ships the reader a way to correct the translation on the reader's
+    # own key; the build only records which model that would be, never a key or a
+    # cost. English content stays byte-identical, so this does not touch the cache.
+    revise = None
+    if args.revise:
+        revise = {"provider": cfg.provider, "model": cfg.model, "target": target.name}
+
     output_path = args.output / f"{slug}.html"
     render_book(
         title, chapters, run_result.translations, output_path,
-        published, published_note, glosses, downloads, target,
+        published, published_note, glosses, downloads, target, revise,
     )
     print(f"\nWrote {output_path}")
+    if args.revise:
+        print("Readers can correct the translation with their own key — see the ⓘ note.")
 
 
 def main(argv: list[str] | None = None) -> None:

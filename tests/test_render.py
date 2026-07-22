@@ -215,3 +215,55 @@ def test_a_download_blob_cannot_close_its_script(tmp_path, book):
     blob = _blob(out.read_text(encoding="utf-8"), "epub")
     assert "<" not in blob
     assert base64.b64decode(blob) == b"</script>bytes"
+
+
+# ---- revise ----
+
+def test_revise_embeds_config_and_a_per_pair_source_hash(book):
+    data = build_book_data(
+        "Mon Livre", book, {},
+        revise={"provider": "anthropic", "model": "claude-x", "target": "English"},
+    )
+    assert data["revise"] == {
+        "enabled": True,
+        "provider": "anthropic",
+        "model": "claude-x",
+        "target": "English",
+        "endpoint": "https://api.anthropic.com/v1/messages",
+        "style": "anthropic",
+    }
+    # A fix keys to the paragraph's source hash, so it survives a rebuild.
+    assert all(p["h"] == hash_text(p["fr"]) for p in data["pairs"])
+
+
+def test_revise_endpoint_and_style_follow_the_provider(book):
+    for provider, style in [("openai", "openai"), ("openrouter", "openai"), ("ollama", "ollama")]:
+        data = build_book_data("L", book, {}, revise={"provider": provider, "model": "m"})
+        assert data["revise"]["style"] == style
+        assert data["revise"]["endpoint"]  # a browser endpoint is recorded
+
+
+def test_a_plain_build_carries_no_revise_config_or_hash(book):
+    data = build_book_data("Mon Livre", book, {})
+    assert "revise" not in data
+    assert all("h" not in p for p in data["pairs"])
+
+
+def test_only_a_revise_build_puts_a_provider_url_in_the_file(tmp_path, book):
+    # The reader loads no external asset; the provider endpoint is present only
+    # when --revise embedded it, so a plain book stays URL-free.
+    plain = tmp_path / "plain.html"
+    render_book("L", book, {}, plain)
+    assert "api.anthropic.com" not in plain.read_text(encoding="utf-8")
+
+    revised = tmp_path / "revise.html"
+    render_book("L", book, {}, revised,
+                revise={"provider": "anthropic", "model": "m", "target": "English"})
+    assert "https://api.anthropic.com/v1/messages" in revised.read_text(encoding="utf-8")
+
+
+def test_the_edits_link_control_ships_hidden(tmp_path, book):
+    # Reader-JS reveals it only once a reader has made a correction to carry.
+    out = tmp_path / "x.html"
+    render_book("Mon Livre", book, {}, out)
+    assert re.search(r'id="edits-btn"[^>]*\shidden', out.read_text(encoding="utf-8"))

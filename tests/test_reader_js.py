@@ -36,7 +36,7 @@ DL_EPUB = b"PK\x03\x04FAKE-EPUB\x00\x01\x02"
 DL_PDF = b"%PDF-1.4\nFAKE-PDF\n%%EOF"
 
 
-def build_reader(tmp_path_factory, published: bool, downloads=None, target=ENGLISH):
+def build_reader(tmp_path_factory, published: bool, downloads=None, target=ENGLISH, revise=False):
     paragraphs = [f"{SHORT_FR} ({n})" for n in range(24)]
     paragraphs.insert(12, TALL_FR)
     chapters = [
@@ -61,6 +61,7 @@ def build_reader(tmp_path_factory, published: bool, downloads=None, target=ENGLI
         "Livre d'Essai", chapters, translations, out,
         publications if published else None, "a note" if published else "",
         None, downloads, target,
+        {"provider": "anthropic", "model": "claude-sonnet-4-6", "target": "English"} if revise else None,
     )
     return out
 
@@ -756,3 +757,239 @@ def test_escape_dismisses_the_tooltip(glossed):
 
 def test_a_book_without_glosses_has_no_hover_targets(reader):
     assert reader.locator("#stage-wrap .unit").count() == 0
+
+
+# ---- revise (reader-side correction) ----
+
+ANTHROPIC_ENDPOINT = "https://api.anthropic.com/v1/messages"
+
+
+@pytest.fixture(scope="module")
+def revise_path(tmp_path_factory):
+    return build_reader(tmp_path_factory, published=False, revise=True)
+
+
+def select_en_word(page, word):
+    """Select `word` inside the first AI-column paragraph and release, as a
+    reader would — the mouseup is what raises the correction control."""
+    return page.evaluate(
+        """(word) => {
+          var p = document.querySelector('#stage-wrap .page-right p.pair-en');
+          if (!p) return false;
+          var node = p.firstChild;
+          var idx = node.textContent.indexOf(word);
+          if (idx < 0) return false;
+          var range = document.createRange();
+          range.setStart(node, idx);
+          range.setEnd(node, idx + word.length);
+          var sel = window.getSelection();
+          sel.removeAllRanges();
+          sel.addRange(range);
+          document.getElementById('stage-wrap').dispatchEvent(
+            new MouseEvent('mouseup', { bubbles: true }));
+          return true;
+        }""",
+        word,
+    )
+
+
+def first_en_text(page):
+    return page.inner_text("#stage-wrap .page-right p.pair-en")
+
+
+def test_revise_off_by_default_shows_no_control(reader):
+    # The shared reader is built without --revise: selecting text does nothing.
+    assert reader.evaluate(
+        "() => JSON.parse(document.getElementById('book-data').textContent).revise") is None
+    assert select_en_word(reader, "several")
+    reader.wait_for_timeout(120)
+    assert reader.locator(".revise").count() == 0
+
+
+def test_manual_edit_corrects_persists_and_reverts(browser, revise_path):
+    page = _fresh(browser, revise_path)
+    page.evaluate("() => localStorage.clear()")
+    rewind(page)
+    assert "several" in first_en_text(page)
+
+    assert select_en_word(page, "several")
+    page.wait_for_selector(".revise", timeout=3000)
+    page.click('.revise .revise-btn:text-is("Edit")')
+    page.fill(".revise-edit", "SEVERAL_FIXED")
+    page.click('.revise .revise-btn:text-is("Save")')
+    page.wait_for_timeout(500)
+
+    assert "SEVERAL_FIXED" in first_en_text(page)
+    assert "several" not in first_en_text(page)
+
+    # Stored locally, keyed by the paragraph's source hash, and reapplied on load.
+    stored = page.evaluate(
+        "() => JSON.parse(localStorage.getItem('biread:' + "
+        "JSON.parse(document.getElementById('book-data').textContent).slug + ':overrides'))"
+    )
+    assert stored["v"] == 2 and len(stored["byHash"]) == 1
+    page.reload()
+    page.wait_for_function(
+        "() => { const c = document.getElementById('counter');"
+        "return c && c.textContent && !c.textContent.includes('+'); }", timeout=15000)
+    rewind(page)
+    assert "SEVERAL_FIXED" in first_en_text(page)
+
+    # The corrected paragraph carries a revert mark; using it restores the text.
+    page.click("#stage-wrap .page-right p.pair-en.revised .revise-undo")
+    page.wait_for_timeout(500)
+    assert "SEVERAL_FIXED" not in first_en_text(page)
+    assert "several" in first_en_text(page)
+    assert page.evaluate(
+        "() => JSON.parse(localStorage.getItem('biread:' + "
+        "JSON.parse(document.getElementById('book-data').textContent).slug + ':overrides')).byHash"
+    ) == {}
+    page.close()
+
+
+def test_rewrite_calls_only_the_provider_endpoint_with_the_readers_key(browser, revise_path):
+    page = _fresh(browser, revise_path)
+    page.evaluate("() => localStorage.clear()")
+    rewind(page)
+
+    # Stub fetch so no real request leaves the browser; record every call.
+    page.evaluate(
+        """() => {
+          window.__calls = [];
+          window.fetch = function (url, opts) {
+            window.__calls.push({ url: url, headers: (opts && opts.headers) || {},
+                                  body: (opts && opts.body) || '' });
+            return Promise.resolve({
+              ok: true,
+              json: function () { return Promise.resolve({ content: [{ type: 'text', text: 'REWRITTEN_SPAN' }] }); }
+            });
+          };
+        }"""
+    )
+
+    assert select_en_word(page, "several")
+    page.wait_for_selector(".revise", timeout=3000)
+    # Regenerate with no key opens the key panel, holding the selection.
+    page.click('.revise .revise-btn:text-is("Regenerate")')
+    page.wait_for_selector(".revise-key", timeout=3000)
+    page.fill(".revise-key-input", "sk-reader-key")
+    page.click('.revise-key .revise-btn:text-is("Save")')
+    page.wait_for_timeout(500)
+
+    assert "REWRITTEN_SPAN" in first_en_text(page)
+    calls = page.evaluate("() => window.__calls")
+    assert len(calls) == 1, "the key must reach the provider and nowhere else"
+    assert calls[0]["url"] == ANTHROPIC_ENDPOINT
+    assert calls[0]["headers"]["x-api-key"] == "sk-reader-key"
+    # The prompt carries the model and the French source as ground truth.
+    assert "claude-sonnet-4-6" in calls[0]["body"]
+    assert "French source" in calls[0]["body"]
+    page.close()
+
+
+def test_the_revise_ui_shows_no_cost_or_token_figures(browser, revise_path):
+    page = _fresh(browser, revise_path)
+    page.evaluate("() => localStorage.clear()")
+    rewind(page)
+    assert select_en_word(page, "several")
+    page.wait_for_selector(".revise", timeout=3000)
+    control = page.inner_text(".revise").lower()  # read while it's the visible panel
+    page.click('.revise .revise-link:text-is("Key")')
+    page.wait_for_selector(".revise-key", timeout=3000)
+    panel = page.inner_text(".revise-key").lower()
+
+    for text in (control, panel):
+        assert "$" not in text
+        assert "token" not in text
+        assert "price" not in text and "cost" not in text
+    page.close()
+
+
+def _copy_from(page, button_id):
+    """Click a copy button with the clipboard stubbed, and return what it copied."""
+    return page.evaluate(
+        """async (id) => {
+          let got = null;
+          navigator.clipboard.writeText = t => { got = t; return Promise.resolve(); };
+          document.getElementById(id).click();
+          await new Promise(r => setTimeout(r, 60));
+          return got;
+        }""",
+        button_id,
+    )
+
+
+def test_an_edits_link_carries_corrections_to_a_fresh_browser(browser, revise_path):
+    page = _fresh(browser, revise_path)
+    page.evaluate("() => localStorage.clear()")
+    page.reload()
+    page.wait_for_function(
+        "() => { const c = document.getElementById('counter');"
+        "return c && c.textContent && !c.textContent.includes('+'); }", timeout=15000)
+    rewind(page)
+
+    # With nothing corrected, there is no edits link to offer.
+    assert page.is_hidden("#edits-btn")
+
+    assert select_en_word(page, "several")
+    page.wait_for_selector(".revise", timeout=3000)
+    page.click('.revise .revise-btn:text-is("Edit")')
+    page.fill(".revise-edit", "LINK_CARRIED")
+    page.click('.revise .revise-btn:text-is("Save")')
+    page.wait_for_timeout(400)
+
+    # The edits control now appears; capture the link it copies.
+    assert page.is_visible("#edits-btn")
+    edits_link = _copy_from(page, "edits-btn")
+    assert edits_link and "#e=" in edits_link
+
+    # The ordinary page link must NOT carry the private edits.
+    page_link = _copy_from(page, "link-btn")
+    assert "#e=" not in page_link and re.search(r"#p\d", page_link)
+
+    # Open the edits link in a brand-new context (its own empty storage): the
+    # correction rides in the link alone, with nothing shared between them.
+    other = browser.new_page(viewport={"width": 1280, "height": 900})
+    other.goto(edits_link)
+    other.wait_for_function(
+        "() => { const c = document.getElementById('counter');"
+        "return c && c.textContent && !c.textContent.includes('+'); }", timeout=15000)
+    rewind(other)
+    assert "LINK_CARRIED" in first_en_text(other)
+    # It landed in the new browser's own storage, and the giant payload was
+    # stripped from its address bar.
+    saved = other.evaluate(
+        "() => JSON.parse(localStorage.getItem('biread:' + "
+        "JSON.parse(document.getElementById('book-data').textContent).slug + ':overrides')).byHash")
+    assert any("LINK_CARRIED" in v["text"] for v in saved.values())
+    assert "#e=" not in other.evaluate("() => location.hash")
+    page.close()
+    other.close()
+
+
+def test_a_correction_reflows_the_page_without_clipping(browser, revise_path):
+    page = _fresh(browser, revise_path)
+    page.evaluate("() => localStorage.clear()")
+    rewind(page)
+    # Replace a short span with a very long one, forcing the paragraph — and the
+    # page — to re-measure. No page may end up clipped as a result.
+    assert select_en_word(page, "several")
+    page.wait_for_selector(".revise", timeout=3000)
+    page.click('.revise .revise-btn:text-is("Edit")')
+    page.fill(".revise-edit", ("lengthened " * 60).strip())
+    page.click('.revise .revise-btn:text-is("Save")')
+    page.wait_for_timeout(600)
+
+    clipped = page.evaluate(
+        """() => {
+          const bad = [];
+          for (const p of document.querySelectorAll('#stage-wrap .page:not(.leaf-face)')) {
+            if (p.scrollHeight > p.clientHeight + 1
+                && getComputedStyle(p).overflowY !== 'auto'
+                && p.querySelectorAll('p.pair').length > 1) bad.push(p.className);
+          }
+          return bad;
+        }"""
+    )
+    assert clipped == []
+    page.close()

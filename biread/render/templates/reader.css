@@ -56,6 +56,9 @@ button:focus-visible { outline: 2px solid rgba(200,175,130,.85); outline-offset:
 /* .link-btn sets display:flex, which would otherwise defeat the `hidden`
    attribute that keeps the download out of a plain build (no format embedded). */
 .dl-btn[hidden] { display: none; }
+.edits-btn[hidden] { display: none; }
+/* Placed after .link-btn.copied::after so it wins for the edits button. */
+.edits-btn.copied::after { content: 'Edits link copied'; }
 
 .btn-pill { font-size: 14px; color: #e4d7ba; background: rgba(120,95,55,.16); border: 1px solid rgba(180,150,100,.28); border-radius: 999px; padding: 7px 16px; }
 .segmented-row { display: flex; align-items: center; gap: 6px; }
@@ -205,3 +208,36 @@ p.pair-en.blurred { filter: blur(5px); }
 
 @keyframes pageShade { 0% { opacity: 0; } 45% { opacity: .7; } 100% { opacity: 0; } }
 @keyframes xfade { from { opacity: 0; } }
+
+/* ---------- revise ---------- */
+/* The floating control by a selection in the AI column, and the key panel. Both
+   speak the reader's dark-panel language; no number ever appears in either. */
+.revise { position: fixed; z-index: 72; width: 280px; max-width: calc(100vw - 16px); background: #211b14; color: #efe6d2; border-radius: 9px; box-shadow: 0 14px 36px rgba(0,0,0,.55); padding: 10px; animation: xfade .12s ease-out; }
+.revise-note, .revise-edit { width: 100%; font-family: inherit; font-size: 14px; color: #f4ead0; background: rgba(120,95,55,.16); border: 1px solid rgba(200,175,130,.4); border-radius: 6px; padding: 6px 8px; outline: none; }
+.revise-edit { line-height: 1.4; resize: vertical; }
+.revise-note::placeholder, .revise-edit::placeholder { color: #9a8a6a; }
+.revise-row { display: flex; gap: 8px; margin-top: 8px; }
+.revise-btn { flex: 1; font-family: inherit; font-size: 13px; color: #e4d7ba; background: rgba(120,95,55,.16); border: 1px solid rgba(180,150,100,.34); border-radius: 999px; padding: 6px 12px; }
+.revise-btn:hover:not(:disabled) { background: rgba(180,150,100,.26); }
+.revise-btn.primary { color: #1c160f; background: #d8c39a; border-color: transparent; font-weight: 600; }
+.revise-btn:disabled { opacity: .5; cursor: default; }
+.revise-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
+.revise-link { background: none; border: none; color: #a2926f; font-size: 12px; padding: 2px; text-decoration: underline; }
+.revise-link:hover { color: #c8b891; }
+.revise-status { margin-top: 8px; font-size: 12.5px; font-style: italic; color: #a99a78; }
+.revise-status.error { color: #d29c86; font-style: normal; }
+
+/* A corrected paragraph carries a small revert mark in the outer margin. It is
+   absolutely positioned, so it is invisible to pagination's height measurement. */
+p.pair-en.revised { position: relative; }
+.revise-undo { position: absolute; top: 3px; right: -17px; width: 16px; height: 16px; padding: 0; line-height: 15px; text-align: center; font-size: 12px; border: none; border-radius: 50%; background: rgba(180,150,100,.24); color: #8a7551; }
+.revise-undo:hover { background: rgba(180,150,100,.42); color: #3a3125; }
+
+.revise-key-input { width: 100%; margin-top: 12px; font-family: inherit; font-size: 14px; color: #f4ead0; background: rgba(120,95,55,.16); border: 1px solid rgba(200,175,130,.4); border-radius: 6px; padding: 7px 9px; outline: none; }
+.revise-key-input::placeholder { color: #9a8a6a; }
+.revise-remember { display: flex; align-items: center; gap: 5px; margin-top: 10px; font-size: 13px; color: #c3b590; cursor: pointer; accent-color: #b79a5f; }
+/* When Rewrite-without-a-key raises the panel, it sits above the control that
+   is still holding the selection behind it, so the consent copy stays readable
+   and the note the reader typed survives into the rewrite. */
+.info-panel.revise-key { z-index: 80; }
+.info-panel.revise-key .revise-row { margin-top: 14px; }

@@ -26,6 +26,22 @@ from ..translate import hash_text
 TEMPLATES = Path(__file__).parent / "templates"
 ASSETS = Path(__file__).parent.parent / "assets"
 
+# Where a reader's own key would call, per provider, and which wire shape the
+# reader uses. Embedded only by --revise, so a plain book carries no URL. The
+# reader falls back to hand-editing when a provider has no browser endpoint.
+REVISE_ENDPOINT = {
+    "anthropic": "https://api.anthropic.com/v1/messages",
+    "openai": "https://api.openai.com/v1/chat/completions",
+    "openrouter": "https://openrouter.ai/api/v1/chat/completions",
+    "ollama": "http://localhost:11434/api/chat",
+}
+REVISE_STYLE = {
+    "anthropic": "anthropic",
+    "openai": "openai",
+    "openrouter": "openai",
+    "ollama": "ollama",
+}
+
 PLACEHOLDER_RE = re.compile(r"@@([A-Z_]+)@@")
 
 # Anything that could close the <script> element the book data lives in, plus
@@ -116,10 +132,16 @@ def build_book_data(
     glosses: dict | None = None,
     downloads: list[Download] | None = None,
     target: Target = ENGLISH,
+    revise: dict | None = None,
 ) -> dict:
     """`pairs` is a flat list of {fr, en} across the whole book, including any
     untitled leading section. `chapters[i].pair` indexes into it, marking where
-    that chapter's body starts — the reader forces a page break there."""
+    that chapter's body starts — the reader forces a page break there.
+
+    `revise`, when set, turns on reader-side correction: each body pair carries
+    its source hash `h` (so a reader's local fix survives a rebuild and goes
+    stale safely if the paragraph is retranslated), and the reader learns which
+    provider/model to call on the reader's own key."""
     pairs = []
     chapter_meta = []
     for chapter in chapters:
@@ -134,6 +156,8 @@ def build_book_data(
         for paragraph in chapter.paragraphs:
             key = hash_text(paragraph)
             pair = {"fr": paragraph, "en": translations.get(key, "")}
+            if revise:
+                pair["h"] = key
             if published:
                 pair["pub"] = published.get(key, "")
             units = displayable(paragraph, (glosses or {}).get(key) or [])
@@ -164,6 +188,18 @@ def build_book_data(
         data["downloads"] = [
             {"format": fmt, "filename": filename} for fmt, filename, _blob in downloads
         ]
+    if revise:
+        # No key and no cost live here — only which endpoint a reader's own key
+        # would call, its wire shape, the model, and the prompt's target language.
+        provider = revise["provider"]
+        data["revise"] = {
+            "enabled": True,
+            "provider": provider,
+            "model": revise["model"],
+            "target": revise.get("target", target.name),
+            "endpoint": REVISE_ENDPOINT.get(provider, ""),
+            "style": REVISE_STYLE.get(provider, "openai"),
+        }
     return data
 
 
@@ -177,9 +213,11 @@ def render_book(
     glosses: dict | None = None,
     downloads: list[Download] | None = None,
     target: Target = ENGLISH,
+    revise: dict | None = None,
 ) -> None:
     data = build_book_data(
-        title, chapters, translations, published, published_note, glosses, downloads, target
+        title, chapters, translations, published, published_note, glosses, downloads,
+        target, revise,
     )
 
     css = fill((TEMPLATES / "reader.css").read_text(encoding="utf-8"), {

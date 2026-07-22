@@ -205,6 +205,21 @@ def test_incompatible_cache_needs_a_decision(project, monkeypatch, capsys):
     assert json.loads(cache_file.read_text())["schema_version"] == 1
 
 
+def test_revise_flag_embeds_the_build_provider_model_and_hashes(project):
+    project.invoke("--revise")
+    data = book_data(project.html())
+    assert data["revise"]["enabled"] is True
+    assert data["revise"]["provider"] == "anthropic"   # from the fake config
+    assert data["revise"]["model"] == "fake-model"
+    assert data["revise"]["style"] == "anthropic"
+    assert all("h" in p for p in data["pairs"])
+
+
+def test_no_revise_config_without_the_flag(project):
+    project.invoke()
+    assert "revise" not in book_data(project.html())
+
+
 def test_html_keeps_the_slug_but_exports_take_the_book_name(project):
     # The hosted reader wants a clean URL; a saved EPUB wants a readable name.
     project.invoke("--title", "Micromégas", "--epub")
