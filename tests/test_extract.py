@@ -42,11 +42,8 @@ def test_dispatch_is_case_insensitive(tmp_path):
     assert isinstance(get_extractor(tmp_path / "BOOK.TXT"), TxtExtractor)
 
 
-def test_planned_formats_say_so(tmp_path):
-    with pytest.raises(ExtractError, match="planned, not built yet"):
-        get_extractor(tmp_path / "book.epub")
-
-
 def test_unknown_format_lists_what_is_supported(tmp_path):
-    with pytest.raises(ExtractError, match=r"Supported: \.txt"):
+    with pytest.raises(ExtractError, match="no extractor") as exc:
         get_extractor(tmp_path / "book.rtf")
+    message = str(exc.value)
+    assert ".txt" in message and ".epub" in message and ".pdf" in message

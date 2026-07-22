@@ -174,11 +174,11 @@ def test_missing_input_exits_with_a_message(tmp_path, capsys):
 
 
 def test_unsupported_format_exits_with_a_message(tmp_path, capsys):
-    source = tmp_path / "book.epub"
+    source = tmp_path / "book.rtf"
     source.write_bytes(b"whatever")
     with pytest.raises(SystemExit):
         cli.main([str(source)])
-    assert "planned, not built yet" in capsys.readouterr().err
+    assert "no extractor" in capsys.readouterr().err
 
 
 def test_large_books_need_force(project, monkeypatch, capsys):
