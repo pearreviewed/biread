@@ -121,6 +121,7 @@
   var keyPanel = null;
   var reviseTarget = null;
   var reviseBusy = false;
+  var undoStack = []; // this session's corrections, for Cmd/Ctrl+Z
 
   // Type scales with the book, so a smaller book keeps the same number of
   // characters per line instead of turning into a narrow ribbon of text.
@@ -1052,8 +1053,9 @@
 
   function applyRevision(i, start, end, revised) {
     if (!revised || !PAIRS[i].h) return;
-    var full = generatedEnglish(i);
-    overrides[PAIRS[i].h] = { base: PAIRS[i].en, text: full.slice(0, start) + revised + full.slice(end) };
+    var h = PAIRS[i].h, full = generatedEnglish(i);
+    undoStack.push({ h: h, prev: overrides[h] || null }); // remember the pre-edit state
+    overrides[h] = { base: PAIRS[i].en, text: full.slice(0, start) + revised + full.slice(end) };
     saveOverrides();
     updateEditsButton();
     hideRevise();
@@ -1064,6 +1066,19 @@
     updateEditsButton();
     hideRevise();
     repaginate(currentPosition());
+  }
+  // Step back through this session's corrections — one paragraph's history at a
+  // time, restoring whatever it was before that edit (an earlier fix, or nothing).
+  function undoLastEdit() {
+    if (!undoStack.length) return false;
+    var entry = undoStack.pop();
+    if (entry.prev) overrides[entry.h] = entry.prev;
+    else delete overrides[entry.h];
+    saveOverrides();
+    updateEditsButton();
+    hideRevise();
+    repaginate(currentPosition());
+    return true;
   }
 
   function setReviseBusy(busy) {
@@ -1305,6 +1320,16 @@
       if (reviseCtl && !inside) hideRevise();
       if (keyPanel && !inside) closeKeyPanel();
     }, true);
+
+    // Cmd/Ctrl+Z undoes the last correction — but leaves native undo to the field
+    // or key input while the reader is typing in one.
+    document.addEventListener('keydown', function (e) {
+      if (!(e.metaKey || e.ctrlKey) || e.shiftKey || e.altKey) return;
+      if (e.key !== 'z' && e.key !== 'Z') return;
+      var t = e.target;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return;
+      if (undoLastEdit()) e.preventDefault();
+    });
 
     // Copy the reader's corrections as their own link (see above).
     var editsBtn = document.getElementById('edits-btn');
