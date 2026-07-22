@@ -967,6 +967,43 @@ def test_an_edits_link_carries_corrections_to_a_fresh_browser(browser, revise_pa
     other.close()
 
 
+def test_a_real_drag_selects_english_without_turning_the_page(browser, revise_path):
+    # The reader turns pages on click, and a click fires at the end of a drag, so
+    # dragging to select an English phrase was being eaten as a page turn. Driven
+    # with real mouse events (not a scripted selection), which is what exposed it.
+    page = _fresh(browser, revise_path)
+    page.evaluate("() => localStorage.clear()")
+    rewind(page)
+    before = current_spread(page)
+    box = page.eval_on_selector(
+        "#stage-wrap .page-right p.pair-en",
+        "e => { const r = e.getBoundingClientRect(); return {x:r.x,y:r.y,w:r.width,h:r.height}; }")
+    y = box["y"] + box["h"] / 2
+    page.mouse.move(box["x"] + 20, y)
+    page.mouse.down()
+    page.mouse.move(box["x"] + 160, y, steps=10)
+    page.mouse.up()
+    page.wait_for_timeout(250)
+    assert current_spread(page) == before, "a drag to select must not turn the page"
+    assert page.evaluate("() => (window.getSelection() || '').toString().trim().length") > 0
+    assert page.locator(".revise").count() > 0, "selecting English should raise the control"
+    page.close()
+
+
+def test_a_plain_click_still_turns_the_page(browser, revise_path):
+    page = _fresh(browser, revise_path)
+    page.evaluate("() => localStorage.clear()")
+    rewind(page)
+    before = current_spread(page)
+    box = page.eval_on_selector(
+        "#stage-wrap .book-desk",
+        "e => { const r = e.getBoundingClientRect(); return {x:r.x,y:r.y,w:r.width,h:r.height}; }")
+    page.mouse.click(box["x"] + box["w"] * 0.78, box["y"] + box["h"] / 2)  # right half → forward
+    page.wait_for_timeout(800)
+    assert current_spread(page) == before + 1, "a plain click should still turn the page"
+    page.close()
+
+
 def test_a_correction_reflows_the_page_without_clipping(browser, revise_path):
     page = _fresh(browser, revise_path)
     page.evaluate("() => localStorage.clear()")

@@ -137,7 +137,9 @@ p.pair { margin: 0 -12px 0.34em; padding: 2px 12px; font-size: var(--fpx); line-
 /* A paragraph resumed from the previous page is not a new paragraph. */
 p.pair.continued { text-indent: 0; }
 p.pair-fr { color: #332a1d; }
-p.pair-en { color: #4b4335; }
+/* The AI column is explicitly selectable so a reader can highlight a phrase to
+   correct it — a page turn happens on a click, not a drag (see onBookClick). */
+p.pair-en { color: #4b4335; -webkit-user-select: text; user-select: text; }
 p.pair-en.blurred { filter: blur(5px); }
 .xfade { animation: xfade .32s ease; }
 

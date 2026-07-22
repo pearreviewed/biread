@@ -1300,6 +1300,7 @@
     var book = document.createElement('div');
     book.className = S.mobile ? 'book-mobile' : 'book-desk';
     book.addEventListener('click', onBookClick);
+    book.addEventListener('mousedown', onBookPress, { passive: true });
     book.addEventListener('touchstart', onTouchStart, { passive: true });
     book.addEventListener('touchend', onTouchEnd, { passive: true });
 
@@ -1614,14 +1615,16 @@
   }
 
   // ---------- input ----------
+  var pressX = 0, pressY = 0;
+  function onBookPress(e) { pressX = e.clientX; pressY = e.clientY; }
   function onBookClick(e) {
     if (turning()) return;
-    // A drag that selected text, or a click on a revert mark, is not a page turn.
-    if (REVISE) {
-      var sel = window.getSelection();
-      if (sel && !sel.isCollapsed && sel.toString().trim()) return;
-      if (e.target.closest && e.target.closest('.revise-undo')) return;
-    }
+    // A press-and-drag is a text selection (highlighting a line to correct it),
+    // not a page turn. Some browsers — Safari notably — still fire a click at the
+    // end of such a drag and have already collapsed the selection by then, so
+    // measure the pointer travel rather than trusting getSelection() to survive.
+    if (Math.abs(e.clientX - pressX) > 8 || Math.abs(e.clientY - pressY) > 8) return;
+    if (REVISE && e.target.closest && e.target.closest('.revise-undo')) return;
     var box = e.currentTarget.getBoundingClientRect();
     step(e.clientX > box.left + box.width / 2 ? 1 : -1);
   }
