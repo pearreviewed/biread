@@ -25,6 +25,11 @@ body {
 button { font-family: inherit; cursor: pointer; }
 button:focus-visible { outline: 2px solid rgba(200,175,130,.85); outline-offset: 2px; }
 
+/* A warm text selection, in the reader's own accent — highlighting a phrase to
+   correct it (or just to read) should sit in the book, not flash browser-blue. */
+::selection { background: rgba(180,150,100,.5); }
+::-moz-selection { background: rgba(180,150,100,.5); }
+
 /* ---------- header ---------- */
 #app-header { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 16px 30px; border-bottom: 1px solid rgba(180,150,100,.14); flex-wrap: wrap; }
 .header-left { display: flex; align-items: baseline; gap: 14px; min-width: 0; }
