@@ -61,6 +61,24 @@ const BUILD = [
   "res.html",
 ].join("\n");
 
+// Free path: no key, no AI — set a brought translation beside the French by position.
+const LOAD_FREE = [
+  "from pathlib import Path",
+  "from biread.extract import get_extractor",
+  "from biread.cleanup import clean",
+  "from biread.targets import get_target",
+  "orig_chapters, _ = clean(get_extractor(Path(orig_path)).extract(Path(orig_path)))",
+  "pub_chapters, _ = clean(get_extractor(Path(pub_path)).extract(Path(pub_path)))",
+  "target = get_target(lang_key)",
+].join("\n");
+
+const BUILD_FREE = [
+  LOAD_FREE,
+  "from biread.build import build_positional",
+  "html, _ = build_positional(title=title, chapters=orig_chapters, published_chapters=pub_chapters, target=target)",
+  "html",
+].join("\n");
+
 self.onmessage = async (e) => {
   await ready;
   const m = e.data;
@@ -84,6 +102,8 @@ self.onmessage = async (e) => {
     } else if (m.type === "build") {
       pyodide.globals.set("js_progress", (s, d, t) => postMessage({ type: "progress", stage: s, done: d, total: t }));
       postMessage({ type: "done", html: await pyodide.runPythonAsync(BUILD) });
+    } else if (m.type === "build-free") {
+      postMessage({ type: "done", html: await pyodide.runPythonAsync(BUILD_FREE) });
     }
   } catch (err) {
     postMessage({ type: "error", error: cleanError(err) });

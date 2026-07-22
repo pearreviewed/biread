@@ -13,6 +13,7 @@
   var PAIRS = DATA.pairs;
   var CHAPTERS = DATA.chapters;
   var PUBLISHED = !!DATA.publishedAvailable;
+  var SOLO = !!DATA.solo;
   // Formats built alongside this book, in menu order. The bytes live in separate
   // <script> blobs (read only on download); this just says what to offer.
   var DOWNLOADS = DATA.downloads || [];
@@ -1236,7 +1237,17 @@
 
   var segTranslation = document.getElementById('seg-translation');
   var segPublished = document.getElementById('seg-published');
-  if (PUBLISHED) {
+  if (SOLO) {
+    // A translation the reader brought, set beside the French by position: one
+    // honest column, no AI/published toggle to switch between.
+    segTranslation.removeAttribute('data-i18n');
+    segTranslation.textContent = i18n('publishedPanelTitle');
+    segTranslation.style.cursor = 'default';
+    segPublished.remove();
+    var soloDivider = document.querySelector('.segmented .seg-divider');
+    if (soloDivider) soloDivider.remove();
+    document.getElementById('info-btn').style.display = 'none';
+  } else if (PUBLISHED) {
     segPublished.disabled = false;
     segPublished.removeAttribute('aria-disabled');
     segPublished.removeAttribute('tabindex');

@@ -116,6 +116,7 @@ def build_book_data(
     glosses: dict | None = None,
     downloads: list[Download] | None = None,
     target: Target = ENGLISH,
+    solo: bool = False,
 ) -> dict:
     """`pairs` is a flat list of {fr, en} across the whole book, including any
     untitled leading section. `chapters[i].pair` indexes into it, marking where
@@ -164,6 +165,10 @@ def build_book_data(
         data["downloads"] = [
             {"format": fmt, "filename": filename} for fmt, filename, _blob in downloads
         ]
+    if solo:
+        # A brought translation set beside the French by position: the reader
+        # shows it as one honest column, with no AI/published toggle.
+        data["solo"] = True
     return data
 
 
@@ -176,11 +181,12 @@ def render_html(
     glosses: dict | None = None,
     downloads: list[Download] | None = None,
     target: Target = ENGLISH,
+    solo: bool = False,
 ) -> str:
     """The finished reader as a single HTML string. `render_book` writes it to a
     file; the in-browser builder hands the same string straight to a download."""
     data = build_book_data(
-        title, chapters, translations, published, published_note, glosses, downloads, target
+        title, chapters, translations, published, published_note, glosses, downloads, target, solo
     )
 
     css = fill((TEMPLATES / "reader.css").read_text(encoding="utf-8"), {

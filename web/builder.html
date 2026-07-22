@@ -268,7 +268,8 @@ $("build").addEventListener("click", async () => {
     const { key: _k, ...noKey } = pending;
     worker.postMessage({ type: "estimate", ...noKey });
   } else if (pending.pub) {
-    $("boot").textContent = "The free side-by-side path is coming next — add a key for now.";
+    screen("progress"); $("stage").textContent = "Lining up your two books…"; $("bar").style.width = "35%";
+    worker.postMessage({ type: "build-free", orig: pending.orig, origName: pending.origName, pub: pending.pub, pubName: pending.pubName, lang: pending.lang, title: pending.title });
   } else {
     $("boot").textContent = "Add your AI key, or a published translation to read side by side.";
   }

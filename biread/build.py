@@ -76,6 +76,23 @@ def build_reader(
     )
 
 
+def build_positional(
+    *,
+    title: str,
+    chapters: list[Chapter],
+    published_chapters: list[Chapter],
+    target: Target = ENGLISH,
+) -> tuple[str, AlignmentReport]:
+    """The free path: no AI, no key. Set a brought published translation beside
+    the French by position and render it as the single reading column."""
+    aligned, report = align_published(chapters, published_chapters, None)
+    html = render_html(
+        title, chapters, aligned, published=None,
+        published_note=published_note(report), glosses=None, target=target, solo=True,
+    )
+    return html, report
+
+
 def published_note(report: AlignmentReport) -> str:
     """Reader-facing note on how the published edition was placed, in the ⓘ
     panel's laconic voice."""
