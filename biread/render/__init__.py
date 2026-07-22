@@ -167,6 +167,38 @@ def build_book_data(
     return data
 
 
+def render_html(
+    title: str,
+    chapters: list[Chapter],
+    translations: dict[str, str],
+    published: dict[str, str] | None = None,
+    published_note: str = "",
+    glosses: dict | None = None,
+    downloads: list[Download] | None = None,
+    target: Target = ENGLISH,
+) -> str:
+    """The finished reader as a single HTML string. `render_book` writes it to a
+    file; the in-browser builder hands the same string straight to a download."""
+    data = build_book_data(
+        title, chapters, translations, published, published_note, glosses, downloads, target
+    )
+
+    css = fill((TEMPLATES / "reader.css").read_text(encoding="utf-8"), {
+        "FONT_REGULAR": _b64(ASSETS / "fonts" / "eb-garamond-400.woff2"),
+        "FONT_ITALIC": _b64(ASSETS / "fonts" / "eb-garamond-400-italic.woff2"),
+        "PAPER_GRAIN": _b64(ASSETS / "paper-grain.png"),
+    })
+
+    return fill((TEMPLATES / "reader.html").read_text(encoding="utf-8"), {
+        "TITLE": escape_html(title),
+        "CSS": css,
+        "BOOK_DATA": script_json(data),
+        "JS": (TEMPLATES / "reader.js").read_text(encoding="utf-8"),
+        "DOWNLOADS": _download_scripts(downloads),
+        "UI_LOADING": escape_html(target.ui["loading"]),
+    })
+
+
 def render_book(
     title: str,
     chapters: list[Chapter],
@@ -178,25 +210,9 @@ def render_book(
     downloads: list[Download] | None = None,
     target: Target = ENGLISH,
 ) -> None:
-    data = build_book_data(
+    html = render_html(
         title, chapters, translations, published, published_note, glosses, downloads, target
     )
-
-    css = fill((TEMPLATES / "reader.css").read_text(encoding="utf-8"), {
-        "FONT_REGULAR": _b64(ASSETS / "fonts" / "eb-garamond-400.woff2"),
-        "FONT_ITALIC": _b64(ASSETS / "fonts" / "eb-garamond-400-italic.woff2"),
-        "PAPER_GRAIN": _b64(ASSETS / "paper-grain.png"),
-    })
-
-    html = fill((TEMPLATES / "reader.html").read_text(encoding="utf-8"), {
-        "TITLE": escape_html(title),
-        "CSS": css,
-        "BOOK_DATA": script_json(data),
-        "JS": (TEMPLATES / "reader.js").read_text(encoding="utf-8"),
-        "DOWNLOADS": _download_scripts(downloads),
-        "UI_LOADING": escape_html(target.ui["loading"]),
-    })
-
     output_path.parent.mkdir(parents=True, exist_ok=True)
     tmp = output_path.with_name(output_path.name + ".tmp")
     tmp.write_text(html, encoding="utf-8")
