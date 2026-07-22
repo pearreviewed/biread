@@ -29,7 +29,7 @@ pytest
 
 The suite **needs no network and no API key** — the model is faked and the
 fixtures are canned — so you can run all of it for free, as often as you like.
-The ~35 browser tests skip themselves unless the `[browser]` extra is installed.
+The ~50 browser tests skip themselves unless the `[browser]` extra is installed.
 
 CI runs the Python tests on every push and pull request, and the browser tests
 alongside; a change has to be green to merge. If you fix a bug, add the test

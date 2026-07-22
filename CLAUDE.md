@@ -98,6 +98,25 @@ The scrubber caused three separate bugs (drag target destroyed mid-gesture,
 stuck scrubbing flag, NaN spread index) which is more than the rest of the
 reader combined.
 
+### Reader-side correction (built)
+
+> sometimes the llm translation is off like genrating got wind of it vs caught wind of it i dont want the user stuck with sentences that rub the, the wrong way ... a person can select a part in the ai translation ... and get a button option to regenerate it maybe with feedback what is wrong but again i dont wanna pay for it
+
+**`--revise` lets a reader fix the AI translation in place.** Select a phrase in
+the generated column and a small panel offers **Edit** (type the fix by hand — no
+key, no cost) and **Regenerate** (rewrite the span in context, with an optional
+"what's wrong" note). Regenerate calls a model, so it runs on the **reader's own
+key**, never the builder's, using the provider the book was built with; a reader
+without that key still gets the hand-edit.
+
+A fix is a private, reversible override stored in the reader's own browser (a ↺
+puts the original back), keyed by source hash so a rebuild drops it only if that
+paragraph is retranslated. Corrections carry to another browser through a
+dedicated *edits link*, kept separate from the page link so a shared page never
+leaks private edits. Cross-device sync needs a server and is **parked** — the
+full design, local and server, is in
+[`design-reference/revise-spec.md`](design-reference/revise-spec.md).
+
 ### Never
 
 > will it constantly show the price in ui? because i dont want that
@@ -143,6 +162,8 @@ two at once. `--dry-run` needs no API key.
 | Download button — where in the header? | Far right, paired with the "copy link" icon (moved there too) and set a little apart. Every other control works the book in place; these two hand it off — the link the current spot, the download the whole book. A quiet icon menu, shown only for formats actually built (`--epub`/`--pdf`), else hidden. |
 | Translation language — where is it chosen, and who pays? | Build-time, per book: `--lang` (default `english`), one language per book. Every language is self-serve — whoever would like an edition builds it on their own key — so you only ever carry the languages you choose. English content is byte-identical; cache is per-language (`translations.<code>.json`). |
 | Translation language — how far does localization reach? | Content **and** the full reader UI, except the `Lecteur bilingue` masthead, which stays French as the reader's signature. A curated, extensible `Target` table (`targets.py`) holds each language's name, hyphenation code, chapter word, and UI strings; adding a language is one row. |
+| Revise — how does a reader fix an off translation, and who pays? | In the reader: **Edit** by hand (key-free) or **Regenerate** on the reader's **own** key — never the builder's — on the book's build provider, so a fix keeps the translation's voice. A fix is a private, reversible local override; it crosses browsers via a dedicated *edits link* kept separate from the page link. |
+| Revise — automatic cross-device sync? | Spec'd (sign-in accounts) and **parked**; the shipped rung is the edits link. Full local+server design in `design-reference/revise-spec.md`. |
 
 ## Reversals
 
@@ -180,9 +201,14 @@ Recorded because the reasoning matters more than the outcome.
   JS, but mobile did not), so a short landscape phone could squash.
 - **The EPUB and PDF are validated structurally, not in the wild.** No one has
   opened the EPUB in Apple Books or Kindle, or printed the PDF, in a test.
-- **Not published yet.** LICENSE (MIT) and CI (GitHub Actions) are in place, but
-  there are no contributing notes, and the repo has no remote — it has never
-  been pushed, so CI has not actually run against a real GitHub yet.
+- **Revise crosses browsers by a link, not by sync.** Corrections live
+  per-browser; the *edits link* carries them across, but automatic cross-device
+  sync needs a server and is parked (`design-reference/revise-spec.md`). On mobile
+  the correction control is off (touch) — a phone reader sees corrections that
+  arrived by link but makes new ones only on a desktop-width window.
+- **Now on GitHub.** LICENSE (MIT), CI (GitHub Actions), and CONTRIBUTING notes
+  are in place; the repo has a remote (`origin`) and has been pushed, so CI now
+  runs on real GitHub.
 
 ---
 
@@ -216,9 +242,9 @@ selector must be scoped to `#stage-wrap`.
 ## Tests
 
 ```sh
-pip install -e ".[dev]" && pytest              # 128 Python tests, no network
+pip install -e ".[dev]" && pytest              # 230 Python tests, no network
 pip install -e ".[browser]" && playwright install chromium
-pytest tests/test_reader_js.py                 # 16 browser tests
+pytest tests/test_reader_js.py                 # 50 browser tests
 ```
 
 The reader's expensive bugs have all been layout and timing — pagination

@@ -75,8 +75,10 @@ own key. Each edition is created, and paid for, by whoever wants it.
   copying the directory.
 - **The reader is plain files.** `reader.{html,css,js}` in
   `render/templates/`, edited as plain files — no bundler. `render/` only inlines
-  assets and substitutes the book data. Pagination, the hover glosses, the
-  save/share-by-URL, and the download menu all live in `reader.js`.
+  assets and substitutes the book data (and, with `--revise`, which provider a
+  reader's own key would call — never a key, never a cost). Pagination, the hover
+  glosses, the save/share-by-URL, the download menu, and reader-side correction
+  all live in `reader.js`.
 
 ## Adding a book
 

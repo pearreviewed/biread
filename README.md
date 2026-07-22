@@ -57,6 +57,7 @@ python -m biread book.txt -o output/
 | `--published FILE` | Also show a published translation (in the target language) you already own |
 | `--title TEXT` | Title in the reader header (default: from the filename) |
 | `--gloss` | Annotate the French for hover translation (costs extra; see `--dry-run`) |
+| `--revise` | Let a reader correct the AI translation in the reader — by hand, or on their own key |
 | `--epub` | Also write a reflowable EPUB, glosses as tap-to-reveal notes |
 | `--pdf` | Also write a print PDF, French and English side by side (needs `[browser]`) |
 | `--cache-dir DIR` | Where translation caches live (default `cache/`) |
@@ -143,6 +144,35 @@ you are. **Blur translation** hides the English until you hover a paragraph.
 The star bookmarks a spread, the ribbon removes it, and your place is restored
 next time — all stored as positions in the book, so they survive resizing the
 window or changing the font size.
+
+## Correcting the translation
+
+The generated English is the primary reading text, and mostly it earns that —
+but a phrase lands wrong now and then, *got wind of* where you wanted *caught
+wind of*. Build with `--revise` and a reader can fix it in place: select the
+phrase in the AI column and a small panel offers two ways to set it right.
+
+<p align="center">
+  <img src="docs/screenshots/revise.jpg" width="880"
+       alt="Selecting a phrase in the English column raises a small panel with a 'what's off?' note field and Edit and Regenerate buttons">
+  <br>
+  <sub><em>Select an awkward phrase to fix it — type the correction by hand, or
+  have it regenerated in context.</em></sub>
+</p>
+
+- **Edit** — type the correction yourself. No key, no cost, instant.
+- **Regenerate** — have the selected span rewritten in context, with an optional
+  note on what's wrong. This one calls a model, so it runs on the **reader's own
+  key**, never yours, using the provider the book was built with. A reader who
+  has no key still gets the by-hand edit.
+
+Nothing is spent on your behalf, and no price, token, or key figure ever appears
+in the reader. A fix is a private, reversible override kept in the reader's own
+browser — a small ↺ puts the original back — and the file you published is never
+touched. Like a bookmark it is per-browser; a reader carries their corrections to
+another browser with the *copy edits* link (kept separate from the page link, so
+a shared page never carries private edits). Automatic cross-device sync would
+need a server, which is a different project.
 
 ## Saving your place
 
