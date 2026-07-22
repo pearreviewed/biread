@@ -116,6 +116,27 @@ def current_spread(page):
     return int(page.inner_text("#counter").split("/")[0].strip())
 
 
+def top_line(page):
+    """The text at the top-left of the spread — the line the reader is on. Each
+    French paragraph is uniquely tagged, so this pins the exact spot, fraction
+    and all, not merely which paragraph."""
+    return page.evaluate(
+        "() => { const p = document.querySelector('#stage-wrap .page-left p.pair-fr');"
+        "return p ? p.textContent.slice(0, 100) : null; }")
+
+
+def advance(page, steps):
+    """Step forward `steps` spreads, waiting for each page-turn to land before
+    the next. A turn only moves the counter once it finishes, so this never
+    drops a keystroke mid-animation or measures the reader mid-flight."""
+    for _ in range(steps):
+        start = current_spread(page)
+        page.evaluate("document.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}))")
+        page.wait_for_function(
+            "n => parseInt(document.getElementById('counter').textContent, 10) > n",
+            arg=start, timeout=4000)
+
+
 def rewind(page):
     """Return to the first spread. The page is shared across the module, so a
     test that cares about position has to establish its own."""
@@ -250,24 +271,24 @@ def test_shift_arrow_jumps_ten_spreads(reader):
     assert current_spread(reader) == min(before + 10, spread_count(reader))
 
 
-def test_changing_font_size_keeps_your_place(reader):
-    # Repagination once anchored on the paragraph alone, so changing the font
-    # while partway through a long paragraph (the book has a deliberately tall
-    # one) threw you back to its start — often the first spread.
-    rewind(reader)
-    for _ in range(8):
-        reader.evaluate("document.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}))")
-        reader.wait_for_timeout(240)
-    on_screen = "() => [...document.querySelectorAll('#stage-wrap [data-pair]')].map(e => Number(e.dataset.pair))"
-    before, spread_before = set(reader.evaluate(on_screen)), current_spread(reader)
-    reader.click("#font-inc")
-    reader.wait_for_timeout(800)
-    after = set(reader.evaluate(on_screen))
-    reader.click("#font-dec")          # restore the shared fixture's font
-    reader.wait_for_timeout(600)
-    assert spread_before > 1, "test should have walked past the first spread"
-    # The same paragraphs are still on screen — you kept your place.
-    assert before & after, (sorted(before), sorted(after))
+def test_changing_font_size_keeps_your_line_at_the_top(reader):
+    # Shrinking the font grows every page, which used to pull the reader's top
+    # line up into the tail of the spread before — landing them a page back with
+    # their place stranded at the bottom. Their position now forces a page break,
+    # so the same line stays at the top of the page through the reflow, whichever
+    # way the type is resized. (Enlarging never had the bug; it is checked too so
+    # the guard holds both directions.)
+    for button, restore in (("#font-dec", "#font-inc"), ("#font-inc", "#font-dec")):
+        rewind(reader)
+        advance(reader, 4)
+        top_before = top_line(reader)
+        assert current_spread(reader) > 1, "test should have walked past the first spread"
+        reader.click(button)
+        reader.wait_for_timeout(800)
+        top_after = top_line(reader)
+        reader.click(restore)          # return the shared fixture to its baseline font
+        reader.wait_for_timeout(600)
+        assert top_after == top_before, (button, top_before, top_after)
 
 
 def test_english_column_is_tagged_english_for_hyphenation(reader):
