@@ -34,9 +34,10 @@ TALL_EN = " ".join(f"{SHORT_EN} [en-{n}]" for n in range(90))
 # marker bytes are enough to prove the right file came back intact.
 DL_EPUB = b"PK\x03\x04FAKE-EPUB\x00\x01\x02"
 DL_PDF = b"%PDF-1.4\nFAKE-PDF\n%%EOF"
+DL_EPUB_PUB = b"PK\x03\x04FAKE-EPUB-PUBLISHED\x00\x01\x02"
 
 
-def build_reader(tmp_path_factory, published: bool, downloads=None, target=ENGLISH):
+def build_reader(tmp_path_factory, published: bool, downloads=None, target=ENGLISH, revise=False):
     paragraphs = [f"{SHORT_FR} ({n})" for n in range(24)]
     paragraphs.insert(12, TALL_FR)
     chapters = [
@@ -61,6 +62,7 @@ def build_reader(tmp_path_factory, published: bool, downloads=None, target=ENGLI
         "Livre d'Essai", chapters, translations, out,
         publications if published else None, "a note" if published else "",
         None, downloads, target,
+        {"provider": "anthropic", "model": "claude-sonnet-4-6", "target": "English"} if revise else None,
     )
     return out
 
@@ -102,7 +104,20 @@ def reader_with_published(browser, tmp_path_factory):
 def reader_with_downloads(browser, tmp_path_factory):
     page = open_reader(browser, build_reader(
         tmp_path_factory, published=False,
-        downloads=[("epub", "Livre.epub", DL_EPUB), ("pdf", "Livre.pdf", DL_PDF)]))
+        downloads=[("epub", "translation", "Livre.epub", DL_EPUB),
+                   ("pdf", "translation", "Livre.pdf", DL_PDF)]))
+    yield page
+    page.close()
+
+
+@pytest.fixture(scope="module")
+def reader_with_both_editions(browser, tmp_path_factory):
+    # A book built with a published translation carries two EPUB editions; the
+    # download follows the source toggle.
+    page = open_reader(browser, build_reader(
+        tmp_path_factory, published=True,
+        downloads=[("epub", "translation", "Livre (AI translation).epub", DL_EPUB),
+                   ("epub", "published", "Livre (published translation).epub", DL_EPUB_PUB)]))
     yield page
     page.close()
 
@@ -113,6 +128,27 @@ def spread_count(page):
 
 def current_spread(page):
     return int(page.inner_text("#counter").split("/")[0].strip())
+
+
+def top_line(page):
+    """The text at the top-left of the spread — the line the reader is on. Each
+    French paragraph is uniquely tagged, so this pins the exact spot, fraction
+    and all, not merely which paragraph."""
+    return page.evaluate(
+        "() => { const p = document.querySelector('#stage-wrap .page-left p.pair-fr');"
+        "return p ? p.textContent.slice(0, 100) : null; }")
+
+
+def advance(page, steps):
+    """Step forward `steps` spreads, waiting for each page-turn to land before
+    the next. A turn only moves the counter once it finishes, so this never
+    drops a keystroke mid-animation or measures the reader mid-flight."""
+    for _ in range(steps):
+        start = current_spread(page)
+        page.evaluate("document.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}))")
+        page.wait_for_function(
+            "n => parseInt(document.getElementById('counter').textContent, 10) > n",
+            arg=start, timeout=4000)
 
 
 def rewind(page):
@@ -249,24 +285,24 @@ def test_shift_arrow_jumps_ten_spreads(reader):
     assert current_spread(reader) == min(before + 10, spread_count(reader))
 
 
-def test_changing_font_size_keeps_your_place(reader):
-    # Repagination once anchored on the paragraph alone, so changing the font
-    # while partway through a long paragraph (the book has a deliberately tall
-    # one) threw you back to its start — often the first spread.
-    rewind(reader)
-    for _ in range(8):
-        reader.evaluate("document.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}))")
-        reader.wait_for_timeout(240)
-    on_screen = "() => [...document.querySelectorAll('#stage-wrap [data-pair]')].map(e => Number(e.dataset.pair))"
-    before, spread_before = set(reader.evaluate(on_screen)), current_spread(reader)
-    reader.click("#font-inc")
-    reader.wait_for_timeout(800)
-    after = set(reader.evaluate(on_screen))
-    reader.click("#font-dec")          # restore the shared fixture's font
-    reader.wait_for_timeout(600)
-    assert spread_before > 1, "test should have walked past the first spread"
-    # The same paragraphs are still on screen — you kept your place.
-    assert before & after, (sorted(before), sorted(after))
+def test_changing_font_size_keeps_your_line_at_the_top(reader):
+    # Shrinking the font grows every page, which used to pull the reader's top
+    # line up into the tail of the spread before — landing them a page back with
+    # their place stranded at the bottom. Their position now forces a page break,
+    # so the same line stays at the top of the page through the reflow, whichever
+    # way the type is resized. (Enlarging never had the bug; it is checked too so
+    # the guard holds both directions.)
+    for button, restore in (("#font-dec", "#font-inc"), ("#font-inc", "#font-dec")):
+        rewind(reader)
+        advance(reader, 4)
+        top_before = top_line(reader)
+        assert current_spread(reader) > 1, "test should have walked past the first spread"
+        reader.click(button)
+        reader.wait_for_timeout(800)
+        top_after = top_line(reader)
+        reader.click(restore)          # return the shared fixture to its baseline font
+        reader.wait_for_timeout(600)
+        assert top_after == top_before, (button, top_before, top_after)
 
 
 def test_english_column_is_tagged_english_for_hyphenation(reader):
@@ -638,6 +674,37 @@ def test_the_menu_lists_built_formats_and_saves_them_intact(reader_with_download
         assert pathlib.Path(download.path()).read_bytes() == blob
 
 
+def _save_epub(page):
+    page.click("#dl-btn")
+    page.wait_for_selector(".popover.dl-menu", timeout=3000)
+    with page.expect_download() as info:
+        page.click(".dl-menu .popover-row:has(.eyebrow-sm:text-is('EPUB'))")
+    return info.value
+
+
+def test_the_download_follows_the_open_translation_source(reader_with_both_editions):
+    page = reader_with_both_editions
+    # One EPUB row, even though two editions are embedded.
+    page.click("#dl-btn")
+    page.wait_for_selector(".popover.dl-menu", timeout=3000)
+    labels = page.eval_on_selector_all(
+        ".dl-menu .popover-row .eyebrow-sm", "els => els.map(e => e.textContent)")
+    assert labels == ["EPUB"]
+    page.click("#dl-btn")  # close
+
+    # Reading the AI translation → the AI edition saves.
+    page.click("#seg-translation")
+    ai = _save_epub(page)
+    assert ai.suggested_filename == "Livre (AI translation).epub"
+    assert pathlib.Path(ai.path()).read_bytes() == DL_EPUB
+
+    # Switch to the published translation → the published edition saves.
+    page.click("#seg-published")
+    pub = _save_epub(page)
+    assert pub.suggested_filename == "Livre (published translation).epub"
+    assert pathlib.Path(pub.path()).read_bytes() == DL_EPUB_PUB
+
+
 # ---- target language ----
 
 @pytest.fixture(scope="module")
@@ -756,3 +823,316 @@ def test_escape_dismisses_the_tooltip(glossed):
 
 def test_a_book_without_glosses_has_no_hover_targets(reader):
     assert reader.locator("#stage-wrap .unit").count() == 0
+
+
+# ---- revise (reader-side correction) ----
+
+ANTHROPIC_ENDPOINT = "https://api.anthropic.com/v1/messages"
+
+
+@pytest.fixture(scope="module")
+def revise_path(tmp_path_factory):
+    return build_reader(tmp_path_factory, published=False, revise=True)
+
+
+def select_en_word(page, word):
+    """Select `word` inside the first AI-column paragraph and release, as a
+    reader would — the mouseup is what raises the correction control."""
+    return page.evaluate(
+        """(word) => {
+          var p = document.querySelector('#stage-wrap .page-right p.pair-en');
+          if (!p) return false;
+          var node = p.firstChild;
+          var idx = node.textContent.indexOf(word);
+          if (idx < 0) return false;
+          var range = document.createRange();
+          range.setStart(node, idx);
+          range.setEnd(node, idx + word.length);
+          var sel = window.getSelection();
+          sel.removeAllRanges();
+          sel.addRange(range);
+          document.getElementById('stage-wrap').dispatchEvent(
+            new MouseEvent('mouseup', { bubbles: true }));
+          return true;
+        }""",
+        word,
+    )
+
+
+def first_en_text(page):
+    return page.inner_text("#stage-wrap .page-right p.pair-en")
+
+
+def test_revise_off_by_default_shows_no_control(reader):
+    # The shared reader is built without --revise: selecting text does nothing.
+    assert reader.evaluate(
+        "() => JSON.parse(document.getElementById('book-data').textContent).revise") is None
+    assert select_en_word(reader, "several")
+    reader.wait_for_timeout(120)
+    assert reader.locator(".revise").count() == 0
+
+
+def test_manual_edit_corrects_persists_and_reverts(browser, revise_path):
+    page = _fresh(browser, revise_path)
+    page.evaluate("() => localStorage.clear()")
+    rewind(page)
+    assert "several" in first_en_text(page)
+
+    assert select_en_word(page, "several")
+    page.wait_for_selector(".revise", timeout=3000)
+    page.click('.revise .revise-btn:text-is("Edit")')
+    page.fill(".revise-edit", "SEVERAL_FIXED")
+    page.click('.revise .revise-btn:text-is("Save")')
+    page.wait_for_timeout(500)
+
+    assert "SEVERAL_FIXED" in first_en_text(page)
+    assert "several" not in first_en_text(page)
+
+    # Stored locally, keyed by the paragraph's source hash, and reapplied on load.
+    stored = page.evaluate(
+        "() => JSON.parse(localStorage.getItem('biread:' + "
+        "JSON.parse(document.getElementById('book-data').textContent).slug + ':overrides'))"
+    )
+    assert stored["v"] == 2 and len(stored["byHash"]) == 1
+    page.reload()
+    page.wait_for_function(
+        "() => { const c = document.getElementById('counter');"
+        "return c && c.textContent && !c.textContent.includes('+'); }", timeout=15000)
+    rewind(page)
+    assert "SEVERAL_FIXED" in first_en_text(page)
+
+    # The corrected paragraph carries a revert mark; using it restores the text.
+    page.click("#stage-wrap .page-right p.pair-en.revised .revise-undo")
+    page.wait_for_timeout(500)
+    assert "SEVERAL_FIXED" not in first_en_text(page)
+    assert "several" in first_en_text(page)
+    assert page.evaluate(
+        "() => JSON.parse(localStorage.getItem('biread:' + "
+        "JSON.parse(document.getElementById('book-data').textContent).slug + ':overrides')).byHash"
+    ) == {}
+    page.close()
+
+
+def test_typing_a_fix_then_edit_applies_it_at_once(browser, revise_path):
+    # Typing the replacement straight into the field and pressing Edit is an
+    # immediate edit — no separate editor step, the typed text becomes the line.
+    page = _fresh(browser, revise_path)
+    page.evaluate("() => localStorage.clear()")
+    rewind(page)
+    assert select_en_word(page, "several")
+    page.wait_for_selector(".revise", timeout=3000)
+    page.fill(".revise-note", "SEVERAL_TYPED")
+    page.click('.revise .revise-btn:text-is("Edit")')
+    page.wait_for_timeout(400)
+    assert page.locator(".revise-edit").count() == 0, "a typed field should not open the editor"
+    assert "SEVERAL_TYPED" in first_en_text(page)
+    assert "several" not in first_en_text(page)
+    page.close()
+
+
+def test_rewrite_calls_only_the_provider_endpoint_with_the_readers_key(browser, revise_path):
+    page = _fresh(browser, revise_path)
+    page.evaluate("() => localStorage.clear()")
+    rewind(page)
+
+    # Stub fetch so no real request leaves the browser; record every call.
+    page.evaluate(
+        """() => {
+          window.__calls = [];
+          window.fetch = function (url, opts) {
+            window.__calls.push({ url: url, headers: (opts && opts.headers) || {},
+                                  body: (opts && opts.body) || '' });
+            return Promise.resolve({
+              ok: true,
+              json: function () { return Promise.resolve({ content: [{ type: 'text', text: 'REWRITTEN_SPAN' }] }); }
+            });
+          };
+        }"""
+    )
+
+    assert select_en_word(page, "several")
+    page.wait_for_selector(".revise", timeout=3000)
+    # Regenerate with no key opens the key panel, holding the selection.
+    page.click('.revise .revise-btn:text-is("Regenerate")')
+    page.wait_for_selector(".revise-key", timeout=3000)
+    page.fill(".revise-key-input", "sk-reader-key")
+    page.click('.revise-key .revise-btn:text-is("Save")')
+    page.wait_for_timeout(500)
+
+    assert "REWRITTEN_SPAN" in first_en_text(page)
+    calls = page.evaluate("() => window.__calls")
+    assert len(calls) == 1, "the key must reach the provider and nowhere else"
+    assert calls[0]["url"] == ANTHROPIC_ENDPOINT
+    assert calls[0]["headers"]["x-api-key"] == "sk-reader-key"
+    # The prompt carries the model and the French source as ground truth.
+    assert "claude-sonnet-4-6" in calls[0]["body"]
+    assert "French source" in calls[0]["body"]
+    page.close()
+
+
+def test_the_revise_ui_shows_no_cost_or_token_figures(browser, revise_path):
+    page = _fresh(browser, revise_path)
+    page.evaluate("() => localStorage.clear()")
+    rewind(page)
+    assert select_en_word(page, "several")
+    page.wait_for_selector(".revise", timeout=3000)
+    control = page.inner_text(".revise").lower()  # read while it's the visible panel
+    page.click('.revise .revise-link:text-is("Key")')
+    page.wait_for_selector(".revise-key", timeout=3000)
+    panel = page.inner_text(".revise-key").lower()
+
+    for text in (control, panel):
+        assert "$" not in text
+        assert "token" not in text
+        assert "price" not in text and "cost" not in text
+    page.close()
+
+
+def _copy_from(page, button_id):
+    """Click a copy button with the clipboard stubbed, and return what it copied."""
+    return page.evaluate(
+        """async (id) => {
+          let got = null;
+          navigator.clipboard.writeText = t => { got = t; return Promise.resolve(); };
+          document.getElementById(id).click();
+          await new Promise(r => setTimeout(r, 60));
+          return got;
+        }""",
+        button_id,
+    )
+
+
+def test_an_edits_link_carries_corrections_to_a_fresh_browser(browser, revise_path):
+    page = _fresh(browser, revise_path)
+    page.evaluate("() => localStorage.clear()")
+    page.reload()
+    page.wait_for_function(
+        "() => { const c = document.getElementById('counter');"
+        "return c && c.textContent && !c.textContent.includes('+'); }", timeout=15000)
+    rewind(page)
+
+    # With nothing corrected, there is no edits link to offer.
+    assert page.is_hidden("#edits-btn")
+
+    assert select_en_word(page, "several")
+    page.wait_for_selector(".revise", timeout=3000)
+    page.click('.revise .revise-btn:text-is("Edit")')
+    page.fill(".revise-edit", "LINK_CARRIED")
+    page.click('.revise .revise-btn:text-is("Save")')
+    page.wait_for_timeout(400)
+
+    # The edits control now appears; capture the link it copies.
+    assert page.is_visible("#edits-btn")
+    edits_link = _copy_from(page, "edits-btn")
+    assert edits_link and "#e=" in edits_link
+
+    # The ordinary page link must NOT carry the private edits.
+    page_link = _copy_from(page, "link-btn")
+    assert "#e=" not in page_link and re.search(r"#p\d", page_link)
+
+    # Open the edits link in a brand-new context (its own empty storage): the
+    # correction rides in the link alone, with nothing shared between them.
+    other = browser.new_page(viewport={"width": 1280, "height": 900})
+    other.goto(edits_link)
+    other.wait_for_function(
+        "() => { const c = document.getElementById('counter');"
+        "return c && c.textContent && !c.textContent.includes('+'); }", timeout=15000)
+    rewind(other)
+    assert "LINK_CARRIED" in first_en_text(other)
+    # It landed in the new browser's own storage, and the giant payload was
+    # stripped from its address bar.
+    saved = other.evaluate(
+        "() => JSON.parse(localStorage.getItem('biread:' + "
+        "JSON.parse(document.getElementById('book-data').textContent).slug + ':overrides')).byHash")
+    assert any("LINK_CARRIED" in v["text"] for v in saved.values())
+    assert "#e=" not in other.evaluate("() => location.hash")
+    page.close()
+    other.close()
+
+
+def test_a_real_drag_selects_english_without_turning_the_page(browser, revise_path):
+    # The reader turns pages on click, and a click fires at the end of a drag, so
+    # dragging to select an English phrase was being eaten as a page turn. Driven
+    # with real mouse events (not a scripted selection), which is what exposed it.
+    page = _fresh(browser, revise_path)
+    page.evaluate("() => localStorage.clear()")
+    rewind(page)
+    before = current_spread(page)
+    box = page.eval_on_selector(
+        "#stage-wrap .page-right p.pair-en",
+        "e => { const r = e.getBoundingClientRect(); return {x:r.x,y:r.y,w:r.width,h:r.height}; }")
+    y = box["y"] + box["h"] / 2
+    page.mouse.move(box["x"] + 20, y)
+    page.mouse.down()
+    page.mouse.move(box["x"] + 160, y, steps=10)
+    page.mouse.up()
+    page.wait_for_timeout(250)
+    assert current_spread(page) == before, "a drag to select must not turn the page"
+    assert page.evaluate("() => (window.getSelection() || '').toString().trim().length") > 0
+    assert page.locator(".revise").count() > 0, "selecting English should raise the control"
+    page.close()
+
+
+def test_the_correction_control_works_on_the_narrow_layout(browser, revise_path):
+    # A narrow window — or a hosted panel — uses the stacked layout; correcting a
+    # line must work there too, not only on the wide two-page spread.
+    page = browser.new_page(viewport={"width": 520, "height": 820})
+    page.goto(revise_path.as_uri())
+    page.wait_for_function(
+        "() => { const c = document.getElementById('counter');"
+        "return c && c.textContent && !c.textContent.includes('+'); }", timeout=15000)
+    assert page.locator("#stage-wrap .book-mobile").count() == 1, "expected the stacked layout"
+    box = page.eval_on_selector(
+        "#stage-wrap .pair-en",
+        "e => { const r = e.getBoundingClientRect(); return {x:r.x,y:r.y,w:r.width,h:r.height}; }")
+    y = box["y"] + box["h"] / 2
+    page.mouse.move(box["x"] + 12, y)
+    page.mouse.down()
+    page.mouse.move(box["x"] + min(120, box["w"] - 15), y, steps=12)
+    page.mouse.up()
+    page.wait_for_timeout(250)
+    assert page.locator(".revise").count() > 0, \
+        "selecting English on the narrow layout should raise the control"
+    page.close()
+
+
+def test_a_plain_click_still_turns_the_page(browser, revise_path):
+    page = _fresh(browser, revise_path)
+    page.evaluate("() => localStorage.clear()")
+    rewind(page)
+    before = current_spread(page)
+    box = page.eval_on_selector(
+        "#stage-wrap .book-desk",
+        "e => { const r = e.getBoundingClientRect(); return {x:r.x,y:r.y,w:r.width,h:r.height}; }")
+    page.mouse.click(box["x"] + box["w"] * 0.78, box["y"] + box["h"] / 2)  # right half → forward
+    page.wait_for_timeout(800)
+    assert current_spread(page) == before + 1, "a plain click should still turn the page"
+    page.close()
+
+
+def test_a_correction_reflows_the_page_without_clipping(browser, revise_path):
+    page = _fresh(browser, revise_path)
+    page.evaluate("() => localStorage.clear()")
+    rewind(page)
+    # Replace a short span with a very long one, forcing the paragraph — and the
+    # page — to re-measure. No page may end up clipped as a result.
+    assert select_en_word(page, "several")
+    page.wait_for_selector(".revise", timeout=3000)
+    page.click('.revise .revise-btn:text-is("Edit")')
+    page.fill(".revise-edit", ("lengthened " * 60).strip())
+    page.click('.revise .revise-btn:text-is("Save")')
+    page.wait_for_timeout(600)
+
+    clipped = page.evaluate(
+        """() => {
+          const bad = [];
+          for (const p of document.querySelectorAll('#stage-wrap .page:not(.leaf-face)')) {
+            if (p.scrollHeight > p.clientHeight + 1
+                && getComputedStyle(p).overflowY !== 'auto'
+                && p.querySelectorAll('p.pair').length > 1) bad.push(p.className);
+          }
+          return bad;
+        }"""
+    )
+    assert clipped == []
+    page.close()

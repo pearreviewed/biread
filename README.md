@@ -32,7 +32,8 @@ browser, or email it to someone.
        alt="On a narrow screen the spread folds to a single column, each French paragraph followed by its English">
   <br>
   <sub><em>On a phone, the spread folds into a single column — or export an EPUB
-  with <code>--epub</code> and read it in Apple Books, Kindle, or any e-reader.</em></sub>
+  with <code>--epub</code> and read the spread in Apple Books (best on a tablet
+  or in landscape).</em></sub>
 </p>
 
 ## Quick start
@@ -57,7 +58,8 @@ python -m biread book.txt -o output/
 | `--published FILE` | Also show a published translation (in the target language) you already own |
 | `--title TEXT` | Title in the reader header (default: from the filename) |
 | `--gloss` | Annotate the French for hover translation (costs extra; see `--dry-run`) |
-| `--epub` | Also write a reflowable EPUB, glosses as tap-to-reveal notes |
+| `--revise` | Let a reader correct the AI translation in the reader — by hand, or on their own key |
+| `--epub` | Also write a fixed-layout EPUB: the French and English as a locked spread, like the reader (needs `[browser]`) |
 | `--pdf` | Also write a print PDF, French and English side by side (needs `[browser]`) |
 | `--cache-dir DIR` | Where translation caches live (default `cache/`) |
 | `--dry-run` | Report uncached work and an estimated cost, then stop |
@@ -144,6 +146,42 @@ The star bookmarks a spread, the ribbon removes it, and your place is restored
 next time — all stored as positions in the book, so they survive resizing the
 window or changing the font size.
 
+## Correcting the translation
+
+biread is for readers who care about the prose — reading a French book for the
+pleasure of the language, with a translation at their elbow. The generated
+English is genuinely good and carries most of the book, but it is not a human
+literary translator, and for a reader who notices such things a single phrase
+that rings false — *got wind of* where the ear wanted *caught wind of* — is
+enough to break the spell.
+
+`--revise` hands that reader the pen. Any line can be made to read the way they
+would have it, so the reading stays unbroken and the text becomes, quietly,
+theirs. Select the phrase in the AI column and a small panel offers two ways to
+set it right.
+
+<p align="center">
+  <img src="docs/screenshots/revise.jpg" width="880"
+       alt="Selecting a phrase in the English column raises a small panel with a 'what's off?' note field and Edit and Regenerate buttons">
+  <br>
+  <sub><em>Select an awkward phrase to fix it — type the correction by hand, or
+  have it regenerated in context.</em></sub>
+</p>
+
+- **Edit** — type the correction yourself. No key, no cost, instant.
+- **Regenerate** — have the selected span rewritten in context, with an optional
+  note on what's wrong. This one calls a model, so it runs on the **reader's own
+  key**, never yours, using the provider the book was built with. A reader who
+  has no key still gets the by-hand edit.
+
+Nothing is spent on your behalf, and no price, token, or key figure ever appears
+in the reader. A fix is a private, reversible override kept in the reader's own
+browser — a small ↺ puts the original back — and the file you published is never
+touched. Like a bookmark it is per-browser; a reader carries their corrections to
+another browser with the *copy edits* link (kept separate from the page link, so
+a shared page never carries private edits). Automatic cross-device sync would
+need a server, which is a different project.
+
 ## Saving your place
 
 Progress saves itself. Every page turn records where you are; the star records a
@@ -190,11 +228,19 @@ The reader is one interactive HTML file; `--epub` and `--pdf` write static
 copies for reading elsewhere. Neither calls the API — they transform text that
 is already generated and cached — but each keeps only what its medium can hold.
 
-- **`--epub`** is a reflowable e-book for Kindle, Apple Books, or a phone.
-  E-readers paginate for themselves, so there is no two-page spread: the French
-  and English interleave, paragraph by paragraph. A glossed word becomes an
-  EPUB 3 footnote — Apple Books reveals it on a tap, others show a note at the
-  chapter's end. Built with the standard library, no extra dependency.
+- **`--epub`** is a fixed-layout e-book that keeps the reader's open-book spread:
+  the French on the left page, the English on the right, locked together. It is
+  paginated at build time by the reader's own algorithm — both columns break at
+  the same point, so a split paragraph meets again where it ends — which means it
+  measures the type in headless Chromium and needs the `[browser]` extra (below).
+  It best fits a tablet or a Mac in landscape; a phone in portrait shows one page
+  at a time. Glosses are left out — a tap target on every phrase turns the page
+  into a wall of links and buries the text (the same reason the PDF drops them);
+  hover-glossing stays in the on-screen reader.
+- **Built with `--published`?** Each format is written twice — one edition from
+  the AI translation, one from the published one — and the reader's download hands
+  over whichever translation you have open, so the file matches the page you were
+  reading. The two are named `… (AI translation)` and `… (published translation)`.
 - **`--pdf`** is for print: the French and English side by side in two columns,
   aligned paragraph by paragraph, matching the reader's type. Glosses are left
   out — footnotes for every hover would bury the page. It is printed by headless

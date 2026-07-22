@@ -26,6 +26,22 @@ from ..translate import hash_text
 TEMPLATES = Path(__file__).parent / "templates"
 ASSETS = Path(__file__).parent.parent / "assets"
 
+# Where a reader's own key would call, per provider, and which wire shape the
+# reader uses. Embedded only by --revise, so a plain book carries no URL. The
+# reader falls back to hand-editing when a provider has no browser endpoint.
+REVISE_ENDPOINT = {
+    "anthropic": "https://api.anthropic.com/v1/messages",
+    "openai": "https://api.openai.com/v1/chat/completions",
+    "openrouter": "https://openrouter.ai/api/v1/chat/completions",
+    "ollama": "http://localhost:11434/api/chat",
+}
+REVISE_STYLE = {
+    "anthropic": "anthropic",
+    "openai": "openai",
+    "openrouter": "openai",
+    "ollama": "ollama",
+}
+
 PLACEHOLDER_RE = re.compile(r"@@([A-Z_]+)@@")
 
 # Anything that could close the <script> element the book data lives in, plus
@@ -91,19 +107,22 @@ def _b64(path: Path) -> str:
 
 
 # A file the reader can download: (format id, saved filename, its bytes).
-Download = tuple[str, str, bytes]
+#: (format, source, filename, bytes). `source` is "translation" or "published":
+#: a book built with a published translation carries both editions, and the
+#: reader hands over whichever the reader has open.
+Download = tuple[str, str, str, bytes]
 
 
 def _download_scripts(downloads: list[Download] | None) -> str:
-    """One base64 <script> blob per built format, read only when the reader
+    """One base64 <script> blob per built edition, read only when the reader
     downloads it. Kept out of the book data so a multi-megabyte PDF is not parsed
     on every open. base64 has no `<`, so it cannot close the script early."""
     if not downloads:
         return ""
     return "\n".join(
-        f'<script type="application/octet-stream" id="dl-{fmt}">'
+        f'<script type="application/octet-stream" id="dl-{fmt}-{source}">'
         f'{base64.b64encode(blob).decode("ascii")}</script>'
-        for fmt, _filename, blob in downloads
+        for fmt, source, _filename, blob in downloads
     )
 
 
@@ -117,10 +136,16 @@ def build_book_data(
     downloads: list[Download] | None = None,
     target: Target = ENGLISH,
     solo: bool = False,
+    revise: dict | None = None,
 ) -> dict:
     """`pairs` is a flat list of {fr, en} across the whole book, including any
     untitled leading section. `chapters[i].pair` indexes into it, marking where
-    that chapter's body starts — the reader forces a page break there."""
+    that chapter's body starts — the reader forces a page break there.
+
+    `revise`, when set, turns on reader-side correction: each body pair carries
+    its source hash `h` (so a reader's local fix survives a rebuild and goes
+    stale safely if the paragraph is retranslated), and the reader learns which
+    provider/model to call on the reader's own key."""
     pairs = []
     chapter_meta = []
     for chapter in chapters:
@@ -135,6 +160,8 @@ def build_book_data(
         for paragraph in chapter.paragraphs:
             key = hash_text(paragraph)
             pair = {"fr": paragraph, "en": translations.get(key, "")}
+            if revise:
+                pair["h"] = key
             if published:
                 pair["pub"] = published.get(key, "")
             units = displayable(paragraph, (glosses or {}).get(key) or [])
@@ -163,12 +190,25 @@ def build_book_data(
     if downloads:
         # Just what the menu needs; the bytes ride in their own <script> blobs.
         data["downloads"] = [
-            {"format": fmt, "filename": filename} for fmt, filename, _blob in downloads
+            {"format": fmt, "source": source, "filename": filename}
+            for fmt, source, filename, _blob in downloads
         ]
     if solo:
         # A brought translation set beside the French by position: the reader
         # shows it as one honest column, with no AI/published toggle.
         data["solo"] = True
+    if revise:
+        # No key and no cost live here — only which endpoint a reader's own key
+        # would call, its wire shape, the model, and the prompt's target language.
+        provider = revise["provider"]
+        data["revise"] = {
+            "enabled": True,
+            "provider": provider,
+            "model": revise["model"],
+            "target": revise.get("target", target.name),
+            "endpoint": REVISE_ENDPOINT.get(provider, ""),
+            "style": REVISE_STYLE.get(provider, "openai"),
+        }
     return data
 
 
@@ -182,11 +222,13 @@ def render_html(
     downloads: list[Download] | None = None,
     target: Target = ENGLISH,
     solo: bool = False,
+    revise: dict | None = None,
 ) -> str:
     """The finished reader as a single HTML string. `render_book` writes it to a
     file; the in-browser builder hands the same string straight to a download."""
     data = build_book_data(
-        title, chapters, translations, published, published_note, glosses, downloads, target, solo
+        title, chapters, translations, published, published_note, glosses, downloads,
+        target, solo, revise,
     )
 
     css = fill((TEMPLATES / "reader.css").read_text(encoding="utf-8"), {
@@ -215,9 +257,11 @@ def render_book(
     glosses: dict | None = None,
     downloads: list[Download] | None = None,
     target: Target = ENGLISH,
+    revise: dict | None = None,
 ) -> None:
     html = render_html(
-        title, chapters, translations, published, published_note, glosses, downloads, target
+        title, chapters, translations, published, published_note, glosses, downloads,
+        target, revise=revise,
     )
     output_path.parent.mkdir(parents=True, exist_ok=True)
     tmp = output_path.with_name(output_path.name + ".tmp")

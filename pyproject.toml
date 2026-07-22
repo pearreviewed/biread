@@ -19,7 +19,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0"]
-# Powers --pdf export and the reader's browser tests; also needs
+# Powers --epub and --pdf export and the reader's browser tests; also needs
 # `playwright install chromium`.
 browser = ["pytest>=8.0", "playwright>=1.40"]
 

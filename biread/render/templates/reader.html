@@ -38,11 +38,19 @@
       <span class="seg-divider"></span>
       <button id="font-inc" data-i18n-aria="largerText" aria-label="Larger text">A+</button>
     </div>
-    <!-- The "take it with you" pair, set apart at the far edge. Every other
+    <!-- The "take it with you" cluster, set apart at the far edge. Every other
          control works the book in place; these hand it off — the link this exact
-         spot, the download the whole book. Download hidden unless a format was built. -->
+         spot, the edits link the reader's own corrections, the download the whole
+         book. The edits link appears only once corrections exist; download only
+         when a format was built. -->
     <button class="link-btn" id="link-btn" data-i18n-aria="copyLink" data-i18n-title="copyLink" aria-label="Copy a link to this page" title="Copy a link to this page">
       <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg>
+    </button>
+    <!-- Carries the reader's corrections in a link, separate from the page link
+         above so private edits never ride a shared page. Revealed by JS only when
+         there is at least one correction to carry. -->
+    <button class="link-btn edits-btn" id="edits-btn" data-i18n-aria="reviseCopyEdits" data-i18n-title="reviseCopyEdits" aria-label="Copy a link to your corrections" title="Copy a link to your corrections" hidden>
+      <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
     </button>
     <button class="link-btn dl-btn" id="dl-btn" data-pop="1" data-i18n-aria="download" data-i18n-title="download" aria-haspopup="true" aria-expanded="false" aria-label="Download this book" title="Download this book" hidden>
       <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>

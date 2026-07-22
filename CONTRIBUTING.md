@@ -14,8 +14,8 @@ python -m venv venv && source venv/bin/activate
 pip install -e ".[dev]"
 ```
 
-That's enough for everything except the browser tests and PDF export, which
-drive a real headless Chromium:
+That's enough for everything except the browser tests and the EPUB and PDF
+export, which drive a real headless Chromium:
 
 ```sh
 pip install -e ".[browser]" && playwright install chromium
@@ -29,7 +29,8 @@ pytest
 
 The suite **needs no network and no API key** — the model is faked and the
 fixtures are canned — so you can run all of it for free, as often as you like.
-The ~35 browser tests skip themselves unless the `[browser]` extra is installed.
+The ~54 browser tests (and the EPUB/PDF export render tests) skip themselves
+unless the `[browser]` extra is installed.
 
 CI runs the Python tests on every push and pull request, and the browser tests
 alongside; a change has to be green to merge. If you fix a bug, add the test
