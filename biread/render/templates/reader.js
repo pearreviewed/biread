@@ -104,6 +104,11 @@
   var reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   var spreads = [];
   var paginated = 0; // sections laid out so far; always the lowest N, in order
+  // When a reflow (font or window change) rebuilds the grid, the reader's
+  // position is forced to start a spread so their line stays at the top of the
+  // page instead of being pulled up into the tail of the one before. Null for
+  // the natural, position-independent grid the book first opens with.
+  var forcedBreak = null;
   var backgroundTimer = null;
   var transitionTimer = null;
   var probe = {};
@@ -282,6 +287,12 @@
   // paragraph too tall for one page continues onto the next, so a spread spans
   // two positions rather than covering a whole number of paragraphs.
   function position(p, f) { return { p: p, f: f }; }
+
+  // a strictly before b in reading order. The epsilon keeps near-equal fractions
+  // from forcing a zero-height or duplicate spread boundary.
+  function posBefore(a, b) {
+    return a.p !== b.p ? a.p < b.p : a.f + 1e-6 < b.f;
+  }
 
   // Snap forward to a word boundary so a split never cuts through a word.
   function sliceAt(text, fraction) {
@@ -548,6 +559,12 @@
     var guard = 0;
     while (cursor.p < section.end && guard++ < 10000) {
       var end = spreadEnd(cursor, first);
+      // End this spread at the reader's position rather than past it, so the
+      // next one opens on their line. Fires at most once — the section holding
+      // the break — and only inside it, never at the cursor or the natural end.
+      if (forcedBreak && posBefore(cursor, forcedBreak) && posBefore(forcedBreak, end)) {
+        end = forcedBreak;
+      }
       spreads.push({ from: cursor, to: end });
       cursor = end;
       first = false;
@@ -640,6 +657,7 @@
   function repaginate(anchor) {
     spreads = [];
     paginated = 0;
+    forcedBreak = anchor;
     buildProbe();
     ensureThroughPair(anchor.p);
     S.spreadIndex = spreadIndexForPosition(anchor);
@@ -939,7 +957,7 @@
 
     var row = document.createElement('div');
     row.className = 'revise-row';
-    row.appendChild(reviseButton('reviseEdit', startManualEdit));
+    row.appendChild(reviseButton('reviseEdit', onEditPressed));
     row.appendChild(reviseButton('reviseRegenerate', runRewrite, true));
     ctl.appendChild(row);
 
@@ -964,6 +982,16 @@
     document.body.appendChild(ctl);
     reviseCtl = ctl;
     positionBy(ctl, rect);
+  }
+
+  // Edit: if the reader typed a replacement straight into the field, that IS the
+  // fix — apply it at once, no editor step. An empty field opens the inline editor
+  // on the current span instead.
+  function onEditPressed() {
+    if (!reviseTarget) return;
+    var typed = reviseCtl && reviseCtl._note ? reviseCtl._note.value.trim() : '';
+    if (typed) applyRevision(reviseTarget.i, reviseTarget.start, reviseTarget.end, typed);
+    else startManualEdit();
   }
 
   // Manual edit: turn the span into an editable field, no key and no call. This

@@ -847,6 +847,23 @@ def test_manual_edit_corrects_persists_and_reverts(browser, revise_path):
     page.close()
 
 
+def test_typing_a_fix_then_edit_applies_it_at_once(browser, revise_path):
+    # Typing the replacement straight into the field and pressing Edit is an
+    # immediate edit — no separate editor step, the typed text becomes the line.
+    page = _fresh(browser, revise_path)
+    page.evaluate("() => localStorage.clear()")
+    rewind(page)
+    assert select_en_word(page, "several")
+    page.wait_for_selector(".revise", timeout=3000)
+    page.fill(".revise-note", "SEVERAL_TYPED")
+    page.click('.revise .revise-btn:text-is("Edit")')
+    page.wait_for_timeout(400)
+    assert page.locator(".revise-edit").count() == 0, "a typed field should not open the editor"
+    assert "SEVERAL_TYPED" in first_en_text(page)
+    assert "several" not in first_en_text(page)
+    page.close()
+
+
 def test_rewrite_calls_only_the_provider_endpoint_with_the_readers_key(browser, revise_path):
     page = _fresh(browser, revise_path)
     page.evaluate("() => localStorage.clear()")
