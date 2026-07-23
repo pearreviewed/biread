@@ -532,14 +532,29 @@ def test_resume_returns_to_the_exact_page_of_a_long_paragraph(browser, tmp_path_
         page.close()
 
 
+def drop_file_on(page, selector, name="roman.txt", text="Un.\n\nDeux.\n\nTrois."):
+    """Fire a genuine file drop (DataTransfer with a File) on an element — the
+    real drag path, which set_input_files does not exercise."""
+    page.evaluate(
+        """([sel, name, text]) => {
+          const dt = new DataTransfer();
+          dt.items.add(new File([text], name, { type: 'text/plain' }));
+          const target = document.querySelector(sel);
+          for (const type of ['dragenter', 'dragover', 'drop']) {
+            const ev = new DragEvent(type, { bubbles: true, cancelable: true });
+            Object.defineProperty(ev, 'dataTransfer', { value: dt });
+            target.dispatchEvent(ev);
+          }
+        }""",
+        [selector, name, text],
+    )
+
+
 def test_builder_flow_is_live_only_in_a_builder_edition(browser, tmp_path_factory):
     # The working builder — file drop, preview, edition choice (and later the
     # on-your-key pipeline) — runs ONLY in a hosted builder edition. A shared book
     # carries the same markup inert, so a travelling file never runs a builder or,
     # later, asks anyone for their key. Each opens its own page (mutates state).
-    french = tmp_path_factory.mktemp("src") / "roman.txt"
-    french.write_text("\n\n".join(f"Une phrase française numéro {n}." for n in range(8)), encoding="utf-8")
-
     plain = open_reader(browser, build_reader(tmp_path_factory, published=False))
     try:
         plain.click("#mode-corner")                       # a shared book: placeholder only
@@ -554,7 +569,9 @@ def test_builder_flow_is_live_only_in_a_builder_edition(browser, tmp_path_factor
         assert page.locator("#builder-flow").is_visible()
         assert page.locator("#builder-placeholder").is_hidden()
 
-        page.set_input_files("#builder-file", str(french))   # 'drop' a French file
+        # Drop onto the whole build area, not the small frame — that is where it
+        # broke: a file dropped past the frame made the browser open it instead.
+        drop_file_on(page, "#builder-view", name="roman.txt")
         page.wait_for_selector("#builder-loaded:not([hidden])", timeout=4000)
         assert page.inner_text(".builder-file-name").strip() == "roman.txt"
         assert "paragraphs" in page.inner_text(".builder-stats")

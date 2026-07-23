@@ -1896,9 +1896,20 @@
       reader.readAsText(file);
     }
     input.addEventListener('change', function () { accept(input.files && input.files[0]); });
-    zone.addEventListener('dragover', function (e) { e.preventDefault(); zone.classList.add('dragging'); });
-    zone.addEventListener('dragleave', function () { zone.classList.remove('dragging'); });
-    zone.addEventListener('drop', function (e) {
+
+    // Catch the file anywhere in the build area, not only on the frame — the
+    // frame is a small target in a wide space. And stop the browser from opening
+    // a file dropped anywhere on the page (its default is to navigate to it,
+    // which reads as "nothing happened, and my book is gone").
+    var view = document.getElementById('builder-view');
+    var swallow = function (e) { e.preventDefault(); };
+    window.addEventListener('dragover', swallow);
+    window.addEventListener('drop', swallow);
+    view.addEventListener('dragover', function (e) { e.preventDefault(); zone.classList.add('dragging'); });
+    view.addEventListener('dragleave', function (e) {
+      if (!view.contains(e.relatedTarget)) zone.classList.remove('dragging');
+    });
+    view.addEventListener('drop', function (e) {
       e.preventDefault();
       zone.classList.remove('dragging');
       accept(e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]);
