@@ -504,6 +504,33 @@ def test_the_corner_link_swaps_builder_and_reader(browser, tmp_path_factory):
         page.close()
 
 
+def test_resume_returns_to_the_exact_page_of_a_long_paragraph(browser, tmp_path_factory):
+    # The saved position is paragraph + fraction, so resuming lands on the page
+    # you left — not the first page of a paragraph that spans several (the book's
+    # deliberately tall one). It used to store only the paragraph and drop you at
+    # its start. Its own page: reopening the book mutates shared state.
+    book = build_reader(tmp_path_factory, published=False)
+    page = open_reader(browser, book)
+    try:
+        advance(page, 6)                       # deep inside the tall paragraph
+        left_line, left_spread = top_line(page), current_spread(page)
+
+        page.evaluate("() => history.replaceState(null, '', location.pathname)")
+        page.reload()                          # reopen with no page in the url -> resume banner
+        page.wait_for_function(
+            "() => { const c = document.getElementById('counter');"
+            "return c && c.textContent && !c.textContent.includes('+'); }", timeout=15000)
+        assert page.locator(".resume-banner").is_visible()
+        assert current_spread(page) < left_spread, "should reopen at the start, not resumed yet"
+
+        page.click(".resume-go")
+        page.wait_for_timeout(900)
+        assert current_spread(page) == left_spread, (left_spread, current_spread(page))
+        assert top_line(page) == left_line
+    finally:
+        page.close()
+
+
 def open_finder(page):
     page.click("#counter")
     page.wait_for_selector("#counter-input:not([hidden])")
