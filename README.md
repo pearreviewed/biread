@@ -59,6 +59,7 @@ python -m biread book.txt -o output/
 | `--title TEXT` | Title in the reader header (default: from the filename) |
 | `--gloss` | Annotate the French for hover translation (costs extra; see `--dry-run`) |
 | `--revise` | Let a reader correct the AI translation in the reader — by hand, or on their own key |
+| `--builder-url URL` | Where the reader can cross to the builder, as a quiet corner arrow. Omit it and no arrow appears, so a shared book never points at nothing |
 | `--epub` | Also write a fixed-layout EPUB: the French and English as a locked spread, like the reader (needs `[browser]`) |
 | `--pdf` | Also write a print PDF, French and English side by side (needs `[browser]`) |
 | `--cache-dir DIR` | Where translation caches live (default `cache/`) |

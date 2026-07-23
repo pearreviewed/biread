@@ -71,6 +71,12 @@ def build_parser() -> argparse.ArgumentParser:
              "rewritten on their own API key (never yours; nothing is called at build)",
     )
     parser.add_argument(
+        "--builder-url", type=str, default="", metavar="URL",
+        help="where this book's reader can cross to the builder, as a quiet corner "
+             "arrow. Omit it and no arrow is shown, so a book you share never points "
+             "at nothing",
+    )
+    parser.add_argument(
         "--epub", action="store_true",
         help="also write a fixed-layout EPUB: the French and English as a locked "
              "spread, like the reader (needs the browser engine, as --pdf does)",
@@ -392,6 +398,7 @@ def run(args: argparse.Namespace) -> None:
     render_book(
         title, chapters, run_result.translations, output_path,
         published, published_note, glosses, downloads, target, revise,
+        args.builder_url,
     )
     print(f"\nWrote {output_path}")
     if args.revise:
