@@ -16,7 +16,8 @@ SCHEMA_VERSION = 1
 
 
 class Cache:
-    def __init__(self, path: Path, entries: dict[str, str] | None = None):
+    def __init__(self, path: Path | None, entries: dict[str, str] | None = None):
+        # path=None is an in-memory cache (a browser build): nothing is persisted.
         self.path = path
         self._entries: dict[str, str] = entries if entries is not None else {}
 
@@ -79,6 +80,8 @@ class Cache:
         over the first's translations. Merging is safe because keys are content
         hashes — the same key always describes the same source paragraph.
         """
+        if self.path is None:  # in-memory: nothing to persist
+            return
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._entries = {**self._on_disk(), **self._entries}
         payload = {"schema_version": SCHEMA_VERSION, "entries": self._entries}

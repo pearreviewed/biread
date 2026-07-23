@@ -4,7 +4,11 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, replace
 
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
+except ImportError:  # absent in a browser build, where there is no .env to read
+    def load_dotenv(*_args, **_kwargs) -> bool:
+        return False
 
 from .errors import ConfigError
 
