@@ -19,60 +19,60 @@
     background: radial-gradient(120% 90% at 50% 10%, #2c2418 0%, #1c160f 55%, #120d08 100%);
     color: var(--ink); font-family: 'EB Garamond', Georgia, serif;
     display: flex; flex-direction: column; align-items: center;
-    padding: 42px 24px 70px; line-height: 1.5;
+    padding: 16px 24px 18px; line-height: 1.5;
   }
   button, input, select { font-family: inherit; }
   button { cursor: pointer; }
   ::selection { background: rgba(180,150,100,.35); }
 
-  header { text-align: center; margin-bottom: 30px; }
+  header { text-align: center; margin-bottom: 12px; }
   .eyebrow { font-size: 12px; letter-spacing: .34em; text-transform: uppercase; color: var(--muted); }
-  h1 { font-size: 33px; font-weight: 400; margin: 8px 0 6px; color: var(--ink-soft); font-style: italic; text-wrap: balance; }
+  h1 { font-size: 28px; font-weight: 400; margin: 4px 0 4px; color: var(--ink-soft); font-style: italic; text-wrap: balance; }
   .tagline { color: var(--muted); font-size: 16.5px; text-wrap: balance; }
 
   .card {
     width: 100%; max-width: 1040px; background: rgba(30,23,15,.5);
-    border: 1px solid var(--gold); border-radius: 18px; padding: 32px 38px 34px;
+    border: 1px solid var(--gold); border-radius: 18px; padding: 20px 30px 22px;
     box-shadow: 0 26px 64px rgba(0,0,0,.4);
   }
 
-  .drop { border: 1.5px dashed var(--gold-2); border-radius: 12px; padding: 22px 24px; text-align: left; color: var(--ink); transition: background .18s ease, border-color .18s ease; }
+  .drop { border: 1.5px dashed var(--gold-2); border-radius: 12px; padding: 15px 20px; text-align: left; color: var(--ink); transition: background .18s ease, border-color .18s ease; }
   .drop.over { background: var(--fill); border-color: #c8b891; }
   .drop .big { font-size: 20px; color: var(--ink-bright); }
   .drop .formats { font-size: 13px; color: var(--muted); margin-top: 8px; letter-spacing: .04em; }
   .drop .chosen { color: #b9c99a; font-style: italic; margin-top: 8px; min-height: 1.2em; }
   .pick { color: #d8c8a4; text-decoration: underline; text-underline-offset: 3px; }
-  .drop-main { padding: 30px; }
+  .drop-main { padding: 22px; }
   .drop-main .big { font-size: 23px; }
 
-  .paths { display: flex; gap: 34px; align-items: stretch; margin-top: 28px; }
+  .paths { display: flex; gap: 34px; align-items: stretch; margin-top: 16px; }
   .path { flex: 1 1 0; min-width: 0; }
-  .path h2 { font-size: 20px; font-weight: 400; margin: 0 0 10px; color: var(--ink-bright); text-wrap: balance; }
+  .path h2 { font-size: 20px; font-weight: 400; margin: 0 0 6px; color: var(--ink-bright); text-wrap: balance; }
   .vrule { flex: 0 0 1px; background: var(--gold); position: relative; }
   .vrule span { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); background: #241b12; padding: 10px 2px; color: var(--muted); font-size: 12px; letter-spacing: .16em; text-transform: uppercase; }
 
-  ul.benefits { list-style: none; padding: 0; margin: 8px 0 18px; }
-  ul.benefits li { padding: 4px 0; position: relative; color: var(--ink); text-wrap: pretty; }
+  ul.benefits { list-style: none; padding: 0; margin: 4px 0 10px; }
+  ul.benefits li { padding: 3px 0; position: relative; color: var(--ink); text-wrap: pretty; }
   ul.benefits li::before { content: '·'; position: absolute; left: -14px; top: 2px; color: #c8b891; font-size: 20px; line-height: 1; }
 
   input.keyinput { width: 100%; }
   input[type=password], input[type=text], select { background: var(--fill); border: 1px solid var(--gold-2); color: var(--ink-bright); border-radius: 8px; padding: 10px 12px; font-size: 15px; outline: none; }
   input:focus, select:focus { border-color: #c8b891; }
   label.check { display: inline-flex; align-items: center; gap: 8px; color: var(--ink); font-size: 14px; cursor: pointer; }
-  .keyblock label.check { margin-top: 12px; }
+  .keyblock label.check { margin-top: 8px; }
   input[type=checkbox] { accent-color: #a98f78; width: 16px; height: 16px; }
-  .privacy { font-size: 13.5px; color: var(--muted); font-style: italic; margin-top: 12px; text-wrap: pretty; }
+  .privacy { font-size: 13.5px; color: var(--muted); font-style: italic; margin-top: 8px; text-wrap: pretty; }
   .free { display: flex; flex-direction: column; }
-  .free p { margin: 0 0 16px; color: var(--ink); text-wrap: pretty; }
+  .free p { margin: 0 0 10px; color: var(--ink); text-wrap: pretty; }
   .free .drop { flex: 1; display: flex; flex-direction: column; justify-content: center; }
 
-  .foot { display: flex; align-items: flex-end; justify-content: space-between; gap: 26px; margin-top: 30px; padding-top: 24px; border-top: 1px solid var(--gold); flex-wrap: wrap; }
+  .foot { display: flex; align-items: flex-end; justify-content: space-between; gap: 26px; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--gold); flex-wrap: wrap; }
   .opts { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; }
   .opts .lang { display: flex; align-items: center; gap: 9px; color: var(--ink); }
   .opts-col { display: flex; flex-direction: column; gap: 10px; }
   .opt-hint { font-size: 12.5px; color: var(--muted); font-style: italic; text-wrap: pretty; }
   .build-wrap { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
-  .build { padding: 13px 44px; font-size: 17px; border-radius: 999px; background: var(--fill-2); border: 1px solid var(--gold-2); color: var(--ink-bright); transition: background .18s ease, opacity .18s ease; min-width: 230px; }
+  .build { padding: 11px 40px; font-size: 17px; border-radius: 999px; background: var(--fill-2); border: 1px solid var(--gold-2); color: var(--ink-bright); transition: background .18s ease, opacity .18s ease; min-width: 230px; }
   .build:hover:not(:disabled) { background: rgba(180,150,100,.36); }
   .build:disabled { opacity: .5; cursor: default; }
   .boot { color: var(--muted); font-size: 13px; font-style: italic; min-height: 1.1em; }
