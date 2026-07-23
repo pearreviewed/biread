@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parent.parent
 WEB = ROOT / "web"
 DIST = WEB / "dist"
 FONTS = ROOT / "biread" / "assets" / "fonts"
-FONT_FILES = ("eb-garamond-400.woff2", "eb-garamond-400-italic.woff2")
+FONT_FILES = ("charis-sil-400.woff2", "charis-sil-400-italic.woff2")
 
 
 def main() -> None:

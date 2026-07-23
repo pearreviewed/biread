@@ -239,8 +239,8 @@ def render_html(
     )
 
     css = fill((TEMPLATES / "reader.css").read_text(encoding="utf-8"), {
-        "FONT_REGULAR": _b64(ASSETS / "fonts" / "eb-garamond-400.woff2"),
-        "FONT_ITALIC": _b64(ASSETS / "fonts" / "eb-garamond-400-italic.woff2"),
+        "FONT_REGULAR": _b64(ASSETS / "fonts" / "charis-sil-400.woff2"),
+        "FONT_ITALIC": _b64(ASSETS / "fonts" / "charis-sil-400-italic.woff2"),
         "PAPER_GRAIN": _b64(ASSETS / "paper-grain.png"),
     })
 

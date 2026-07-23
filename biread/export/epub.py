@@ -48,14 +48,14 @@ FPX = round(max(15, min(23, SPREAD_W / 53)))
 # two can never disagree about how much room a page has. The type, paper and
 # heading values mirror reader.css — that stylesheet still governs the look.
 STYLESHEET = """\
-@font-face { font-family: 'EB Garamond'; font-style: normal; font-weight: 400;
+@font-face { font-family: 'Charis SIL'; font-style: normal; font-weight: 400;
   src: url(data:font/woff2;base64,@@FONT_REGULAR@@) format('woff2'); }
-@font-face { font-family: 'EB Garamond'; font-style: italic; font-weight: 400;
+@font-face { font-family: 'Charis SIL'; font-style: italic; font-weight: 400;
   src: url(data:font/woff2;base64,@@FONT_ITALIC@@) format('woff2'); }
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; height: 100%; }
 :root { --fpx: @@FPX@@px; }
-.page { position: absolute; inset: 0; overflow: hidden; font-family: 'EB Garamond', Georgia, serif;
+.page { position: absolute; inset: 0; overflow: hidden; font-family: 'Charis SIL', Charter, Cambria, Georgia, serif;
   padding: calc(var(--fpx) * 2.2) calc(var(--fpx) * 2.9) calc(var(--fpx) * 2);
   background-color: #fdf4ee; background-image: url(paper.png),
   radial-gradient(170% 125% at 98% 50%, #fdf5ef 0%, #fbf1e7 97.5%, #f0dcc8 99.4%, #caa885 100%);
@@ -224,8 +224,8 @@ def _esc(text: str) -> str:
 def _stylesheet() -> str:
     return (STYLESHEET
             .replace("@@FPX@@", str(FPX))
-            .replace("@@FONT_REGULAR@@", _b64(FONTS / "eb-garamond-400.woff2"))
-            .replace("@@FONT_ITALIC@@", _b64(FONTS / "eb-garamond-400-italic.woff2")))
+            .replace("@@FONT_REGULAR@@", _b64(FONTS / "charis-sil-400.woff2"))
+            .replace("@@FONT_ITALIC@@", _b64(FONTS / "charis-sil-400-italic.woff2")))
 
 
 def _book_pairs(chapters: list[Chapter], translations: dict[str, str],
