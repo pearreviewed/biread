@@ -108,29 +108,6 @@ body.mode-builder #builder-view { flex: 1; min-height: 0; display: flex; align-i
 .builder-title { font-size: 25px; font-style: italic; font-weight: 500; color: #e4d7ba; margin: 0 0 12px; }
 .builder-lede { font-size: 16px; line-height: 1.55; color: #9c8a66; margin: 0; }
 
-/* The working flow (hosted builder edition only): drop a French file, preview
-   it, choose how the English comes. Revealed by JS when DATA.builder is set. */
-#builder-flow { width: 100%; max-width: 560px; }
-.builder-dropzone { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 40px 28px; border-radius: 18px; border: 1.5px dashed rgba(180,150,100,.4); cursor: pointer; transition: border-color .15s ease, background .15s ease; }
-.builder-dropzone:hover { border-color: rgba(200,175,130,.7); background: rgba(200,175,130,.05); }
-.builder-dropzone.dragging { border-color: rgba(216,195,154,.9); background: rgba(200,175,130,.12); }
-.builder-dropzone .builder-drop { margin-bottom: 18px; }
-.builder-loaded { text-align: center; }
-.builder-file-row { display: flex; align-items: baseline; justify-content: center; gap: 12px; margin-bottom: 8px; }
-.builder-file-name { font-size: 21px; font-style: italic; color: #e4d7ba; word-break: break-all; }
-.builder-file-change { background: none; border: none; color: #7d6e52; font-size: 13px; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
-.builder-file-change:hover { color: #c8b891; }
-.builder-stats { font-size: 14.5px; color: #9c8a66; margin-bottom: 4px; }
-.builder-stats-note { font-size: 12.5px; font-style: italic; color: #6f6249; margin-bottom: 30px; }
-.builder-q { font-size: 15px; color: #c8b891; margin: 0 0 14px; }
-.builder-paths { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
-.builder-path { flex: 1 1 200px; max-width: 240px; text-align: left; background: rgba(200,175,130,.04); border: 1px solid rgba(180,150,100,.25); border-radius: 12px; padding: 15px 16px; cursor: pointer; transition: border-color .15s ease, background .15s ease; }
-.builder-path:hover { border-color: rgba(200,175,130,.5); }
-.builder-path.selected { border-color: rgba(216,195,154,.9); background: rgba(200,175,130,.1); }
-.builder-path-title { font-size: 15px; color: #e4d7ba; margin-bottom: 5px; }
-.builder-path-sub { font-size: 13px; line-height: 1.45; color: #9c8a66; }
-.builder-next { font-size: 13.5px; color: #7d6e52; margin-top: 26px; min-height: 18px; }
-
 /* ---------- book ---------- */
 #stage-wrap { flex: 1; min-height: 0; display: flex; align-items: flex-start; justify-content: center; perspective: 2400px; padding: 14px 24px 20px; }
 #stage-wrap.mobile { perspective: 1800px; padding: 12px 16px 16px; }

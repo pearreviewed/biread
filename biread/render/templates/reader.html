@@ -58,27 +58,15 @@
   </div>
 </header>
 <div id="stage-wrap"><div class="loading-msg">@@UI_LOADING@@</div></div>
-<!-- The build surface, shown when the spread stands down. A shared book carries
-     only the placeholder; the working flow (#builder-flow) is inert markup there
-     and is revealed by JS solely in the hosted builder edition (DATA.builder). -->
+<!-- The build surface. A placeholder until its engine lands; shown only in build
+     mode, when the spread above stands down. -->
 <div id="builder-view">
-  <div class="builder-empty" id="builder-placeholder">
+  <div class="builder-empty">
     <div class="builder-drop">
       <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="8 8 12 4 16 8"/><line x1="12" y1="4" x2="12" y2="16"/></svg>
     </div>
     <h2 class="builder-title" data-i18n="builderComingTitle">Make your own book</h2>
     <p class="builder-lede" data-i18n="builderComingBody">Soon you'll turn a French book into a bilingual reader here, on your own key.</p>
-  </div>
-  <div class="builder-flow" id="builder-flow" hidden>
-    <label class="builder-dropzone" id="builder-dropzone">
-      <input type="file" id="builder-file" accept=".txt,text/plain" hidden>
-      <div class="builder-drop">
-        <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="8 8 12 4 16 8"/><line x1="12" y1="4" x2="12" y2="16"/></svg>
-      </div>
-      <h2 class="builder-title" data-i18n="builderDropTitle">Drop a French book</h2>
-      <p class="builder-lede" data-i18n="builderDropBody">A plain-text&nbsp;(.txt) French original — drag it here, or click to choose a file.</p>
-    </label>
-    <div class="builder-loaded" id="builder-loaded" hidden></div>
   </div>
 </div>
 <!-- The one crossing between the two surfaces: a quiet back-link in the desk's
