@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Lecteur bilingue — build your own</title>
+<title>Lecteur bilingue — build your own bilingual book</title>
 <style>
   :root {
     --ink: #ded2b8; --ink-bright: #f4ead0; --ink-soft: #cbbc9b; --muted: #8f7d5e;
@@ -17,75 +17,80 @@
   body {
     min-height: 100vh;
     background: radial-gradient(120% 90% at 50% 10%, #2c2418 0%, #1c160f 55%, #120d08 100%);
-    color: var(--ink); font-family: 'EB Garamond', Georgia, serif;
+    color: var(--ink); font-family: Charter, "Bitstream Charter", "Charis SIL", Cambria, "Source Serif 4", Georgia, serif;
+    font-size: 16.5px; -webkit-font-smoothing: antialiased;
     display: flex; flex-direction: column; align-items: center;
-    padding: 16px 24px 18px; line-height: 1.5;
+    padding: 14px 24px 14px; line-height: 1.55;
   }
   button, input, select { font-family: inherit; }
   button { cursor: pointer; }
   ::selection { background: rgba(180,150,100,.35); }
 
   header { text-align: center; margin-bottom: 12px; }
-  .eyebrow { font-size: 12px; letter-spacing: .34em; text-transform: uppercase; color: var(--muted); }
-  h1 { font-size: 28px; font-weight: 400; margin: 4px 0 4px; color: var(--ink-soft); font-style: italic; text-wrap: balance; }
-  .tagline { color: var(--muted); font-size: 16.5px; text-wrap: balance; }
+  .eyebrow { font-size: 11px; font-weight: 500; letter-spacing: .22em; text-transform: uppercase; color: var(--muted); }
+  h1 { font-size: 30px; font-weight: 600; margin: 6px 0 5px; color: var(--ink-bright); letter-spacing: -.005em; text-wrap: balance; }
+  .tagline { color: var(--muted); font-size: 15.5px; text-wrap: balance; }
 
   .card {
     width: 100%; max-width: 1040px; background: rgba(30,23,15,.5);
-    border: 1px solid var(--gold); border-radius: 18px; padding: 20px 30px 22px;
-    box-shadow: 0 26px 64px rgba(0,0,0,.4);
+    border: 1px solid rgba(180,150,100,.16); border-radius: 14px; padding: 18px 30px 18px;
+    box-shadow: 0 1px 0 rgba(255,255,255,.03) inset;
   }
 
-  .drop { border: 1.5px dashed var(--gold-2); border-radius: 12px; padding: 15px 20px; text-align: left; color: var(--ink); transition: background .18s ease, border-color .18s ease; }
+  .drop { border: 1px dashed rgba(180,150,100,.34); border-radius: 10px; padding: 15px 20px; text-align: left; color: var(--ink); transition: background .18s ease, border-color .18s ease; }
   .drop.over { background: var(--fill); border-color: #c8b891; }
-  .drop .big { font-size: 20px; color: var(--ink-bright); }
-  .drop .formats { font-size: 13px; color: var(--muted); margin-top: 8px; letter-spacing: .04em; }
-  .drop .chosen { color: #b9c99a; font-style: italic; margin-top: 8px; min-height: 1.2em; }
+  .drop .big { font-size: 18.5px; font-weight: 600; color: var(--ink-bright); }
+  .drop .formats { font-size: 13.5px; color: var(--muted); margin-top: 8px; letter-spacing: .04em; }
+  .drop .chosen { color: #b9c99a; font-weight: 500; margin-top: 8px; min-height: 1.2em; }
   .pick { color: #d8c8a4; text-decoration: underline; text-underline-offset: 3px; }
   .drop-main { padding: 22px; }
-  .drop-main .big { font-size: 23px; }
+  .drop-main .big { font-size: 21.5px; }
 
-  .paths { display: flex; gap: 34px; align-items: stretch; margin-top: 16px; }
+  .paths { display: flex; gap: 34px; align-items: stretch; margin-top: 12px; }
   .path { flex: 1 1 0; min-width: 0; }
-  .path h2 { font-size: 20px; font-weight: 400; margin: 0 0 6px; color: var(--ink-bright); text-wrap: balance; }
+  .path h2 { font-size: 17.5px; font-weight: 600; margin: 0 0 7px; color: var(--ink-bright); text-wrap: balance; }
   .vrule { flex: 0 0 1px; background: var(--gold); position: relative; }
-  .vrule span { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); background: #241b12; padding: 10px 2px; color: var(--muted); font-size: 12px; letter-spacing: .16em; text-transform: uppercase; }
+  .vrule span { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); background: #241b12; padding: 10px 2px; color: var(--muted); font-size: 11px; font-weight: 500; letter-spacing: .18em; text-transform: uppercase; }
 
   ul.benefits { list-style: none; padding: 0; margin: 4px 0 10px; }
-  ul.benefits li { padding: 3px 0; position: relative; color: var(--ink); text-wrap: pretty; }
+  ul.benefits li { padding: 2px 0; position: relative; color: var(--ink); text-wrap: pretty; }
   ul.benefits li::before { content: '·'; position: absolute; left: -14px; top: 2px; color: #c8b891; font-size: 20px; line-height: 1; }
 
   input.keyinput { width: 100%; }
-  input[type=password], input[type=text], select { background: var(--fill); border: 1px solid var(--gold-2); color: var(--ink-bright); border-radius: 8px; padding: 10px 12px; font-size: 15px; outline: none; }
-  input:focus, select:focus { border-color: #c8b891; }
-  label.check { display: inline-flex; align-items: center; gap: 8px; color: var(--ink); font-size: 14px; cursor: pointer; }
+  input[type=password], input[type=text], select { background: rgba(255,255,255,.04); border: 1px solid rgba(180,150,100,.26); color: var(--ink-bright); border-radius: 9px; padding: 9px 12px; font-size: 15px; outline: none; transition: border-color .15s ease, background .15s ease; }
+  select { appearance: none; -webkit-appearance: none; padding-right: 30px; cursor: pointer; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none' stroke='%238f7d5e' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='1,1.5 6,6.5 11,1.5'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 11px center; }
+  input:focus, select:focus { border-color: rgba(200,175,130,.7); background: rgba(255,255,255,.07); }
+  label.check { display: inline-flex; align-items: center; gap: 8px; color: var(--ink); font-size: 15px; cursor: pointer; }
   .keyblock label.check { margin-top: 8px; }
   input[type=checkbox] { accent-color: #a98f78; width: 16px; height: 16px; }
-  .privacy { font-size: 13.5px; color: var(--muted); font-style: italic; margin-top: 8px; text-wrap: pretty; }
+  .privacy { font-size: 13.5px; color: var(--muted); margin-top: 8px; text-wrap: pretty; }
   .free { display: flex; flex-direction: column; }
   .free p { margin: 0 0 10px; color: var(--ink); text-wrap: pretty; }
-  .free .drop { flex: 1; display: flex; flex-direction: column; justify-content: center; }
+  /* Pull the box left by exactly its padding + border (20 + 1), so the words
+     inside line up with the paragraph above instead of sitting indented. Left
+     only: the right edge stays flush with the column and the main drop zone. */
+  .free .drop { flex: 1; display: flex; flex-direction: column; justify-content: center; margin-left: -21px; }
 
-  .foot { display: flex; align-items: flex-end; justify-content: space-between; gap: 26px; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--gold); flex-wrap: wrap; }
+  .foot { display: flex; align-items: flex-end; justify-content: space-between; gap: 26px; margin-top: 14px; padding-top: 13px; border-top: 1px solid var(--gold); flex-wrap: wrap; }
   .opts { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; }
   .opts .lang { display: flex; align-items: center; gap: 9px; color: var(--ink); }
   .opts-col { display: flex; flex-direction: column; gap: 10px; }
-  .opt-hint { font-size: 12.5px; color: var(--muted); font-style: italic; text-wrap: pretty; }
+  .opt-hint { font-size: 13px; color: var(--muted); text-wrap: pretty; }
   .build-wrap { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
-  .build { padding: 11px 40px; font-size: 17px; border-radius: 999px; background: var(--fill-2); border: 1px solid var(--gold-2); color: var(--ink-bright); transition: background .18s ease, opacity .18s ease; min-width: 230px; }
-  .build:hover:not(:disabled) { background: rgba(180,150,100,.36); }
-  .build:disabled { opacity: .5; cursor: default; }
-  .boot { color: var(--muted); font-size: 13px; font-style: italic; min-height: 1.1em; }
+  .build { padding: 11px 32px; font-size: 15.5px; font-weight: 600; letter-spacing: .01em; border-radius: 10px; background: #c8b891; border: 1px solid #c8b891; color: #1f1810; transition: background .18s ease, opacity .18s ease; min-width: 230px; }
+  .build:hover:not(:disabled) { background: #dccdaa; border-color: #dccdaa; }
+  .build:disabled { opacity: .38; cursor: default; }
+  .boot { color: var(--muted); font-size: 13px; min-height: 1.1em; }
 
   .center { text-align: center; padding: 46px 8px; }
-  .center h2 { font-weight: 400; font-size: 23px; color: var(--ink-bright); margin: 0 0 22px; }
+  .center h2 { font-weight: 600; font-size: 21px; color: var(--ink-bright); margin: 0 0 22px; }
   .bar { height: 8px; background: rgba(180,150,100,.16); border-radius: 999px; overflow: hidden; margin: 0 auto 12px; max-width: 440px; }
   .bar > span { display: block; height: 100%; width: 0; background: linear-gradient(90deg,#8f7d5e,#c8b891); transition: width .3s ease; }
   .stage { color: var(--muted); font-size: 14px; letter-spacing: .04em; }
-  .done-note { color: var(--muted); font-size: 14px; margin-top: 14px; font-style: italic; }
+  .done-note { color: var(--muted); font-size: 13.5px; margin-top: 14px; }
   .again { margin-top: 24px; background: none; border: 1px solid var(--gold); color: var(--ink-soft); border-radius: 999px; padding: 8px 18px; font-size: 14px; }
   #screen-confirm { max-width: 480px; margin: 0 auto; padding: 30px 8px; }
-  #screen-confirm h2 { font-size: 19px; margin-bottom: 14px; color: var(--ink-soft); }
+  #screen-confirm h2 { font-size: 18px; margin-bottom: 14px; color: var(--ink-soft); }
   .est-cost { font-size: 21px; color: var(--ink-bright); margin-bottom: 4px; }
   .est-detail { color: var(--muted); font-size: 13.5px; margin-bottom: 24px; text-wrap: pretty; }
   .confirm-row { display: flex; gap: 14px; justify-content: center; align-items: center; flex-wrap: wrap; }
@@ -107,7 +112,7 @@
 <body>
 <header>
   <div class="eyebrow">Lecteur bilingue</div>
-  <h1>Build your own edition</h1>
+  <h1>Build your own bilingual book</h1>
   <div class="tagline">French on the left, your language on the right – from a book you bring.</div>
 </header>
 
@@ -149,7 +154,7 @@
     <div class="foot">
       <div class="opts-col">
         <div class="opts">
-          <div class="lang"><span>Language</span><select id="lang"><option>English</option></select></div>
+          <div class="lang"><span>Translate into</span><select id="lang"><option>English</option></select></div>
           <div class="lang"><span>Model</span><select id="model">
             <option value="claude-haiku-4-5-20251001">Haiku 4.5 · cheapest</option>
             <option value="claude-sonnet-5" selected>Sonnet 5 · balanced</option>
