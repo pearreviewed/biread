@@ -1791,9 +1791,6 @@
       if (mobile !== S.mobile) {
         S.mobile = mobile;
         mount();
-        // The corner link hides on mobile — don't strand a window that shrank
-        // into the narrow layout in the builder with no way back.
-        if (mobile) setMode(false);
       }
       measureHeader();
       sizeBook();      // the stage changed, so re-fit the book to it
@@ -1859,28 +1856,6 @@
   }
   segTranslation.addEventListener('click', function () { setSource('translation'); });
   segPublished.addEventListener('click', function () { setSource('published'); });
-
-  // ---------- build / read ----------
-  // Two surfaces share one shell: the builder (make a book) and the reader
-  // (this). You cross between them rarely, so the control is a quiet corner link,
-  // not a header peer of the source toggle. In build mode the book and its
-  // controls stand down (CSS); this toggles the mode class, flips the link to
-  // name where it now leads, and closes any reader overlay that would otherwise
-  // float over the builder.
-  var modeCorner = document.getElementById('mode-corner');
-  var modeCornerLabel = document.getElementById('mode-corner-label');
-  function setMode(building) {
-    document.body.classList.toggle('mode-builder', building);
-    modeCornerLabel.textContent = building ? (i18n('modeRead') || 'Reader')
-                                           : (i18n('modeBuild') || 'Builder');
-    if (building) {
-      S.chapOpen = S.bmOpen = S.infoOpen = S.dlOpen = false;
-      renderOverlays();
-    }
-  }
-  modeCorner.addEventListener('click', function () {
-    setMode(!document.body.classList.contains('mode-builder'));
-  });
 
   function togglePanel(name) {
     S.chapOpen = name === 'chap' ? !S.chapOpen : false;

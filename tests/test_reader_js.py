@@ -473,37 +473,6 @@ def test_the_published_segment_stays_disabled_without_a_published_text(reader):
     assert reader.is_disabled("#seg-published")
 
 
-def test_the_corner_link_swaps_builder_and_reader(browser, tmp_path_factory):
-    # Its own page: crossing to the builder mutates shared state, so it must not
-    # ride the module-scoped `reader`.
-    page = open_reader(browser, build_reader(tmp_path_factory, published=False))
-    try:
-        # Reading: the book is up, the builder hidden, the link names its target.
-        assert page.locator("#stage-wrap").is_visible()
-        assert not page.locator("#builder-view").is_visible()
-        assert page.inner_text("#mode-corner").strip() == "Builder"
-
-        page.click("#mode-corner")
-        # Building: the build surface takes over; the book and the header controls
-        # that work it stand down; the link now points back to the reader.
-        assert page.locator("#builder-view").is_visible()
-        assert not page.locator("#stage-wrap").is_visible()
-        assert not page.locator("#seg-translation").is_visible()
-        assert not page.locator("#counter").is_visible()
-        assert page.locator("#mode-corner").is_visible()
-        assert page.inner_text("#mode-corner").strip() == "Reader"
-
-        page.click("#mode-corner")
-        # Back to reading: the paginated book returns untouched by the round trip.
-        assert page.locator("#stage-wrap").is_visible()
-        assert not page.locator("#builder-view").is_visible()
-        assert page.inner_text("#mode-corner").strip() == "Builder"
-        assert page.evaluate(
-            "() => document.querySelectorAll('#stage-wrap .page').length") > 0
-    finally:
-        page.close()
-
-
 def test_resume_returns_to_the_exact_page_of_a_long_paragraph(browser, tmp_path_factory):
     # The saved position is paragraph + fraction, so resuming lands on the page
     # you left — not the first page of a paragraph that spans several (the book's

@@ -58,24 +58,6 @@
   </div>
 </header>
 <div id="stage-wrap"><div class="loading-msg">@@UI_LOADING@@</div></div>
-<!-- The build surface. A placeholder until its engine lands; shown only in build
-     mode, when the spread above stands down. -->
-<div id="builder-view">
-  <div class="builder-empty">
-    <div class="builder-drop">
-      <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="8 8 12 4 16 8"/><line x1="12" y1="4" x2="12" y2="16"/></svg>
-    </div>
-    <h2 class="builder-title" data-i18n="builderComingTitle">Make your own book</h2>
-    <p class="builder-lede" data-i18n="builderComingBody">Soon you'll turn a French book into a bilingual reader here, on your own key.</p>
-  </div>
-</div>
-<!-- The one crossing between the two surfaces: a quiet back-link in the desk's
-     bottom-left corner. Reads "Builder" while reading, "Reader" while building
-     (JS flips it). Desktop only. -->
-<button id="mode-corner" type="button">
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
-  <span id="mode-corner-label" data-i18n="modeBuild">Builder</span>
-</button>
 <div id="measure-host"></div>
 <div id="overlay-root"></div>
 <!-- Built formats, base64, read only when the reader downloads one — kept out of
