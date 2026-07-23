@@ -144,6 +144,95 @@ def _pivot(english: list[str], published: list[str]) -> tuple[list[str], int]:
     return [" ".join(reversed(g)) for g in groups], dropped
 
 
+ROMAN_RE = re.compile(r"^[ivxlcdm]+$")
+ROMAN_VALUES = {"i": 1, "v": 5, "x": 10, "l": 50, "c": 100, "d": 500, "m": 1000}
+
+# Editions number their chapters in whatever style they please: the French says
+# "CHAPITRE premier" where its English translation says "CHAPTER I". Both have to
+# reduce to the same integer before the two books can be matched on it. Words are
+# looked up before roman numerals on purpose — "dix" is French for ten and also a
+# well-formed roman numeral for 509.
+NUMBER_WORDS = {
+    "premier": 1, "première": 1, "premiere": 1, "un": 1, "first": 1,
+    "second": 2, "seconde": 2, "deuxième": 2, "deuxieme": 2, "deux": 2,
+    "troisième": 3, "troisieme": 3, "trois": 3, "third": 3,
+    "quatrième": 4, "quatrieme": 4, "quatre": 4, "fourth": 4,
+    "cinquième": 5, "cinquieme": 5, "cinq": 5, "fifth": 5,
+    "sixième": 6, "sixieme": 6, "six": 6, "sixth": 6,
+    "septième": 7, "septieme": 7, "sept": 7, "seventh": 7,
+    "huitième": 8, "huitieme": 8, "huit": 8, "eighth": 8,
+    "neuvième": 9, "neuvieme": 9, "neuf": 9, "ninth": 9,
+    "dixième": 10, "dixieme": 10, "dix": 10, "tenth": 10,
+    "onzième": 11, "onzieme": 11, "onze": 11, "eleventh": 11,
+    "douzième": 12, "douzieme": 12, "douze": 12, "twelfth": 12,
+    "treizième": 13, "treizieme": 13, "treize": 13, "thirteenth": 13,
+    "quatorzième": 14, "quatorzieme": 14, "quatorze": 14, "fourteenth": 14,
+    "quinzième": 15, "quinzieme": 15, "quinze": 15, "fifteenth": 15,
+    "seizième": 16, "seizieme": 16, "seize": 16, "sixteenth": 16,
+    "dix-septième": 17, "dix-septieme": 17, "seventeenth": 17,
+    "dix-huitième": 18, "dix-huitieme": 18, "eighteenth": 18,
+    "dix-neuvième": 19, "dix-neuvieme": 19, "nineteenth": 19,
+    "vingtième": 20, "vingtieme": 20, "vingt": 20, "twentieth": 20,
+}
+
+
+def _roman(token: str) -> int | None:
+    total = highest = 0
+    for char in reversed(token):
+        value = ROMAN_VALUES[char]
+        total += -value if value < highest else value
+        highest = max(highest, value)
+    return total or None
+
+
+def chapter_number(token: str | None) -> int | None:
+    """A chapter's number as an integer, whatever names it: "IV", "4",
+    "quatrième", "fourth".
+
+    None when the token is not a number at all. That case is load-bearing: a
+    table of contents header ("CHAPTER PAGE") matches the heading pattern too,
+    and must not be counted as a chapter.
+    """
+    if not token:
+        return None
+    word = token.strip().rstrip(".").lower()
+    if word.isdigit():
+        return int(word) or None
+    if word in NUMBER_WORDS:
+        return NUMBER_WORDS[word]
+    if ROMAN_RE.match(word):
+        return _roman(word)
+    return None
+
+
+def trim_matter(chapters: list[Chapter]) -> list[Chapter]:
+    """Drop what brackets a book without being the book: a title page, a table of
+    contents, a publisher's notice or a critic's introduction in front; a licence
+    or endnotes behind. These are exactly the sections cleanup could not number.
+
+    Leaving them in is what puts two editions permanently out of step — one
+    edition's forty-page introduction would otherwise shift every paragraph after
+    it. A book with no numbered chapters is returned untouched: there is nothing
+    to anchor on, and all of it may be the text.
+    """
+    numbered = [i for i, c in enumerate(chapters) if chapter_number(c.number) is not None]
+    if not numbered:
+        return chapters
+    return chapters[numbered[0] : numbered[-1] + 1]
+
+
+def _pair_by_number(french: list[Chapter], published: list[Chapter]):
+    """Pair chapters on the number they carry rather than the order they arrive
+    in, so an extra preface on one side cannot shift the book. A French chapter
+    with no counterpart pairs with None and is left blank rather than guessed."""
+    by_number: dict[int, Chapter] = {}
+    for chapter in published:
+        number = chapter_number(chapter.number)
+        if number is not None and number not in by_number:
+            by_number[number] = chapter
+    return [(c, by_number.get(chapter_number(c.number))) for c in french]
+
+
 def _label(chapter: Chapter, index: int) -> str:
     if chapter.number:
         return f"Chapitre {chapter.number}"
@@ -160,24 +249,32 @@ def align_published(
     Pass `translations` (French hash -> generated English) to align by
     similarity, which is what makes the result trustworthy.
     """
-    fr_bodies = [c for c in french if c.paragraphs]
-    pub_bodies = [c for c in published if c.paragraphs]
+    fr_bodies = [c for c in trim_matter(french) if c.paragraphs]
+    pub_bodies = [c for c in trim_matter(published) if c.paragraphs]
 
     if not fr_bodies:
         raise AlignmentError("the French text has no paragraphs to align against.")
     if not pub_bodies:
         raise AlignmentError("the published translation has no paragraphs.")
 
-    matched = len(fr_bodies) == len(pub_bodies)
+    # Chapters are the one boundary translators keep, and the number a chapter
+    # carries survives translation even when none of its words do. Pair on that
+    # number rather than on position: an extra preface on one side then cannot
+    # shift the book, and drift stays inside a single chapter.
+    fr_numbers = {chapter_number(c.number) for c in fr_bodies} - {None}
+    pub_numbers = {chapter_number(c.number) for c in pub_bodies} - {None}
+    by_number = len(fr_numbers & pub_numbers) >= 2  # one match could be coincidence
+
+    matched = by_number or len(fr_bodies) == len(pub_bodies)
     use_pivot = bool(translations)
     report = AlignmentReport(
         method="pivot" if use_pivot else "proportional", chapters_matched=matched
     )
     aligned: dict[str, str] = {}
 
-    # Chapters are the one boundary translators keep, so align within them when
-    # the structure agrees; otherwise treat the book as one run.
-    if matched:
+    if by_number:
+        pairs = _pair_by_number(fr_bodies, pub_bodies)
+    elif len(fr_bodies) == len(pub_bodies):
         pairs = list(zip(fr_bodies, pub_bodies))
     else:
         pairs = [(
@@ -186,10 +283,20 @@ def align_published(
         )]
         report.notes.append(
             f"Chapter structures differ ({len(fr_bodies)} French vs {len(pub_bodies)} "
-            f"published) — aligned across the whole book instead of per chapter."
+            f"published) and share no chapter numbers, so the book was aligned as one "
+            f"run rather than chapter by chapter."
         )
 
     for index, (fr, pub) in enumerate(pairs):
+        if pub is None:
+            report.unmatched += len(fr.paragraphs)
+            report.notes.append(
+                f"{_label(fr, index)}: the published edition has no chapter of that "
+                f"number, so it is left blank rather than filled with a guess."
+            )
+            for paragraph in fr.paragraphs:
+                aligned[hash_text(paragraph)] = ""
+            continue
         if use_pivot:
             english = [translations.get(hash_text(p), "") for p in fr.paragraphs]
             prose = [p for p in pub.paragraphs if not FOOTNOTE_RE.match(p)]

@@ -16,6 +16,7 @@ from .align import AlignmentReport, align_published
 from .cache import Cache
 from .cleanup import Chapter
 from .config import Config
+from .errors import ExtractError
 from .gloss import GlossRun, gloss_book
 from .llm import LLMClient
 from .render import render_html
@@ -50,6 +51,12 @@ def build_reader(
     gloss_cfg: Config | None = None,
     on_progress: ProgressFn | None = None,
 ) -> BuildResult:
+    # Checked before a single call is paid for: a book that never broke into
+    # paragraphs would otherwise be translated in vast blocks, at vast cost.
+    check_usable(chapters, "The book")
+    if published_chapters is not None:
+        check_usable(published_chapters, "The published translation")
+
     run = translate_book(chapters, client, cache, cfg, _stage(on_progress, "translate"), target.name)
 
     published = alignment = None
@@ -76,6 +83,33 @@ def build_reader(
     )
 
 
+# A paragraph of prose runs to a few hundred characters, occasionally a couple of
+# thousand. Text arriving in blocks far larger than that never came apart into
+# paragraphs at all — a PDF whose lines carry no paragraph breaks is the usual
+# cause, and no alignment can rescue it.
+BLOCK_LIMIT = 6000
+
+
+def check_usable(chapters: list[Chapter], label: str) -> None:
+    """Refuse a book whose text never broke into paragraphs, and name the fix.
+
+    Building anyway yields a reader of a few enormous "paragraphs" running to
+    hundreds of pages, set against nothing — worse than an honest refusal.
+    """
+    paragraphs = [p for chapter in chapters for p in chapter.paragraphs]
+    if not paragraphs:
+        raise ExtractError(f"{label} has no readable text.")
+    lengths = sorted(len(p) for p in paragraphs)
+    median = lengths[len(lengths) // 2]
+    if median > BLOCK_LIMIT:
+        raise ExtractError(
+            f"{label} did not come apart into paragraphs: its text arrives in blocks of "
+            f"about {median:,} characters, so there is nothing to set beside the other "
+            f"book. PDFs often carry no paragraph breaks. An EPUB or plain-text edition "
+            f"of the same book will read properly."
+        )
+
+
 def build_positional(
     *,
     title: str,
@@ -85,6 +119,8 @@ def build_positional(
 ) -> tuple[str, AlignmentReport]:
     """The free path: no AI, no key. Set a brought published translation beside
     the French by position and render it as the single reading column."""
+    check_usable(chapters, "The original")
+    check_usable(published_chapters, "The published translation")
     aligned, report = align_published(chapters, published_chapters, None)
     html = render_html(
         title, chapters, aligned, published=None,
