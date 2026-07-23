@@ -37,7 +37,7 @@ DL_PDF = b"%PDF-1.4\nFAKE-PDF\n%%EOF"
 DL_EPUB_PUB = b"PK\x03\x04FAKE-EPUB-PUBLISHED\x00\x01\x02"
 
 
-def build_reader(tmp_path_factory, published: bool, downloads=None, target=ENGLISH, revise=False):
+def build_reader(tmp_path_factory, published: bool, downloads=None, target=ENGLISH, revise=False, builder=False):
     paragraphs = [f"{SHORT_FR} ({n})" for n in range(24)]
     paragraphs.insert(12, TALL_FR)
     chapters = [
@@ -63,6 +63,7 @@ def build_reader(tmp_path_factory, published: bool, downloads=None, target=ENGLI
         publications if published else None, "a note" if published else "",
         None, downloads, target,
         {"provider": "anthropic", "model": "claude-sonnet-4-6", "target": "English"} if revise else None,
+        builder,
     )
     return out
 
@@ -527,6 +528,41 @@ def test_resume_returns_to_the_exact_page_of_a_long_paragraph(browser, tmp_path_
         page.wait_for_timeout(900)
         assert current_spread(page) == left_spread, (left_spread, current_spread(page))
         assert top_line(page) == left_line
+    finally:
+        page.close()
+
+
+def test_builder_flow_is_live_only_in_a_builder_edition(browser, tmp_path_factory):
+    # The working builder — file drop, preview, edition choice (and later the
+    # on-your-key pipeline) — runs ONLY in a hosted builder edition. A shared book
+    # carries the same markup inert, so a travelling file never runs a builder or,
+    # later, asks anyone for their key. Each opens its own page (mutates state).
+    french = tmp_path_factory.mktemp("src") / "roman.txt"
+    french.write_text("\n\n".join(f"Une phrase française numéro {n}." for n in range(8)), encoding="utf-8")
+
+    plain = open_reader(browser, build_reader(tmp_path_factory, published=False))
+    try:
+        plain.click("#mode-corner")                       # a shared book: placeholder only
+        assert plain.locator("#builder-placeholder").is_visible()
+        assert plain.locator("#builder-flow").is_hidden()
+    finally:
+        plain.close()
+
+    page = open_reader(browser, build_reader(tmp_path_factory, published=False, builder=True))
+    try:
+        page.click("#mode-corner")
+        assert page.locator("#builder-flow").is_visible()
+        assert page.locator("#builder-placeholder").is_hidden()
+
+        page.set_input_files("#builder-file", str(french))   # 'drop' a French file
+        page.wait_for_selector("#builder-loaded:not([hidden])", timeout=4000)
+        assert page.inner_text(".builder-file-name").strip() == "roman.txt"
+        assert "paragraphs" in page.inner_text(".builder-stats")
+        assert page.locator(".builder-path").count() == 2
+
+        page.locator(".builder-path").first.click()          # choose an edition path
+        assert page.locator(".builder-path.selected").get_attribute("data-path") == "generate"
+        assert page.inner_text(".builder-next").strip() != ""
     finally:
         page.close()
 

@@ -136,6 +136,7 @@ def build_book_data(
     downloads: list[Download] | None = None,
     target: Target = ENGLISH,
     revise: dict | None = None,
+    builder: bool = False,
 ) -> dict:
     """`pairs` is a flat list of {fr, en} across the whole book, including any
     untitled leading section. `chapters[i].pair` indexes into it, marking where
@@ -186,6 +187,11 @@ def build_book_data(
         "lang": target.code,
         "ui": target.ui,
     }
+    if builder:
+        # The working builder (file drop, and later the on-your-key pipeline)
+        # runs only in the hosted edition — never baked into a book that travels,
+        # so a shared file never asks anyone for their key.
+        data["builder"] = True
     if downloads:
         # Just what the menu needs; the bytes ride in their own <script> blobs.
         data["downloads"] = [
@@ -218,10 +224,11 @@ def render_book(
     downloads: list[Download] | None = None,
     target: Target = ENGLISH,
     revise: dict | None = None,
+    builder: bool = False,
 ) -> None:
     data = build_book_data(
         title, chapters, translations, published, published_note, glosses, downloads,
-        target, revise,
+        target, revise, builder,
     )
 
     css = fill((TEMPLATES / "reader.css").read_text(encoding="utf-8"), {
