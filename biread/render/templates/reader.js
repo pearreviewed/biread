@@ -1857,6 +1857,14 @@
   segTranslation.addEventListener('click', function () { setSource('translation'); });
   segPublished.addEventListener('click', function () { setSource('published'); });
 
+  // The crossing to the builder, shown only when this book was built with one to
+  // cross to. No URL, no arrow — a book that travels never points at nothing.
+  if (DATA.builderUrl) {
+    var builderLink = document.getElementById('builder-link');
+    builderLink.href = DATA.builderUrl;
+    builderLink.hidden = false;
+  }
+
   function togglePanel(name) {
     S.chapOpen = name === 'chap' ? !S.chapOpen : false;
     S.bmOpen = name === 'bm' ? !S.bmOpen : false;

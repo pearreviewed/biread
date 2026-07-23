@@ -74,6 +74,7 @@ _ENGLISH_UI = {
     "reviseError": "Couldn't reach the model. Check your key, or type the fix by hand.",
     "reviseUnreachable": "This book's model can't be reached from the browser — you can still edit by hand.",
     "reviseCopyEdits": "Copy a link to your corrections",
+    "builderLink": "Builder",
 }
 
 _SPANISH_UI = {
@@ -123,6 +124,7 @@ _SPANISH_UI = {
     "reviseError": "No se pudo contactar con el modelo. Revisa tu clave o escribe la corrección a mano.",
     "reviseUnreachable": "El modelo de este libro no se puede contactar desde el navegador — aún puedes editar a mano.",
     "reviseCopyEdits": "Copiar un enlace a tus correcciones",
+    "builderLink": "Creador",
 }
 
 _ITALIAN_UI = {
@@ -172,6 +174,7 @@ _ITALIAN_UI = {
     "reviseError": "Impossibile raggiungere il modello. Controlla la chiave o scrivi la correzione a mano.",
     "reviseUnreachable": "Il modello di questo libro non è raggiungibile dal browser — puoi comunque modificare a mano.",
     "reviseCopyEdits": "Copia un link alle tue correzioni",
+    "builderLink": "Creatore",
 }
 
 _GERMAN_UI = {
@@ -221,6 +224,7 @@ _GERMAN_UI = {
     "reviseError": "Modell nicht erreichbar. Prüfe deinen Schlüssel oder korrigiere von Hand.",
     "reviseUnreachable": "Das Modell dieses Buchs ist vom Browser aus nicht erreichbar — du kannst trotzdem von Hand bearbeiten.",
     "reviseCopyEdits": "Link zu deinen Korrekturen kopieren",
+    "builderLink": "Editor",
 }
 
 _PORTUGUESE_UI = {
@@ -270,6 +274,7 @@ _PORTUGUESE_UI = {
     "reviseError": "Não foi possível contactar o modelo. Verifica a tua chave ou escreve a correção à mão.",
     "reviseUnreachable": "O modelo deste livro não está acessível a partir do navegador — podes editar à mão à mesma.",
     "reviseCopyEdits": "Copiar uma ligação para as tuas correções",
+    "builderLink": "Criador",
 }
 
 ENGLISH = Target("english", "English", "en", "Chapter", _ENGLISH_UI)

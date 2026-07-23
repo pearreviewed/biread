@@ -86,6 +86,17 @@ button:focus-visible { outline: 2px solid rgba(200,175,130,.85); outline-offset:
 .fontsize-control button:first-child { font-size: 13px; }
 .fontsize-control button:last-child { font-size: 17px; padding: 5px 13px; }
 
+/* ---------- crossing to the builder ---------- */
+/* Rare, one-way, and not something you flip while reading — so a quiet link in
+   the desk's bottom-left corner rather than a header control. Present only when
+   the book carries a builder URL; `[hidden]` needs the explicit rule because
+   `display: flex` would otherwise defeat the attribute. */
+#builder-link { position: fixed; left: 22px; bottom: 16px; z-index: 30; display: flex; align-items: center; gap: 6px; padding: 4px 6px; color: #7d6e52; font-size: 13px; letter-spacing: .02em; text-decoration: none; transition: color .15s ease; }
+#builder-link:hover { color: #c8b891; }
+#builder-link svg { display: block; }
+#builder-link[hidden] { display: none; }
+@media (max-width: 640px) { #builder-link { display: none; } }
+
 /* ---------- book ---------- */
 #stage-wrap { flex: 1; min-height: 0; display: flex; align-items: flex-start; justify-content: center; perspective: 2400px; padding: 14px 24px 20px; }
 #stage-wrap.mobile { perspective: 1800px; padding: 12px 16px 16px; }

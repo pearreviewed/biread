@@ -37,7 +37,8 @@ DL_PDF = b"%PDF-1.4\nFAKE-PDF\n%%EOF"
 DL_EPUB_PUB = b"PK\x03\x04FAKE-EPUB-PUBLISHED\x00\x01\x02"
 
 
-def build_reader(tmp_path_factory, published: bool, downloads=None, target=ENGLISH, revise=False):
+def build_reader(tmp_path_factory, published: bool, downloads=None, target=ENGLISH, revise=False,
+                 builder_url=""):
     paragraphs = [f"{SHORT_FR} ({n})" for n in range(24)]
     paragraphs.insert(12, TALL_FR)
     chapters = [
@@ -63,6 +64,7 @@ def build_reader(tmp_path_factory, published: bool, downloads=None, target=ENGLI
         publications if published else None, "a note" if published else "",
         None, downloads, target,
         {"provider": "anthropic", "model": "claude-sonnet-4-6", "target": "English"} if revise else None,
+        builder_url,
     )
     return out
 
@@ -496,6 +498,28 @@ def test_resume_returns_to_the_exact_page_of_a_long_paragraph(browser, tmp_path_
         page.wait_for_timeout(900)
         assert current_spread(page) == left_spread, (left_spread, current_spread(page))
         assert top_line(page) == left_line
+    finally:
+        page.close()
+
+
+def test_the_builder_arrow_appears_only_when_a_book_carries_a_builder_url(browser, tmp_path_factory):
+    # The crossing to the builder is a plain link now, not a mode toggle, and it
+    # exists only when the book was built pointing at one. A book that travels
+    # without a builder URL shows no arrow at all, so it can never lead into
+    # nothing — the failing of the old "coming soon" placeholder.
+    plain = open_reader(browser, build_reader(tmp_path_factory, published=False))
+    try:
+        assert plain.locator("#builder-link").is_hidden()
+    finally:
+        plain.close()
+
+    url = "https://example.invalid/builder.html"
+    page = open_reader(browser, build_reader(tmp_path_factory, published=False, builder_url=url))
+    try:
+        link = page.locator("#builder-link")
+        assert link.is_visible()
+        assert link.get_attribute("href") == url
+        assert page.inner_text("#builder-link").strip() == "Builder"
     finally:
         page.close()
 
