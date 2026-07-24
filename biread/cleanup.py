@@ -160,7 +160,10 @@ def _blocks(text: str) -> tuple[list[list[str]], list[Removal]]:
     for block in re.split(r"\n\s*\n+", text.strip()):
         lines = []
         for line in block.splitlines():
-            line = line.strip()
+            # Runs of spaces collapse to one: a PDF laid out with justified text
+            # arrives full of them ("Pangloss     enseignait"), and no prose line
+            # means anything by a gap wider than a single space.
+            line = re.sub(r"\s+", " ", line).strip()
             if not line:
                 continue
             if BARE_PAGE_NUMBER_RE.match(line):

@@ -2,6 +2,13 @@
 loads where pypdf is absent — a browser build installs it on demand, only when a
 PDF is actually dropped in.
 
+Extraction is in layout mode, which rebuilds each line from the glyphs' own
+positions. The default mode guesses word breaks from the gap between glyphs and
+gets them wrong on tight kerning — "il fallait" comes out "il f allait", "les
+cochons" as "l es cochons" — and runs paragraphs together; layout mode keeps
+words whole and the blank line between paragraphs intact. It is several times
+slower, which only PDFs pay, and an EPUB or TXT edition sidesteps it entirely.
+
 A PDF made of scanned images carries no text to extract; that surfaces as a
 clear error rather than an empty book. Real OCR is out of scope.
 """
@@ -13,6 +20,15 @@ from ..errors import ExtractError
 from .base import Extractor
 
 
+def _page_text(page) -> str:
+    """A page in layout mode, falling back to the default if it cannot lay one
+    out — a rare malformed page should not lose the whole book."""
+    try:
+        return page.extract_text(extraction_mode="layout") or ""
+    except Exception:
+        return page.extract_text() or ""
+
+
 class PdfExtractor(Extractor):
     suffixes = (".pdf",)
 
@@ -22,7 +38,7 @@ class PdfExtractor(Extractor):
         except ImportError as e:
             raise ExtractError("reading PDFs needs the 'pypdf' package.") from e
         try:
-            pages = [page.extract_text() or "" for page in PdfReader(str(path)).pages]
+            pages = [_page_text(page) for page in PdfReader(str(path)).pages]
         except Exception as e:
             raise ExtractError(f"{path.name} could not be read as a PDF ({e}).") from e
 

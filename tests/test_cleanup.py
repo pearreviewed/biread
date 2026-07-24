@@ -54,6 +54,13 @@ def test_rejoins_hard_wrapped_lines():
     assert paragraphs == ["Une ligne qui continue.", "Un autre bloc."]
 
 
+def test_collapses_justified_spacing_runs():
+    """A PDF laid out with justified text arrives with runs of spaces between
+    words; a paragraph should read with single spaces regardless."""
+    paragraphs, _ = rejoin_paragraphs("Pangloss     enseignait     la\nmétaphysico.")
+    assert paragraphs == ["Pangloss enseignait la métaphysico."]
+
+
 def test_drops_bare_page_numbers():
     paragraphs, removed = rejoin_paragraphs("Du texte.\n[122]\n123\n\nPlus de texte.")
     assert paragraphs == ["Du texte.", "Plus de texte."]
