@@ -93,6 +93,7 @@
     spreadIndex: 0,
     bookmarks: [],
     resumePair: null,
+    resumeFrac: 0,
     turn: null,
     fade: false,
     ready: false,
@@ -701,7 +702,8 @@
   }
 
   function persistPosition() {
-    lsSet('last', { v: STORE_VERSION, pair: currentPair() });
+    var pos = currentPosition();
+    lsSet('last', { v: STORE_VERSION, pair: pos.p, frac: pos.f });
     writeUrl();
   }
 
@@ -734,6 +736,13 @@
   function goToPair(pair, animate) {
     ensureThroughPair(pair);
     goToSpread(spreadIndexForPair(pair), animate);
+  }
+
+  // Like goToPair, but honours the fraction through a paragraph, so resuming
+  // lands on the page you left rather than the paragraph's first one.
+  function goToPosition(pos, animate) {
+    ensureThroughPair(pos.p);
+    goToSpread(spreadIndexForPosition(pos), animate);
   }
 
   function step(delta) { goToSpread(S.spreadIndex + delta, Math.abs(delta) === 1); }
@@ -1848,6 +1857,14 @@
   segTranslation.addEventListener('click', function () { setSource('translation'); });
   segPublished.addEventListener('click', function () { setSource('published'); });
 
+  // The crossing to the builder, shown only when this book was built with one to
+  // cross to. No URL, no arrow — a book that travels never points at nothing.
+  if (DATA.builderUrl) {
+    var builderLink = document.getElementById('builder-link');
+    builderLink.href = DATA.builderUrl;
+    builderLink.hidden = false;
+  }
+
   function togglePanel(name) {
     S.chapOpen = name === 'chap' ? !S.chapOpen : false;
     S.bmOpen = name === 'bm' ? !S.bmOpen : false;
@@ -2109,10 +2126,10 @@
     resume.className = 'resume-go';
     resume.textContent = i18n('resumeButton');
     resume.addEventListener('click', function () {
-      var target = S.resumePair;
+      var target = position(S.resumePair, S.resumeFrac);
       S.resumePair = null;
       renderOverlays();
-      goToPair(target, false);
+      goToPosition(target, false);
     });
 
     var dismiss = document.createElement('button');
@@ -2140,6 +2157,8 @@
     var storedPosition = lsGet('last');
     var resumePair =
       storedPosition && typeof storedPosition.pair === 'number' ? storedPosition.pair : 0;
+    var resumeFrac =
+      storedPosition && typeof storedPosition.frac === 'number' ? storedPosition.frac : 0;
     // A shared link says "take me here", so it wins over the local memory and
     // goes straight there rather than offering to resume. Any bookmarks it
     // carries are merged in — non-destructive, so the reader keeps their own.
@@ -2162,8 +2181,9 @@
     S.spreadIndex = 0;
     if (linked && linked.pair != null) {
       goToPair(linked.pair, false);
-    } else if (resumePair > 0 && resumePair < PAIRS.length) {
+    } else if (resumePair < PAIRS.length && (resumePair > 0 || resumeFrac > 0)) {
       S.resumePair = resumePair;
+      S.resumeFrac = resumeFrac;
     }
     paint();
     renderOverlays();

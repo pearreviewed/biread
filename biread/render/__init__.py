@@ -137,6 +137,7 @@ def build_book_data(
     target: Target = ENGLISH,
     solo: bool = False,
     revise: dict | None = None,
+    builder_url: str = "",
 ) -> dict:
     """`pairs` is a flat list of {fr, en} across the whole book, including any
     untitled leading section. `chapters[i].pair` indexes into it, marking where
@@ -209,6 +210,11 @@ def build_book_data(
             "endpoint": REVISE_ENDPOINT.get(provider, ""),
             "style": REVISE_STYLE.get(provider, "openai"),
         }
+    if builder_url:
+        # Where this book's reader can cross to the builder. Set only when there
+        # is somewhere real to go, so a book that travels never shows an arrow
+        # into nothing — which is what made the old placeholder a dead end.
+        data["builderUrl"] = builder_url
     return data
 
 
@@ -223,17 +229,18 @@ def render_html(
     target: Target = ENGLISH,
     solo: bool = False,
     revise: dict | None = None,
+    builder_url: str = "",
 ) -> str:
     """The finished reader as a single HTML string. `render_book` writes it to a
     file; the in-browser builder hands the same string straight to a download."""
     data = build_book_data(
         title, chapters, translations, published, published_note, glosses, downloads,
-        target, solo, revise,
+        target, solo, revise, builder_url,
     )
 
     css = fill((TEMPLATES / "reader.css").read_text(encoding="utf-8"), {
-        "FONT_REGULAR": _b64(ASSETS / "fonts" / "eb-garamond-400.woff2"),
-        "FONT_ITALIC": _b64(ASSETS / "fonts" / "eb-garamond-400-italic.woff2"),
+        "FONT_REGULAR": _b64(ASSETS / "fonts" / "charis-sil-400.woff2"),
+        "FONT_ITALIC": _b64(ASSETS / "fonts" / "charis-sil-400-italic.woff2"),
         "PAPER_GRAIN": _b64(ASSETS / "paper-grain.png"),
     })
 
@@ -258,10 +265,11 @@ def render_book(
     downloads: list[Download] | None = None,
     target: Target = ENGLISH,
     revise: dict | None = None,
+    builder_url: str = "",
 ) -> None:
     html = render_html(
         title, chapters, translations, published, published_note, glosses, downloads,
-        target, revise=revise,
+        target, revise=revise, builder_url=builder_url,
     )
     output_path.parent.mkdir(parents=True, exist_ok=True)
     tmp = output_path.with_name(output_path.name + ".tmp")

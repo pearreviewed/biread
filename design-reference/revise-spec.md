@@ -25,7 +25,7 @@ page without clipping; an edits link carries corrections to a fresh browser and 
 rides the page link). Full suite: 280 passing.
 
 The edits link is the no-server rung of the sync ladder (link now → a "sync code" when
-any backend is on the table → sign-in accounts for automatic cross-device sync, still
+any backend is on the table → sign-in accounts for automatic cross-device sync ([`accounts-spec.md`](accounts-spec.md)), still
 parked). The same correction bundle flows through all three, so nothing here is throwaway.
 
 ---

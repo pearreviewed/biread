@@ -22,3 +22,6 @@ dist/
 # The rules above would also hide files we DO want to track — carve out exceptions
 !requirements.txt
 !examples/**/*.txt
+# The bundled font's licence. The OFL requires it to travel with the font, and a
+# book inlines the font, so this must be tracked — `*.txt` above would drop it.
+!biread/assets/fonts/*.txt

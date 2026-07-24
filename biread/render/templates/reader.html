@@ -58,6 +58,13 @@
   </div>
 </header>
 <div id="stage-wrap"><div class="loading-msg">@@UI_LOADING@@</div></div>
+<!-- A quiet crossing to the builder, in the desk's bottom-left corner. Revealed
+     by JS only when the book was built with a builder URL, so a book that travels
+     never offers an arrow into nothing. Desktop only. -->
+<a id="builder-link" href="#" hidden>
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+  <span data-i18n="builderLink">Builder</span>
+</a>
 <div id="measure-host"></div>
 <div id="overlay-root"></div>
 <!-- Built formats, base64, read only when the reader downloads one — kept out of

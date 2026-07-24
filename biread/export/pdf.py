@@ -37,8 +37,8 @@ def _print_html(
     title: str, chapters: list[Chapter], translations: dict[str, str],
     lang_code: str = "en", author: str = "",
 ) -> str:
-    regular = _b64(ASSETS / "fonts" / "eb-garamond-400.woff2")
-    italic = _b64(ASSETS / "fonts" / "eb-garamond-400-italic.woff2")
+    regular = _b64(ASSETS / "fonts" / "charis-sil-400.woff2")
+    italic = _b64(ASSETS / "fonts" / "charis-sil-400-italic.woff2")
 
     rows: list[str] = []
     for chapter in chapters:
@@ -60,12 +60,12 @@ def _print_html(
     return f"""<!doctype html>
 <html lang="fr"><head><meta charset="utf-8"><title>{_esc(title)}</title>
 <style>
-@font-face {{ font-family: 'EB Garamond'; font-style: normal; font-weight: 400;
+@font-face {{ font-family: 'Charis SIL'; font-style: normal; font-weight: 400;
   src: url(data:font/woff2;base64,{regular}) format('woff2'); }}
-@font-face {{ font-family: 'EB Garamond'; font-style: italic; font-weight: 400;
+@font-face {{ font-family: 'Charis SIL'; font-style: italic; font-weight: 400;
   src: url(data:font/woff2;base64,{italic}) format('woff2'); }}
 * {{ box-sizing: border-box; }}
-body {{ font-family: 'EB Garamond', Georgia, serif; font-size: 10.5pt; line-height: 1.42;
+body {{ font-family: 'Charis SIL', Charter, Cambria, Georgia, serif; font-size: 10.5pt; line-height: 1.42;
   color: #201a12; background: #fff; margin: 0; }}
 h1.book {{ text-align: center; font-size: 22pt; margin: 0 0 4pt; }}
 .author {{ text-align: center; font-size: 13pt; color: #5a4f3d; margin: 0 0 6pt; }}

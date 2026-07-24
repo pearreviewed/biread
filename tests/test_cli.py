@@ -226,6 +226,17 @@ def test_no_revise_config_without_the_flag(project):
     assert "revise" not in book_data(project.html())
 
 
+def test_builder_url_flag_carries_the_crossing_into_the_book(project):
+    project.invoke("--builder-url", "https://biread.example/builder.html")
+    assert book_data(project.html())["builderUrl"] == "https://biread.example/builder.html"
+
+
+def test_no_builder_url_without_the_flag(project):
+    # No URL, no arrow: a book you share must never point at nothing.
+    project.invoke()
+    assert "builderUrl" not in book_data(project.html())
+
+
 @pytest.mark.skipif(not HAS_BROWSER, reason="--epub export needs the [browser] extra")
 def test_html_keeps_the_slug_but_exports_take_the_book_name(project):
     # The hosted reader wants a clean URL; a saved EPUB wants a readable name.
