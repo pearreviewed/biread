@@ -11,6 +11,7 @@ import sys
 from pathlib import Path
 
 from .align import align_published
+from .build import published_note
 from .cache import Cache
 from .cleanup import Chapter, Removal, clean
 from .config import Config, load_config
@@ -179,23 +180,21 @@ def resolve_published(
     for note in report.notes:
         print(f"  {note}")
 
-    if report.method == "pivot":
-        print("  Matched paragraph by paragraph against the generated translation.")
-        # Laconic, in the voice of the other panel — a reader does not need the
-        # method, only what to expect from the column in front of them.
-        summary = (
-            "Your translation keeps pace with the French as closely as two editions "
-            "allow. It has its own notes and front matter, which stay behind."
-        )
-        if report.unmatched:
-            summary += " A few passages have no counterpart here."
-    else:
-        print("  No translation to match against — falling back to position.")
-        summary = (
-            "Your translation is placed beside the French by position, so it can "
-            "drift where the two editions differ."
-        )
-    return aligned, summary
+    method_line = {
+        "pivot": "Matched paragraph by paragraph against the generated translation.",
+        "anchored": "Matched on the names and numbers both editions share.",
+    }.get(report.method, "No translation to match against — falling back to position.")
+    print(f"  {method_line}")
+
+    if report.total:
+        print(f"  Coverage: {report.total - report.unmatched}/{report.total} "
+              f"French paragraphs matched ({round(report.coverage * 100)}%).")
+    if report.degraded:
+        print("  ⚠ Alignment is degraded: most of the published column will be blank. "
+              "The two editions may be structured too differently to line up, or the "
+              "published file did not divide into chapters. The reader says so too.")
+
+    return aligned, published_note(report)
 
 
 def report_gloss_estimate(chapters: list[Chapter], cache: Cache, cfg: Config,

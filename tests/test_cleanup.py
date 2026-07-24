@@ -252,3 +252,42 @@ def test_a_year_in_parentheses_inside_prose_is_kept():
     text = "CHAPITRE I.\nLE DÉPART\n\nIl la publia (1752) sans un mot.\n"
     paragraphs = [p for c in clean(text)[0] for p in c.paragraphs]
     assert paragraphs == ["Il la publia (1752) sans un mot."]
+
+
+def test_chapters_marked_by_a_lone_numeral_are_detected():
+    # A Gutenberg PDF sets Candide's chapters as a bare roman numeral over an
+    # all-caps title, with no "CHAPTER" word at all.
+    text = (
+        "Front matter no one numbered.\n\n"
+        "I\n\nHOW IT BEGAN\n\nThe first thing that happened.\n\n"
+        "II\n\nWHAT CAME NEXT\n\nThe second thing that happened.\n\n"
+        "III\n\nTHE END\n\nThe third thing that happened.\n"
+    )
+    chapters, _ = clean(text)
+    numbered = [c for c in chapters if c.number]
+    assert [c.number for c in numbered] == ["I", "II", "III"]
+    assert numbered[0].title == "HOW IT BEGAN"
+
+
+def test_a_stray_numeral_in_prose_does_not_become_a_heading():
+    # A lone numeral outside the ascending spine of real chapters is left as text.
+    text = (
+        "I\n\nFIRST\n\nA paragraph.\n\n"
+        "II\n\nSECOND\n\nA paragraph mentioning\n\nV\n\nout of order.\n\n"
+        "III\n\nTHIRD\n\nAnother paragraph.\n"
+    )
+    chapters, _ = clean(text)
+    assert [c.number for c in chapters if c.number] == ["I", "II", "III"]
+
+
+def test_two_lone_numerals_are_too_few_to_be_a_spine():
+    text = "I\n\nsome text here that is ordinary prose.\n\nII\n\nmore ordinary prose.\n"
+    chapters, _ = clean(text)
+    # Not enough of a run to trust; the file stays one untitled section.
+    assert all(c.number is None for c in chapters)
+
+
+def test_explicit_chapter_headings_still_win():
+    text = "CHAPITRE I.\nLE DÉBUT\n\nUn paragraphe.\n\nCHAPITRE II.\nLA SUITE\n\nDeux.\n"
+    chapters, _ = clean(text)
+    assert [c.number for c in chapters if c.number] == ["I", "II"]

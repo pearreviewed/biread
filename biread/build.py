@@ -132,27 +132,34 @@ def build_positional(
 def published_note(report: AlignmentReport) -> str:
     """Reader-facing note on how the published edition was placed, in the ⓘ
     panel's laconic voice."""
+    if report.degraded:
+        # Honest before reassuring: when most of the page would be blank, say so
+        # and why, rather than promise a column that mostly is not there.
+        return (
+            f"Only about {round(report.coverage * 100)}% of the French found a "
+            "counterpart in this edition — the rest of the page is left blank rather "
+            "than guessed. The two editions may be built too differently to line up, "
+            "or the file you brought didn't divide into chapters."
+        )
     if report.method == "pivot":
         note = (
             "Your translation keeps pace with the French as closely as two editions "
             "allow. It has its own notes and front matter, which stay behind."
         )
-        if report.unmatched:
-            note += " A few passages have no counterpart here."
-        return note
-    if report.method == "anchored":
+    elif report.method == "anchored":
         note = (
             "Your translation is matched to the French by the names and numbers both "
             "editions keep, so it holds its place through the book. Its own notes and "
             "front matter stay behind."
         )
-        if report.unmatched:
-            note += " A few passages have no counterpart here."
-        return note
-    return (
-        "Your translation is placed beside the French by position, so it can "
-        "drift where the two editions differ."
-    )
+    else:
+        return (
+            "Your translation is placed beside the French by position, so it can "
+            "drift where the two editions differ."
+        )
+    if report.unmatched:
+        note += " A few passages have no counterpart here."
+    return note
 
 
 def _stage(on_progress: ProgressFn | None, stage: str) -> Callable[[int, int], None] | None:

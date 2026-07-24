@@ -119,3 +119,97 @@ def test_text_that_never_broke_into_paragraphs_is_refused():
 
 def test_ordinary_prose_is_accepted():
     check_usable([Chapter("1", None, ["A paragraph of ordinary length. " * 10])], "The book")
+
+
+def test_no_chapter_book_opens_on_real_text_not_the_title_page():
+    chapters = [Chapter(None, None, [
+        "Produced by Some Volunteer and the Online Distributed Proofreading Team.",
+        "Transcriber's Note: obvious errors have been corrected.",
+        "THE MODERN LIBRARY",
+        "CANDIDE BY VOLTAIRE",
+        "In a castle of Westphalia there lived a young man of the gentlest manners.",
+        "He was called Candide by the old servants of the house.",
+    ])]
+    trimmed = trim_matter(chapters)
+    assert trimmed[0].paragraphs[0].startswith("In a castle of Westphalia")
+    assert not any("Produced by" in p or "MODERN LIBRARY" in p
+                   for c in trimmed for p in c.paragraphs)
+
+
+def test_a_named_introduction_is_kept_as_the_opening():
+    chapters = [Chapter(None, None, [
+        "Produced by a Project Gutenberg volunteer.",
+        "Introduction",
+        "This preface is part of the work and the reader should see it.",
+        "The story itself begins a little further on.",
+    ])]
+    trimmed = trim_matter(chapters)
+    assert trimmed[0].paragraphs[0] == "Introduction"
+
+
+def test_a_real_opening_line_is_never_mistaken_for_matter():
+    chapters = [Chapter(None, None, ["It was a bright cold day in April."])]
+    assert trim_matter(chapters) == chapters
+
+
+def test_length_matching_places_a_long_stretch_with_a_long_paragraph():
+    # A short French paragraph and a long one; the published side splits the long
+    # one into many pieces. Length-matching must keep the short one short.
+    french = [Chapter("I", None, [
+        "Bref.",
+        "Un paragraphe beaucoup plus long qui continue et continue sans fin apparente.",
+    ])]
+    published = [Chapter("I", None, [
+        "Short.",
+        "A much ", "longer paragraph ", "that goes on ", "and on and on ", "without any end.",
+    ])]
+    aligned, _ = align_published(french, published, None)
+    assert aligned[hash_text("Bref.")] == "Short."
+    long_side = aligned[hash_text(french[0].paragraphs[1])]
+    assert long_side.startswith("A much") and long_side.endswith("without any end.")
+
+
+def test_coverage_is_reported_and_high_when_editions_line_up():
+    french, _ = clean(FRENCH)
+    english, _ = clean(ENGLISH)
+    _, report = align_published(french, english, None)
+    assert report.total == 2
+    assert report.coverage == 1.0
+    assert not report.degraded
+
+
+def test_coverage_and_degraded_are_computed_from_the_blanks():
+    from biread.align import AlignmentReport
+    report = AlignmentReport(method="anchored", chapters_matched=True, total=10, unmatched=8)
+    assert report.coverage == 0.2
+    assert report.degraded
+    assert not AlignmentReport(method="anchored", chapters_matched=True,
+                               total=10, unmatched=1).degraded
+
+
+def test_an_abridged_edition_missing_most_chapters_is_flagged_degraded():
+    # Five French chapters, a published edition carrying only the first two: the
+    # other three are left blank, so most of the column is missing.
+    french = [Chapter(n, None, [f"Paragraphe {n}-{i}." for i in range(2)])
+              for n in ["I", "II", "III", "IV", "V"]]
+    english = [Chapter("I", None, ["Chapter one, first.", "Chapter one, second."]),
+               Chapter("II", None, ["Chapter two, first.", "Chapter two, second."])]
+    _, report = align_published(french, english, None)
+    assert report.total == 10
+    assert report.coverage < 0.7 and report.degraded
+
+
+def test_degraded_note_says_so_plainly_with_a_percentage():
+    from biread.align import AlignmentReport
+    from biread.build import published_note
+    report = AlignmentReport(method="anchored", chapters_matched=True, total=10, unmatched=8)
+    note = published_note(report)
+    assert "%" in note and "left blank" in note
+
+
+def test_a_healthy_note_makes_no_coverage_warning():
+    from biread.build import published_note
+    french, _ = clean(FRENCH)
+    english, _ = clean(ENGLISH)
+    _, report = align_published(french, english, None)
+    assert "left blank" not in published_note(report)

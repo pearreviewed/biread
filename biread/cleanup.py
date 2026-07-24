@@ -10,6 +10,8 @@ import re
 import unicodedata
 from dataclasses import dataclass, field
 
+from .numbering import chapter_number
+
 GUTENBERG_START_RE = re.compile(
     r"^\*\*\*\s*START OF (?:THE|THIS) PROJECT GUTENBERG EBOOK.*\*\*\*\s*$",
     re.IGNORECASE | re.MULTILINE,
@@ -216,10 +218,69 @@ def _split_title(blocks: list[list[str]]) -> tuple[str | None, list[list[str]]]:
     return None, blocks
 
 
-def detect_chapters(text: str) -> tuple[list[Chapter], list[Removal]]:
-    """Split cleaned text into chapters at 'Chapitre/Chapter N' heading lines.
+# A numeral standing alone on its line: as long as "eighteenth", no longer, so
+# a short sentence is never mistaken for a heading.
+HEADING_NUMERAL_MAX_LEN = 12
 
-    A file with no such headings is valid input: everything comes back as one
+
+def _numeral_headings(lines: list[str]) -> list[tuple[int, str]]:
+    """Headings for an edition that marks chapters with a bare numeral and no
+    heading word — a lone "I", "II" … "XXX", as a Gutenberg PDF sets Candide.
+
+    A lone numeral is only a candidate; on its own it could be a page number or
+    a figure in the prose. What makes it a heading is company: chapters number
+    upward through the book, so the real headings are the longest run of
+    candidates whose values strictly increase in reading order, starting from
+    the top. A stray numeral that does not fit that run is left as prose.
+    """
+    candidates = [
+        (i, s, value)
+        for i, line in enumerate(lines)
+        if (s := line.strip()) and len(s) <= HEADING_NUMERAL_MAX_LEN
+        and (value := chapter_number(s)) is not None
+    ]
+    if len(candidates) < 3:
+        return []
+
+    # Longest ascending run, breaking ties toward consecutive numbering: given a
+    # book that reads I, II, V, III, both (I, II, V) and (I, II, III) ascend and
+    # run three long, but chapters are numbered without gaps, so the run that
+    # steps by one wins and the stray V is left as prose. Each run is scored
+    # (length, number of +1 steps) and the best carries.
+    score = [(1, 0)] * len(candidates)
+    came_from = [-1] * len(candidates)
+    for j in range(len(candidates)):
+        for k in range(j):
+            if candidates[k][2] < candidates[j][2]:
+                length, steps = score[k]
+                consecutive = steps + (candidates[j][2] == candidates[k][2] + 1)
+                if (length + 1, consecutive) > score[j]:
+                    score[j] = (length + 1, consecutive)
+                    came_from[j] = k
+    end = max(range(len(candidates)), key=score.__getitem__)
+
+    run: list[tuple[int, str]] = []
+    while end != -1:
+        i, token, _ = candidates[end]
+        run.append((i, token))
+        end = came_from[end]
+    run.reverse()
+
+    # Must be a real spine, not two coincidental numerals: several of them, and
+    # numbered from the front of the book rather than starting deep inside it.
+    if len(run) < 3 or chapter_number(run[0][1]) > 2:
+        return []
+    return run
+
+
+def detect_chapters(text: str) -> tuple[list[Chapter], list[Removal]]:
+    """Split cleaned text into chapters at their heading lines.
+
+    Headings are "Chapitre/Chapter N" lines where an edition writes them out;
+    where it marks a chapter with only a bare numeral, they are found by the
+    ascending run of those instead (`_numeral_headings`).
+
+    A file with no headings at all is valid input: everything comes back as one
     untitled chapter. Numbering need not be contiguous.
 
     Headings are found at the line level, not the rejoined-paragraph level,
@@ -234,6 +295,8 @@ def detect_chapters(text: str) -> tuple[list[Chapter], list[Removal]]:
         for i, line in enumerate(lines)
         if (m := CHAPTER_RE.match(line.strip()))
     ]
+    if len(headings) < 2:
+        headings = _numeral_headings(lines) or headings
 
     def section(start: int, end: int) -> list[list[str]]:
         blocks, r = _blocks("\n".join(lines[start:end]))
@@ -259,6 +322,9 @@ def detect_chapters(text: str) -> tuple[list[Chapter], list[Removal]]:
 
 def clean(raw: str) -> tuple[list[Chapter], list[Removal]]:
     """Raw text -> (chapters, everything that was removed)."""
-    text, removed = strip_boilerplate(raw)
+    from .normalize import repair
+
+    text, repaired = repair(raw)
+    text, removed = strip_boilerplate(text)
     chapters, more = detect_chapters(text)
-    return chapters, removed + more
+    return chapters, repaired + removed + more

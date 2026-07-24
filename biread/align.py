@@ -19,12 +19,14 @@ back to distributing proportionally, which is a rough approximation.
 """
 from __future__ import annotations
 
+import bisect
 import re
 from dataclasses import dataclass, field
 
 from .anchor import align_by_anchors
 from .cleanup import Chapter
 from .errors import AlignmentError
+from .numbering import chapter_number
 from .translate import hash_text
 
 # Digits included on purpose: dates, editions and quantities are among the
@@ -35,6 +37,9 @@ TOKEN_RE = re.compile(r"[^\W_]+", re.UNICODE)
 FOOTNOTE_RE = re.compile(r"^\[\d+\]")
 MIN_SIMILARITY = 0.34  # a third of the shorter text must be shared to count
 MIN_SHARED_WORDS = 2   # one word in common is coincidence, not correspondence
+# Below this share of the French left with a counterpart, the published column is
+# more gap than text: the reader is told plainly rather than shown a near-empty page.
+MIN_COVERAGE = 0.7
 
 # Words too common to say anything about which paragraph a text belongs to.
 STOPWORDS = frozenset("""
@@ -48,6 +53,7 @@ you your not no all one two more very had do did if then than when what
 class AlignmentReport:
     method: str  # "pivot" | "proportional"
     chapters_matched: bool
+    total: int = 0  # French paragraphs a published counterpart was sought for
     exact: int = 0
     grouped: int = 0
     dropped: int = 0  # published paragraphs matching nothing (notes, front matter)
@@ -61,6 +67,18 @@ class AlignmentReport:
         if self.method == "pivot":
             return False
         return self.grouped > 0 or not self.chapters_matched
+
+    @property
+    def coverage(self) -> float:
+        """The share of the French that found a counterpart, 0 to 1."""
+        if not self.total:
+            return 0.0
+        return (self.total - self.unmatched) / self.total
+
+    @property
+    def degraded(self) -> bool:
+        """Too little of the book lined up to present the column without warning."""
+        return self.total > 0 and self.coverage < MIN_COVERAGE
 
 
 def tokenize(text: str) -> set[str]:
@@ -96,6 +114,47 @@ def _distribute(french: list[str], published: list[str]) -> list[str]:
         hi = min(max(lo + 1, (i + 1) * p // f), p)
         out.append(" ".join(published[lo:hi]))
     return out
+
+
+def _match_by_length(french: list[str], published: list[str]) -> list[str]:
+    """Distribute published paragraphs by length rather than by count.
+
+    With no vocabulary or number to go on, the surest thing two editions of a
+    passage still share is shape: a long paragraph translates long and a short
+    one short. So a French paragraph holding a given fraction of its side's text
+    (measured in characters) draws the published paragraphs holding that same
+    fraction of theirs — a long paragraph pulls the long stretch of English, a
+    short one the short — where the count-proportional split ignores size and
+    can hand a two-line paragraph the same share as a two-page one.
+
+    Falls back to the count-proportional split when there is nothing to weigh by:
+    equal counts pair one-to-one, and fewer published than French is a merge,
+    whose text is shown across the paragraphs it was merged from.
+    """
+    n, m = len(french), len(published)
+    if n == 0:
+        return []
+    if m == 0:
+        return [""] * n
+    if m <= n:
+        return _distribute(french, published)
+
+    left_lengths = [len(p) or 1 for p in french]
+    total_left = sum(left_lengths)
+    bounds, running = [], 0
+    for length in left_lengths:
+        running += length
+        bounds.append(running / total_left)
+
+    total_right = sum(len(p) or 1 for p in published)
+    groups: list[list[str]] = [[] for _ in range(n)]
+    running = 0
+    for text in published:
+        weight = len(text) or 1
+        midpoint = (running + weight / 2) / total_right
+        running += weight
+        groups[min(bisect.bisect_left(bounds, midpoint), n - 1)].append(text)
+    return [" ".join(g) for g in groups]
 
 
 def _pivot(english: list[str], published: list[str]) -> tuple[list[str], int]:
@@ -147,65 +206,73 @@ def _pivot(english: list[str], published: list[str]) -> tuple[list[str], int]:
     return [" ".join(reversed(g)) for g in groups], dropped
 
 
-ROMAN_RE = re.compile(r"^[ivxlcdm]+$")
-ROMAN_VALUES = {"i": 1, "v": 5, "x": 10, "l": 50, "c": 100, "d": 500, "m": 1000}
+# The signatures of matter that brackets a book without being it: a Gutenberg
+# volunteer credit, a transcriber's note, a licence. Matched at the head of a
+# paragraph, where these always announce themselves.
+FRONT_MATTER_RES = (
+    re.compile(r"^\s*produced by", re.IGNORECASE),
+    re.compile(r"transcriber'?s?\s*[’']?s?\s*note", re.IGNORECASE),
+    re.compile(r"project gutenberg", re.IGNORECASE),
+    re.compile(r"e-?text (?:prepared|produced) by", re.IGNORECASE),
+    re.compile(r"^\s*(?:copyright|©)\b", re.IGNORECASE),
+    re.compile(r"all rights reserved", re.IGNORECASE),
+    re.compile(r"first (?:published|edition)", re.IGNORECASE),
+)
 
-# Editions number their chapters in whatever style they please: the French says
-# "CHAPITRE premier" where its English translation says "CHAPTER I". Both have to
-# reduce to the same integer before the two books can be matched on it. Words are
-# looked up before roman numerals on purpose — "dix" is French for ten and also a
-# well-formed roman numeral for 509.
-NUMBER_WORDS = {
-    "premier": 1, "première": 1, "premiere": 1, "un": 1, "first": 1,
-    "second": 2, "seconde": 2, "deuxième": 2, "deuxieme": 2, "deux": 2,
-    "troisième": 3, "troisieme": 3, "trois": 3, "third": 3,
-    "quatrième": 4, "quatrieme": 4, "quatre": 4, "fourth": 4,
-    "cinquième": 5, "cinquieme": 5, "cinq": 5, "fifth": 5,
-    "sixième": 6, "sixieme": 6, "six": 6, "sixth": 6,
-    "septième": 7, "septieme": 7, "sept": 7, "seventh": 7,
-    "huitième": 8, "huitieme": 8, "huit": 8, "eighth": 8,
-    "neuvième": 9, "neuvieme": 9, "neuf": 9, "ninth": 9,
-    "dixième": 10, "dixieme": 10, "dix": 10, "tenth": 10,
-    "onzième": 11, "onzieme": 11, "onze": 11, "eleventh": 11,
-    "douzième": 12, "douzieme": 12, "douze": 12, "twelfth": 12,
-    "treizième": 13, "treizieme": 13, "treize": 13, "thirteenth": 13,
-    "quatorzième": 14, "quatorzieme": 14, "quatorze": 14, "fourteenth": 14,
-    "quinzième": 15, "quinzieme": 15, "quinze": 15, "fifteenth": 15,
-    "seizième": 16, "seizieme": 16, "seize": 16, "sixteenth": 16,
-    "dix-septième": 17, "dix-septieme": 17, "seventeenth": 17,
-    "dix-huitième": 18, "dix-huitieme": 18, "eighteenth": 18,
-    "dix-neuvième": 19, "dix-neuvieme": 19, "nineteenth": 19,
-    "vingtième": 20, "vingtieme": 20, "vingt": 20, "twentieth": 20,
-}
+# A genuine front section is part of the book, not garbage before it: an
+# introduction or preface is a valid place to open, so it stops the trimming.
+FRONT_SECTION_RE = re.compile(
+    r"^\s*(introduction|pr[ée]face|preface|prologue|foreword|avant-propos|avertissement)\b",
+    re.IGNORECASE,
+)
 
 
-def _roman(token: str) -> int | None:
-    total = highest = 0
-    for char in reversed(token):
-        value = ROMAN_VALUES[char]
-        total += -value if value < highest else value
-        highest = max(highest, value)
-    return total or None
+def _is_front_matter(paragraph: str) -> bool:
+    """Whether a leading paragraph is apparatus rather than the book itself.
 
-
-def chapter_number(token: str | None) -> int | None:
-    """A chapter's number as an integer, whatever names it: "IV", "4",
-    "quatrième", "fourth".
-
-    None when the token is not a number at all. That case is load-bearing: a
-    table of contents header ("CHAPTER PAGE") matches the heading pattern too,
-    and must not be counted as a chapter.
+    Conservative on purpose: only a paragraph that positively matches a known
+    boilerplate signature, or reads as a title-page fragment (a short line in
+    capitals, no sentence to it), is called matter. Anything that looks like a
+    real sentence — or names a front section the reader would want — is the book,
+    and stops the trimming, so an opening line is never mistaken for garbage.
     """
-    if not token:
-        return None
-    word = token.strip().rstrip(".").lower()
-    if word.isdigit():
-        return int(word) or None
-    if word in NUMBER_WORDS:
-        return NUMBER_WORDS[word]
-    if ROMAN_RE.match(word):
-        return _roman(word)
-    return None
+    text = paragraph.strip()
+    if not text or FRONT_SECTION_RE.match(text):
+        return False
+    if any(r.search(text) for r in FRONT_MATTER_RES):
+        return True
+    letters = [c for c in text if c.isalpha()]
+    title_page_fragment = (
+        len(text) <= 60
+        and letters
+        and not any(c.islower() for c in letters)
+        and not text.rstrip().endswith((".", "!", "?"))
+    )
+    return bool(title_page_fragment)
+
+
+def _strip_leading_matter(chapters: list[Chapter]) -> list[Chapter]:
+    """Drop leading boilerplate paragraphs so a book with no numbered chapters
+    still opens on its first real text rather than a title page."""
+    result: list[Chapter] = []
+    trimmed = False
+    seeking = True
+    for chapter in chapters:
+        if not seeking:
+            result.append(chapter)
+            continue
+        start = 0
+        while start < len(chapter.paragraphs) and _is_front_matter(chapter.paragraphs[start]):
+            start += 1
+        if start < len(chapter.paragraphs):
+            result.append(Chapter(chapter.number, chapter.title, chapter.paragraphs[start:]))
+            seeking = False
+            trimmed = trimmed or start > 0
+        else:
+            trimmed = trimmed or bool(chapter.paragraphs)
+    if not trimmed:
+        return chapters
+    return result or chapters
 
 
 def trim_matter(chapters: list[Chapter]) -> list[Chapter]:
@@ -215,12 +282,14 @@ def trim_matter(chapters: list[Chapter]) -> list[Chapter]:
 
     Leaving them in is what puts two editions permanently out of step — one
     edition's forty-page introduction would otherwise shift every paragraph after
-    it. A book with no numbered chapters is returned untouched: there is nothing
-    to anchor on, and all of it may be the text.
+    it. Where chapters are numbered, everything outside the numbered run goes.
+    Where none are, the book is not left untouched but combed for the boilerplate
+    that opens a file — so it still starts on real text, or on a named front
+    section, rather than on "Produced by …".
     """
     numbered = [i for i, c in enumerate(chapters) if chapter_number(c.number) is not None]
     if not numbered:
-        return chapters
+        return _strip_leading_matter(chapters)
     return chapters[numbered[0] : numbered[-1] + 1]
 
 
@@ -274,7 +343,7 @@ def _by_anchor(
         p for c in published for p in c.paragraphs if not FOOTNOTE_RE.match(p)
     ]
     texts = align_by_anchors(
-        fr_paragraphs, pub_paragraphs, _distribute, _chapter_agreements(french, published)
+        fr_paragraphs, pub_paragraphs, _match_by_length, _chapter_agreements(french, published)
     )
     if texts is None:
         return None
@@ -314,7 +383,9 @@ def align_published(
     matched = by_number or len(fr_bodies) == len(pub_bodies)
     use_pivot = bool(translations)
     report = AlignmentReport(
-        method="pivot" if use_pivot else "proportional", chapters_matched=matched
+        method="pivot" if use_pivot else "proportional",
+        chapters_matched=matched,
+        total=sum(len(c.paragraphs) for c in fr_bodies),
     )
     aligned: dict[str, str] = {}
 
@@ -369,7 +440,7 @@ def align_published(
                 report.notes.append(f"{_label(fr, index)}: " + "; ".join(detail) + ".")
             report.exact += 1
         else:
-            texts = _distribute(fr.paragraphs, pub.paragraphs)
+            texts = _match_by_length(fr.paragraphs, pub.paragraphs)
             if len(fr.paragraphs) == len(pub.paragraphs):
                 report.exact += 1
             else:
