@@ -140,6 +140,15 @@ def published_note(report: AlignmentReport) -> str:
         if report.unmatched:
             note += " A few passages have no counterpart here."
         return note
+    if report.method == "anchored":
+        note = (
+            "Your translation is matched to the French by the names and numbers both "
+            "editions keep, so it holds its place through the book. Its own notes and "
+            "front matter stay behind."
+        )
+        if report.unmatched:
+            note += " A few passages have no counterpart here."
+        return note
     return (
         "Your translation is placed beside the French by position, so it can "
         "drift where the two editions differ."

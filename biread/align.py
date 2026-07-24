@@ -12,14 +12,17 @@ English is a text-similarity problem rather than a guess. Each published
 paragraph is matched to the generated paragraph it most resembles, in order,
 and anything resembling nothing (front matter, footnotes) is dropped.
 
-Without a generated translation to pivot on, this falls back to distributing
-proportionally within each chapter, which is only a rough approximation.
+Without a generated translation to pivot on, the two editions are anchored to
+each other instead, on the names and numbers that survive translation
+(`anchor.py`). Only where even that finds too little to go on does this fall
+back to distributing proportionally, which is a rough approximation.
 """
 from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
 
+from .anchor import align_by_anchors
 from .cleanup import Chapter
 from .errors import AlignmentError
 from .translate import hash_text
@@ -239,6 +242,49 @@ def _label(chapter: Chapter, index: int) -> str:
     return "Opening section" if index == 0 else f"Section {index + 1}"
 
 
+def _chapter_agreements(
+    french: list[Chapter], published: list[Chapter]
+) -> list[tuple[int, int]]:
+    """Where each shared chapter number begins, counted in paragraphs.
+
+    Fed to the anchoring pass as agreements it could not have found on its own:
+    a chapter number is the surest correspondence two editions offer, when both
+    of them happen to mark one.
+    """
+    def starts(chapters: list[Chapter]) -> dict[int, int]:
+        found: dict[int, int] = {}
+        index = 0
+        for chapter in chapters:
+            number = chapter_number(chapter.number)
+            if number is not None and number not in found:
+                found[number] = index
+            index += len(chapter.paragraphs)
+        return found
+
+    here, there = starts(french), starts(published)
+    return [(here[n], there[n]) for n in sorted(here.keys() & there.keys())]
+
+
+def _by_anchor(
+    french: list[Chapter], published: list[Chapter], report: AlignmentReport
+) -> dict[str, str] | None:
+    """Match two editions on the names and numbers they share, or None."""
+    fr_paragraphs = [p for c in french for p in c.paragraphs]
+    pub_paragraphs = [
+        p for c in published for p in c.paragraphs if not FOOTNOTE_RE.match(p)
+    ]
+    texts = align_by_anchors(
+        fr_paragraphs, pub_paragraphs, _distribute, _chapter_agreements(french, published)
+    )
+    if texts is None:
+        return None
+
+    report.method = "anchored"
+    report.dropped += len(pub_paragraphs) - sum(1 for t in texts if t)
+    report.unmatched = sum(1 for t in texts if not t)
+    return {hash_text(p): text for p, text in zip(fr_paragraphs, texts)}
+
+
 def align_published(
     french: list[Chapter],
     published: list[Chapter],
@@ -271,6 +317,15 @@ def align_published(
         method="pivot" if use_pivot else "proportional", chapters_matched=matched
     )
     aligned: dict[str, str] = {}
+
+    # With no generated translation to pivot through, the editions are matched on
+    # what survives translation: the names and numbers they share. That needs no
+    # headings, so it carries books whose chapters are unmarked, unnumbered, or
+    # written in a language this pipeline does not detect chapters in.
+    if not use_pivot:
+        anchored = _by_anchor(fr_bodies, pub_bodies, report)
+        if anchored is not None:
+            return anchored, report
 
     if by_number:
         pairs = _pair_by_number(fr_bodies, pub_bodies)

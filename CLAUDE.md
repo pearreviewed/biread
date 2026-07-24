@@ -234,6 +234,10 @@ biread/
   cleanup.py      raw text -> chapters of clean paragraphs
   translate.py    paragraphs -> English, batched and cached
   align.py        a published translation -> matched to the French by content
+  anchor.py       two editions pinned to each other by the names and numbers
+                  they share, for when there is no generated translation to
+                  pivot through (no model, no headings, no shared vocabulary)
+  build.py        the pipeline shared by the CLI and the in-browser builder
   gloss.py        per-paragraph hover units; width judged at render, not cache
   language.py     what glossing needs to know about the source language
   render/         book -> one HTML file (templates/ holds the real reader)
