@@ -18,7 +18,7 @@ W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 class DocxExtractor(Extractor):
     suffixes = (".docx",)
 
-    def extract(self, path: Path) -> str:
+    def extract(self, path: Path, on_page=None) -> str:
         try:
             with zipfile.ZipFile(path) as zf:
                 xml = zf.read(DOCUMENT)

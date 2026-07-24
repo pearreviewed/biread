@@ -105,6 +105,23 @@ def test_pdf(tmp_path):
     assert "Bonjour le monde" in PdfExtractor().extract(p)
 
 
+def test_pdf_reports_pages_as_it_reads(tmp_path):
+    """A slow PDF read is otherwise silent; the callback is what lets the builder
+    show 'page 12 of 147'."""
+    p = tmp_path / "book.pdf"
+    p.write_bytes(make_pdf("Une page"))
+    seen = []
+    PdfExtractor().extract(p, on_page=lambda done, total: seen.append((done, total)))
+    assert seen == [(1, 1)]
+
+
+def test_a_pageless_format_ignores_the_page_callback(tmp_path):
+    p = tmp_path / "book.txt"
+    p.write_text("Just text.", encoding="utf-8")
+    never = lambda *a: (_ for _ in ()).throw(AssertionError("txt has no pages"))
+    assert TxtExtractor().extract(p, on_page=never) == "Just text."
+
+
 def test_pdf_without_text_is_a_clear_error(tmp_path):
     p = tmp_path / "scan.pdf"
     p.write_bytes(make_pdf(" "))

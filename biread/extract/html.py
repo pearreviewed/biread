@@ -56,7 +56,7 @@ def html_to_text(html: str) -> str:
 class HtmlExtractor(Extractor):
     suffixes = (".html", ".htm")
 
-    def extract(self, path: Path) -> str:
+    def extract(self, path: Path, on_page=None) -> str:
         raw = path.read_bytes()
         for encoding in ("utf-8-sig", "cp1252"):
             try:

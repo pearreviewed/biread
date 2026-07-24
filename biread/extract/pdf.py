@@ -15,9 +15,10 @@ clear error rather than an empty book. Real OCR is out of scope.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Optional
 
 from ..errors import ExtractError
-from .base import Extractor
+from .base import Extractor, PageProgress
 
 
 def _page_text(page) -> str:
@@ -32,13 +33,19 @@ def _page_text(page) -> str:
 class PdfExtractor(Extractor):
     suffixes = (".pdf",)
 
-    def extract(self, path: Path) -> str:
+    def extract(self, path: Path, on_page: Optional[PageProgress] = None) -> str:
         try:
             from pypdf import PdfReader
         except ImportError as e:
             raise ExtractError("reading PDFs needs the 'pypdf' package.") from e
         try:
-            pages = [_page_text(page) for page in PdfReader(str(path)).pages]
+            book_pages = PdfReader(str(path)).pages
+            total = len(book_pages)
+            pages = []
+            for index, page in enumerate(book_pages, 1):
+                pages.append(_page_text(page))
+                if on_page:
+                    on_page(index, total)
         except Exception as e:
             raise ExtractError(f"{path.name} could not be read as a PDF ({e}).") from e
 

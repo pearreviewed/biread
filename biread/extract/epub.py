@@ -19,7 +19,7 @@ CONTAINER = "META-INF/container.xml"
 class EpubExtractor(Extractor):
     suffixes = (".epub",)
 
-    def extract(self, path: Path) -> str:
+    def extract(self, path: Path, on_page=None) -> str:
         try:
             with zipfile.ZipFile(path) as zf:
                 opf_path = self._opf_path(zf)

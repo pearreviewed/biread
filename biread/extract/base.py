@@ -7,6 +7,12 @@ as one new file with no changes downstream.
 """
 from abc import ABC, abstractmethod
 from pathlib import Path
+from typing import Callable, Optional
+
+#: Reports reading progress: on_page(done, total). Only a paged format (a PDF)
+#: has anything to report; the rest read in one step and leave it unused. A slow
+#: read is otherwise a silent wait, and a PDF read glyph by glyph is slow.
+PageProgress = Callable[[int, int], None]
 
 
 class Extractor(ABC):
@@ -18,5 +24,8 @@ class Extractor(ABC):
         return path.suffix.lower() in cls.suffixes
 
     @abstractmethod
-    def extract(self, path: Path) -> str:
-        """Return the raw text content of the file at `path`."""
+    def extract(self, path: Path, on_page: Optional[PageProgress] = None) -> str:
+        """Return the raw text content of the file at `path`.
+
+        `on_page`, when given, is called as pages are read; a format without
+        pages ignores it."""

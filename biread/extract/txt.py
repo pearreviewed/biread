@@ -11,7 +11,7 @@ ENCODINGS = ("utf-8-sig", "cp1252")
 class TxtExtractor(Extractor):
     suffixes = (".txt",)
 
-    def extract(self, path: Path) -> str:
+    def extract(self, path: Path, on_page=None) -> str:
         raw = path.read_bytes()
         for encoding in ENCODINGS:
             try:

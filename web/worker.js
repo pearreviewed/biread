@@ -6,6 +6,23 @@ importScripts("https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js");
 const WHEEL_URL = new URL("biread-0.1.0-py3-none-any.whl", self.location.href).href;
 let pyodide;
 
+// Read a file into chapters once and keep it: the keyed path prices the book
+// (which reads it) and then builds it, and re-reading a PDF glyph by glyph the
+// second time is the slowest thing the builder does. Reading also reports its
+// pages, so a long PDF shows "page 12 of 147" instead of sitting silent.
+const SETUP = [
+  "from pathlib import Path",
+  "from biread.extract import get_extractor",
+  "from biread.cleanup import clean",
+  "_BOOKS = {}",
+  "def read_book(path, stage):",
+  "    if path and path not in _BOOKS:",
+  "        ext = get_extractor(Path(path))",
+  "        raw = ext.extract(Path(path), on_page=lambda d, t: js_progress(stage, d, t))",
+  "        _BOOKS[path] = clean(raw)[0]",
+  "    return _BOOKS.get(path)",
+].join("\n");
+
 const ready = (async () => {
   pyodide = await loadPyodide();
   await pyodide.loadPackage("micropip");
@@ -16,21 +33,18 @@ const ready = (async () => {
     "from biread.targets import TARGETS, DEFAULT_LANG",
     "json.dumps({'default': DEFAULT_LANG, 'items': sorted([[k, t.name] for k, t in TARGETS.items()], key=lambda x: x[1])})",
   ].join("\n"));
+  pyodide.globals.set("js_progress", () => {});
+  pyodide.runPython(SETUP);
   postMessage({ type: "ready", langs: JSON.parse(langs) });
 })();
 
 // Shared setup: turn the uploaded files into chapters and a Config.
 const LOAD = [
-  "from pathlib import Path",
-  "from biread.extract import get_extractor",
-  "from biread.cleanup import clean",
   "from biread.config import Config, lookup_price",
   "from biread.cache import Cache",
   "from biread.targets import get_target",
-  "orig_chapters, _ = clean(get_extractor(Path(orig_path)).extract(Path(orig_path)))",
-  "pub_chapters = None",
-  "if pub_path:",
-  "    pub_chapters, _ = clean(get_extractor(Path(pub_path)).extract(Path(pub_path)))",
+  "orig_chapters = read_book(orig_path, 'read-orig')",
+  "pub_chapters = read_book(pub_path, 'read-pub')",
   "target = get_target(lang_key)",
   "cfg = Config(provider='anthropic', model=MODEL, model_gloss=MODEL, api_key=(api_key or None), ollama_host='', base_url=None, max_cost_usd=10**9, price_per_mtok=lookup_price(MODEL))",
 ].join("\n");
@@ -63,12 +77,9 @@ const BUILD = [
 
 // Free path: no key, no AI — set a brought translation beside the French by position.
 const LOAD_FREE = [
-  "from pathlib import Path",
-  "from biread.extract import get_extractor",
-  "from biread.cleanup import clean",
   "from biread.targets import get_target",
-  "orig_chapters, _ = clean(get_extractor(Path(orig_path)).extract(Path(orig_path)))",
-  "pub_chapters, _ = clean(get_extractor(Path(pub_path)).extract(Path(pub_path)))",
+  "orig_chapters = read_book(orig_path, 'read-orig')",
+  "pub_chapters = read_book(pub_path, 'read-pub')",
   "target = get_target(lang_key)",
 ].join("\n");
 
@@ -96,11 +107,13 @@ self.onmessage = async (e) => {
     pyodide.globals.set("api_key", m.key || "");
     pyodide.globals.set("title", m.title || "book");
     pyodide.globals.set("model_id", m.model || "claude-sonnet-5");
+    // Live from here on: reading a PDF reports its pages during pricing and the
+    // free build alike, not only while translating.
+    pyodide.globals.set("js_progress", (s, d, t) => postMessage({ type: "progress", stage: s, done: d, total: t }));
 
     if (m.type === "estimate") {
       postMessage({ type: "estimate", data: JSON.parse(await pyodide.runPythonAsync(ESTIMATE)) });
     } else if (m.type === "build") {
-      pyodide.globals.set("js_progress", (s, d, t) => postMessage({ type: "progress", stage: s, done: d, total: t }));
       postMessage({ type: "done", html: await pyodide.runPythonAsync(BUILD) });
     } else if (m.type === "build-free") {
       postMessage({ type: "done", html: await pyodide.runPythonAsync(BUILD_FREE) });
@@ -119,6 +132,15 @@ function cleanError(err) {
 }
 
 function write(name, bytes) {
-  pyodide.FS.writeFile("/in/" + name, bytes);
-  return "/in/" + name;
+  // Idempotent, so pricing then building the same upload does not rewrite the
+  // file and drop its cached reading. A genuinely new file for a name reused in
+  // the session is rewritten, and its stale reading forgotten.
+  const path = "/in/" + name;
+  try {
+    const old = pyodide.FS.readFile(path);
+    if (old.length === bytes.length && old.every((b, i) => b === bytes[i])) return path;
+  } catch (e) {}
+  pyodide.FS.writeFile(path, bytes);
+  pyodide.runPython("_BOOKS.pop(" + JSON.stringify(path) + ", None)");
+  return path;
 }
