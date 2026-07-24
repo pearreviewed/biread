@@ -111,7 +111,7 @@ button:focus-visible { outline: 2px solid rgba(200,175,130,.85); outline-offset:
 .book-desk { position: relative; margin: 0 auto; border-radius: 5px; cursor: pointer; background: #e9ddc0; transition: opacity .18s ease; box-shadow: 0 2px 0 rgba(0,0,0,.3), 0 34px 70px -24px rgba(0,0,0,.72), 0 10px 26px rgba(0,0,0,.45); }
 .book-mobile { position: relative; width: min(560px,92vw); height: 100%; max-height: 1200px; margin: 0 auto; border-radius: 5px; cursor: pointer; transition: opacity .18s ease; }
 
-.page { position: absolute; top: 0; bottom: 0; width: 50%; padding: calc(var(--fpx) * 2.2) calc(var(--fpx) * 2.9) calc(var(--fpx) * 2); overflow: hidden; background-color: #fdf4ee; background-image: url(data:image/png;base64,@@PAPER_GRAIN@@), radial-gradient(170% 125% at 98% 50%, #fdf5ef 0%, #fbf1e7 97.5%, #f0dcc8 99.4%, #caa885 100%); box-shadow: inset -20px 0 34px -20px rgba(70,45,15,.30); }
+.page { position: absolute; top: 0; bottom: 0; width: 50%; padding: calc(var(--fpx) * 2.5) calc(var(--fpx) * 3.3) calc(var(--fpx) * 2.3); overflow: hidden; background-color: #fdf4ee; background-image: url(data:image/png;base64,@@PAPER_GRAIN@@), radial-gradient(170% 125% at 98% 50%, #fdf5ef 0%, #fbf1e7 97.5%, #f0dcc8 99.4%, #caa885 100%); box-shadow: inset -20px 0 34px -20px rgba(70,45,15,.30); }
 .page-left { left: 0; }
 .page-right { right: 0; background-image: url(data:image/png;base64,@@PAPER_GRAIN@@), radial-gradient(170% 125% at 2% 50%, #fdf5ef 0%, #fbf1e7 97.5%, #f0dcc8 99.4%, #caa885 100%); box-shadow: inset 20px 0 34px -20px rgba(70,45,15,.30); }
 .page-mobile { position: absolute; inset: 0; padding: calc(var(--fpx) * 2) calc(var(--fpx) * 1.5) calc(var(--fpx) * 2.7); overflow: hidden; background-color: #fdf4ee; background-image: url(data:image/png;base64,@@PAPER_GRAIN@@), radial-gradient(140% 145% at 50% 45%, #fdf5ef 0%, #fbf1e7 96.5%, #e2cbb2 100%); box-shadow: 0 20px 50px -20px rgba(0,0,0,.6); }
@@ -132,7 +132,7 @@ button:focus-visible { outline: 2px solid rgba(200,175,130,.85); outline-offset:
 .ch-title { font-size: calc(var(--fpx) * 1.32); line-height: 1.12; margin: 7px 0 0; color: #2a1f12; font-weight: 600; }
 .ch-rule { height: 1px; background: linear-gradient(90deg,#b7a67f,transparent); margin: 16px 0 0; }
 
-p.pair { margin: 0 -12px 0.34em; padding: 2px 12px; font-size: var(--fpx); line-height: 1.38; text-align: justify; text-indent: 1.4em; hyphens: auto; border-radius: 4px; background: transparent; transition: filter .34s ease; }
+p.pair { margin: 0 -12px 0.5em; padding: 2px 12px; font-size: var(--fpx); line-height: 1.5; text-align: justify; text-indent: 1.4em; hyphens: auto; border-radius: 4px; background: transparent; transition: filter .34s ease; }
 /* Hover targets. Only the unit highlights — no paragraph tint; that was
    removed from the design deliberately. */
 .unit { border-radius: 3px; cursor: help; transition: background .12s ease; }

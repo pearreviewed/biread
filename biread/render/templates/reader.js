@@ -60,7 +60,6 @@
   var FADE_MS = 150;
   var STORE_VERSION = 2;
   var LAYOUT_RETRIES = 50; // ~6s of waiting for a usable page box
-  var FIT_MARGIN = 8; // px of slack between the measured fit and the page
 
   document.getElementById('book-title-label').textContent = DATA.titleFr;
 
@@ -127,16 +126,27 @@
 
   // Type scales with the book, so a smaller book keeps the same number of
   // characters per line instead of turning into a narrow ribbon of text.
-  // 1060px of book lands on the design's 20px; the cap lets a wide-screen spread
-  // grow a little more instead of flattening into over-long lines.
+  // 1140px of book lands near 20px; the cap lets a wide-screen spread grow a
+  // little more instead of flattening into over-long lines. Kept deliberately
+  // unhurried — the page should have air, not fill wall to wall.
   function fpx() {
     var width = view.book ? view.book.getBoundingClientRect().width : 1060;
-    var base = Math.max(15, Math.min(23, width / 53));
+    var base = Math.max(15, Math.min(22, width / 57));
     return Math.round(base * S.fontScale);
   }
 
   function applyFontSize() {
     document.documentElement.style.setProperty('--fpx', fpx() + 'px');
+  }
+
+  // Slack between what the probe measures and what the real page draws. A
+  // column's offsetHeight omits its last paragraph's bottom margin, but the page
+  // still draws it, so the page stands that much taller than the probe reported.
+  // Reserve about a line: enough for that margin (0.5em) and a pixel or two of
+  // integer rounding, and it scales with the type, so enlarging the font never
+  // tips a page into scrolling.
+  function fitMargin() {
+    return Math.max(8, Math.round(fpx() * 0.75));
   }
 
   // Size the desktop spread to the largest SPREAD_RATIO box that fits the stage
@@ -480,7 +490,7 @@
     // Leave a few pixels of slack. Heights are integers and the probe is not
     // pixel-identical to the page it stands in for; landing flush against the
     // limit shaves the last line off in the real book.
-    var limit = available - FIT_MARGIN;
+    var limit = available - fitMargin();
 
     var inners = probe.pages.map(function (page) {
       page.textContent = '';
