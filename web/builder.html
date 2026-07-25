@@ -50,7 +50,7 @@
   .path { flex: 1 1 0; min-width: 0; }
   .path h2 { font-size: 17.5px; font-weight: 600; margin: 0 0 7px; color: var(--ink-bright); text-wrap: balance; }
   .vrule { flex: 0 0 1px; background: var(--gold); position: relative; }
-  .vrule span { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); background: #241b12; padding: 10px 2px; color: var(--muted); font-size: 11px; font-weight: 500; letter-spacing: .18em; text-transform: uppercase; }
+  .vrule span { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: #241b12; border: 1px solid var(--gold-2); color: var(--muted); font-size: 10.5px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; }
 
   ul.benefits { list-style: none; padding: 0; margin: 4px 0 10px; }
   ul.benefits li { padding: 2px 0; position: relative; color: var(--ink); text-wrap: pretty; }
@@ -69,7 +69,9 @@
   /* Pull the box left by exactly its padding + border (20 + 1), so the words
      inside line up with the paragraph above instead of sitting indented. Left
      only: the right edge stays flush with the column and the main drop zone. */
-  .free .drop { flex: 1; display: flex; flex-direction: column; justify-content: center; margin-left: -21px; }
+  .free .drop { flex: none; min-height: 92px; padding: 14px 20px; display: flex; flex-direction: column; justify-content: center; margin-left: -21px; margin-top: 8px; }
+  .free .drop .big { font-size: 14px; font-weight: 500; color: var(--ink-soft); }
+  .pub-hint { font-size: 12.5px; line-height: 1.5; color: var(--muted); margin: 10px 0 0; text-wrap: pretty; }
 
   .foot { display: flex; align-items: flex-end; justify-content: space-between; gap: 26px; margin-top: 14px; padding-top: 13px; border-top: 1px solid var(--gold); flex-wrap: wrap; }
   .opts { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; }
@@ -102,7 +104,6 @@
     .drop-main { padding: 22px; }
     .paths { flex-direction: column; gap: 8px; margin-top: 22px; }
     .vrule { flex: none; height: 1px; width: 100%; margin: 14px 0; }
-    .vrule span { padding: 2px 14px; }
     .foot { flex-direction: column; align-items: stretch; }
     .build-wrap { align-items: stretch; }
     .build { width: 100%; }
@@ -131,7 +132,6 @@
         <ul class="benefits">
           <li>the whole book, translated to stay as close to the original as possible while still sounding natural</li>
           <li>hover any phrase in the French for its meaning in context, right where you are</li>
-          <li>add a published edition you own, matched to the French paragraph by paragraph so it stays in step</li>
         </ul>
         <input class="keyinput" type="password" id="key" placeholder="sk-ant-…  (optional)" autocomplete="off">
         <div><label class="check"><input type="checkbox" id="remember"> Remember on this device</label></div>
@@ -142,12 +142,13 @@
 
       <section class="path free">
         <h2>Already own a published translation of it?</h2>
-        <p>Bring both books and read them together in one reader – the French page beside the translation you already trust. No key, no cost, no account: a side-by-side edition of a book you own, the kind you can't buy.</p>
+        <p>Bring both books and read them together in one reader – the French page beside the translation you already trust. No key, no cost, no account: a side-by-side edition of a book you own, that no shop sells.</p>
         <div class="drop" id="drop-pub">
-          <div class="big" style="font-size:17px">Drop the translation, or <span class="pick">choose a file</span></div>
+          <div class="big">Drop the translation, or <span class="pick">choose a file</span></div>
           <div class="chosen" id="chosen-pub"></div>
           <input type="file" id="file-pub" accept=".txt,.epub,.pdf,.html,.htm,.docx" hidden>
         </div>
+        <p class="pub-hint">An EPUB or plain-text copy lines up most closely — a PDF often loses its paragraph breaks, and its text is then shared across the French more loosely.</p>
       </section>
     </div>
 
