@@ -20,6 +20,7 @@ from pathlib import Path
 
 from ..cleanup import Chapter
 from ..gloss import displayable
+from ..numbering import chapter_number, to_roman
 from ..targets import ENGLISH, Target
 from ..translate import hash_text
 
@@ -151,11 +152,16 @@ def build_book_data(
     chapter_meta = []
     for chapter in chapters:
         if chapter.number:
+            # A chapter's number is written as a numeral on both sides, whichever
+            # way the source spelled it — so a French "Chapitre premier" does not
+            # surface in the translation column as "Chapter premier".
+            n = chapter_number(chapter.number)
+            numeral = to_roman(n) if n else chapter.number
             chapter_meta.append({
                 "pair": len(pairs),
-                "frEyebrow": f"Chapitre {chapter.number}",
+                "frEyebrow": f"Chapitre {numeral}",
                 "frTitle": chapter.title or "",
-                "enEyebrow": f"{target.chapter_word} {chapter.number}",
+                "enEyebrow": f"{target.chapter_word} {numeral}",
                 "enTitle": translations.get(hash_text(chapter.title), "") if chapter.title else "",
             })
         for paragraph in chapter.paragraphs:

@@ -10,7 +10,7 @@ import re
 import sys
 from pathlib import Path
 
-from .align import align_published
+from .align import align_published, trim_matter
 from .build import published_note
 from .cache import Cache
 from .cleanup import Chapter, Removal, clean
@@ -306,11 +306,17 @@ def run_translation(chapters: list[Chapter], cache: Cache, cfg: Config, target_n
 
 def run(args: argparse.Namespace) -> None:
     chapters, removals = load_book(args.input)
-    total_paragraphs = sum(len(c.paragraphs) for c in chapters)
 
     print(f"Cleaned '{args.input.name}':\n")
     report_removals(removals)
     report_structure(chapters)
+
+    # From here the book is its body only: the title page, table of contents and
+    # licence that bracket it are dropped, so the reader opens on chapter one and
+    # no front matter is translated or set beside a blank. Same trim the aligner
+    # applies, kept in step so what is read is what was aligned.
+    chapters = [c for c in trim_matter(chapters) if c.paragraphs] or chapters
+    total_paragraphs = sum(len(c.paragraphs) for c in chapters)
 
     title = args.title or humanize(args.input.stem)
     author = args.author or ""

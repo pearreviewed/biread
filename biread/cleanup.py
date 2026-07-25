@@ -67,8 +67,11 @@ FOOTNOTE_MARK = "↑"
 # "[1] From micros, small…" — keeps the marker that identifies it as one.
 FOOTNOTE_REF_RE = re.compile(r"(?<=\S)\[\d{1,3}\]")
 FOOTNOTE_BODY_RE = re.compile(r"^\[\d{1,3}\]\s")
+# The heading word, then its number as any edition writes it: a roman numeral, an
+# integer, or a spelled-out ordinal — including a hyphenated one ("dix-septième",
+# "vingt-unième"), which the bare word branch used to sever at the hyphen and lose.
 CHAPTER_RE = re.compile(
-    r"^\s*(?:CHAPITRE|CHAPTER)\s+([IVXLCDM]+|\d+|[A-Za-zÀ-ÿ]+)\s*\.?\s*$",
+    r"^\s*(?:CHAPITRE|CHAPTER)\s+([IVXLCDM]+|\d+|[A-Za-zÀ-ÿ]+(?:-[A-Za-zÀ-ÿ]+)*)\s*\.?\s*$",
     re.IGNORECASE,
 )
 TITLE_MAX_LEN = 160
@@ -206,15 +209,23 @@ def rejoin_paragraphs(text: str) -> tuple[list[str], list[Removal]]:
 
 
 def _split_title(blocks: list[list[str]]) -> tuple[str | None, list[list[str]]]:
-    """Peel a chapter subtitle off the front of a chapter's blocks.
+    """Peel a chapter's title or argument off the front of its blocks.
 
-    A title is a block of exactly one source line, short enough to be a title,
-    with body text after it. Requiring a single *line* is what keeps a short
-    opening sentence from being promoted to a title: real titles are never
-    hard-wrapped, and a one-block chapter is a body paragraph, not a heading.
+    A single short line before the body is a title — a heading, or the argument a
+    chapter opens with. So is a *wrapped* argument: several lines that together
+    stay short and are clearly shorter than the passage they introduce, which is
+    how an edition like Candide sets a descriptive line under every chapter number
+    and pypdf then breaks it across lines. What is left as body is the chapter's
+    own opening prose — short sentences about as long as what follows them, which
+    a title never is — and a one-block chapter, which is a paragraph, not a heading.
     """
-    if len(blocks) > 1 and len(blocks[0]) == 1 and len(blocks[0][0]) <= TITLE_MAX_LEN:
-        return blocks[0][0], blocks[1:]
+    if len(blocks) < 2:
+        return None, blocks
+    head = " ".join(blocks[0])
+    if not head or len(head) > TITLE_MAX_LEN:
+        return None, blocks
+    if len(blocks[0]) == 1 or len(head) * 2 <= len(" ".join(blocks[1])):
+        return head, blocks[1:]
     return None, blocks
 
 

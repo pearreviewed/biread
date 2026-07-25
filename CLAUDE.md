@@ -61,6 +61,82 @@ filled with a guess. *(Built. Verified: 34 body paragraphs, 0 suspect,
 
 Positional alignment was tried first and was wrong — see Reversals.
 
+### Universal alignment — bringing any book (not yet built)
+
+> these are xamples where alignment failed, we need to be ready for users to
+> bring any books and be able to align the, properly
+>
+> collect the thoughts needed to make a universal alignng tool for all books
+
+The goal: a user drops in *their own* published edition — any PDF, EPUB, TXT,
+DOCX, HTML — and it lands beside the French correctly, or fails **loudly** with a
+reason. Today it can fail **silently**.
+
+**The failure that prompted this (Candide, Gutenberg PDF).** The built reader
+shipped with `publishedAvailable: false`, no published column at all, and a note
+claiming the translation was "placed beside the French by position" — when in
+fact *no* published text made it in. Traced end to end:
+
+- The aligner itself is not the weak link. **Extraction and cleanup are.** The
+  aligner is fed garbage and has nothing to work with.
+- pypdf extracted each chapter heading as the bare word `CHAPTER` on its own
+  line, with the numeral (`I`, `II`, … `XXX`) stranded on a *different* line
+  amid huge whitespace runs — 30 orphaned roman-numeral lines in all.
+- `cleanup.CHAPTER_RE` anchors the word **and** the number on **one** line
+  (`^\s*(?:CHAPITRE|CHAPTER)\s+(NUM)\s*$`). Split across lines, it matched
+  **zero** of 30 chapters.
+- Zero numbered chapters ⇒ `trim_matter` can't trim (it no-ops when nothing is
+  numbered), `_pair_by_number` has nothing to pair, and the whole edition
+  collapses into **one 183-paragraph blob** that still carries the transcriber's
+  note, the TOC, and the Gutenberg licence. Alignment against that is worthless,
+  so the published column was dropped.
+
+**What a universal tool has to get right, in order:**
+
+1. **Extraction damage is the real problem — repair it before anything reads
+   it.** A normalization layer between extract and cleanup that undoes the
+   standard PDF injuries: collapse whitespace runs, de-hyphenate line-broken
+   words, drop running headers/footers and bare page numbers, and **rejoin a
+   heading word to a numeral marooned on the next line**. Every downstream stage
+   assumes clean paragraph text; give it that.
+
+2. **Chapter detection must tolerate layout noise, not assume clean input.**
+   `^…$` single-line matching is too strict. Detect `CHAPTER` / `CHAPITRE`
+   followed by a numeral within a small window even across a line break; treat a
+   lone roman-numeral / integer line as a candidate heading. It must also survive
+   editions that number differently on each side (already handled by
+   `chapter_number`) — but only once headings are found at all.
+
+3. **Alignment must degrade gracefully, never all-or-nothing.** Losing chapter
+   detection should not zero the published column. The content-similarity
+   **pivot** (English↔English through the generated translation) needs no chapter
+   structure and should carry any book that was translated; `anchor.py`
+   (names/numbers) is the no-key fallback. Single-blob proportional is a last
+   resort, not the silent default it became here.
+
+4. **Front-matter / boilerplate stripping must not depend on chapter numbering.**
+   `trim_matter` only fires when chapters were numbered, so a detection miss
+   leaves licences and notes *inside* the aligned text. Gutenberg boilerplate,
+   transcriber's notes, TOC, and licence need removal that stands on its own.
+
+5. **Fail loudly and honestly.** If chapters can't be found or coverage is poor,
+   the reader must say so plainly ("couldn't locate chapters in your published
+   file — alignment is degraded/unavailable, because …"), never emit a confident
+   note over an empty column. `AlignmentReport` already tracks
+   dropped/unmatched; that signal has to reach the reader UI and the terminal,
+   and a near-empty published column should trip a visible warning at build time.
+
+6. **Prove it on more than Micromégas.** The one verified book (34 paragraphs,
+   clean source) is not evidence of universality. Build a corpus of awkward real
+   inputs — Gutenberg PDFs with split headings, EPUBs with interleaved notes,
+   editions whose chapter counts differ — and test extraction → cleanup →
+   alignment against each. This Candide PDF is the first corpus member.
+
+Sample inputs for the corpus live in the user's Downloads
+(`candide - bilingual reader.html` = the broken build,
+`The Project Gutenberg eBook of Candide, by Voltaire..pdf` = the published PDF
+that failed). Copy them into `examples/` before relying on them.
+
 ### Glossing (not yet built)
 
 > gloss is needed. any word on the right side (og language) shoudl be hoverable translated in context, but no articles prepositions and pronouns separately, they should be selected tpgetehr with the connected word and trasnlated in thier context. if the hoverable word is in french passe simple it should also show passe compose version and if the hoverable word is a verb in a form other tahn infinitif, then it should also show inifinitif form
@@ -167,6 +243,7 @@ two at once. `--dry-run` needs no API key.
 | Revise — automatic cross-device sync? | Spec'd (sign-in accounts) and **parked**; the shipped rung is the edits link. Full local+server design in `design-reference/revise-spec.md`. |
 | EPUB — reflowable with tap glosses, or the reader's locked spread? | The **locked spread** (fixed-layout): French left, English right, like the reader. The reflowable version put the French and English in one interleaved column and turned every glossed phrase into an EPUB footnote, which **Apple Books paints blue** — the whole page went blue and unreadable, and it did not look like the reader. Fixed-layout is paginated at build time by the reader's own algorithm (in headless Chromium, so `--epub` now needs `[browser]`), and **drops glosses** — same reason the PDF does. Best on a tablet or a Mac; a phone shows one page at a time. |
 | Server — does it ever hold users' books? | **No — biread stays a tool, not a host.** Translation runs in the reader's browser on the reader's own key; the finished edition is the reader's own file; the server holds only the app, accounts, and edits — never the book. A DMCA takedown agent is avoidable only by not hosting the books. Accounts sync the *bookmark, not the book* (source hash + reading position + fixes + light metadata), the file re-opened locally or pulled from the reader's own cloud. Full design in [`design-reference/accounts-spec.md`](design-reference/accounts-spec.md). |
+| Builder — how does a reader choose the translation model, and where? | On the web builder's price screen, a clickable **three-tier** choice — **Finest / Balanced / Cheapest**, price beside each, model id in fine print — within the key's provider. Cheap to show because the estimate is model-independent: `translate.estimate()` counts tokens from the text alone, so every tier prices off the same counts with no extra API calls. Builder-only — does **not** touch the "never show price in the reader" rule; offers only models with a live `PRICING_PER_MTOK` row. |
 
 ## Reversals
 

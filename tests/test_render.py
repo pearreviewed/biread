@@ -117,6 +117,17 @@ def test_target_localizes_eyebrow_ui_and_hyphenation(book):
     assert data["ui"]["loading"] == "Abriendo el libro…"
 
 
+def test_word_numbered_chapter_gets_a_numeral_eyebrow():
+    # A French edition numbering its chapters in words must not surface in the
+    # translation column as "Chapter premier": the number is shown as a numeral,
+    # including the hyphenated compounds ("dix-septième" -> XVII).
+    book = [Chapter("premier", "Le Début", ["Un paragraphe."]),
+            Chapter("dix-septième", "Plus tard", ["Un autre paragraphe."])]
+    data = build_book_data("Livre", book, {})
+    assert [c["frEyebrow"] for c in data["chapters"]] == ["Chapitre I", "Chapitre XVII"]
+    assert [c["enEyebrow"] for c in data["chapters"]] == ["Chapter I", "Chapter XVII"]
+
+
 def test_the_masthead_stays_french_in_the_rendered_file(tmp_path, book):
     out = tmp_path / "es.html"
     render_book("Mon Livre", book, {}, out, target=SPANISH)

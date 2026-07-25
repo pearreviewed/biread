@@ -67,6 +67,33 @@ def test_trim_drops_the_matter_that_brackets_a_book():
     assert [c.number for c in trim_matter(chapters)] == ["I", "II"]
 
 
+def test_trim_drops_a_trailing_bibliography():
+    # An academic edition appends a bibliography after the last chapter; it has no
+    # counterpart in the other edition and must not be set beside it.
+    chapters = [
+        Chapter("I", None, ["The story begins in a quiet town."]),
+        Chapter("II", None, [
+            "And the story comes to its end.",
+            "BIBLIOGRAPHIE",
+            "Author, A., 'A study of the book', Journal (1990), i.1-20.",
+            "Author, B., 'Another study entirely', Review (1991), ii.3-9.",
+        ]),
+    ]
+    body = [p for c in trim_matter(chapters) for p in c.paragraphs]
+    assert body == ["The story begins in a quiet town.", "And the story comes to its end."]
+
+
+def test_a_mid_book_mention_of_notes_is_not_mistaken_for_back_matter():
+    # Only a paragraph that is the apparatus heading and nothing else is a cut
+    # point, and only in the back half — a sentence mentioning notes is safe.
+    chapters = [
+        Chapter("I", None, ["He took careful notes on the lecture that morning."]),
+        Chapter("II", None, ["The index of his suspicions grew by the day.", "The end."]),
+    ]
+    body = [p for c in trim_matter(chapters) for p in c.paragraphs]
+    assert len(body) == 3
+
+
 def test_a_book_with_no_numbered_chapters_is_left_alone():
     chapters = [Chapter(None, None, ["Just prose, with no headings at all."])]
     assert trim_matter(chapters) == chapters
@@ -93,6 +120,22 @@ def test_chapters_pair_by_number_not_by_position():
     aligned, _ = align_published(french, english, None)
     first = french[0].paragraphs[0]
     assert "Westphalia" in aligned[hash_text(first)]
+
+
+def test_chapter_arguments_are_paired_as_titles():
+    """Each chapter's descriptive argument is set beside its counterpart, so both
+    editions open the chapter on the same line rather than a heading facing prose."""
+    french = [
+        Chapter("premier", "Comment Candide fut eleve.", ["Il y avait en Westphalie un garcon nomme Candide."]),
+        Chapter("second", "Ce que devint Candide.", ["Candide chasse marcha longtemps sans savoir ou aller."]),
+    ]
+    english = [
+        Chapter("I", "HOW CANDIDE WAS BROUGHT UP.", ["There lived in Westphalia a lad named Candide."]),
+        Chapter("II", "WHAT BECAME OF CANDIDE.", ["Candide, driven out, walked a long while."]),
+    ]
+    aligned, _ = align_published(french, english, None)
+    assert aligned[hash_text("Comment Candide fut eleve.")] == "HOW CANDIDE WAS BROUGHT UP."
+    assert aligned[hash_text("Ce que devint Candide.")] == "WHAT BECAME OF CANDIDE."
 
 
 def test_a_french_chapter_with_no_counterpart_is_left_blank():

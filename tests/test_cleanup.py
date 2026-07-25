@@ -90,10 +90,24 @@ def test_heading_and_title_may_share_a_block():
 
 
 def test_short_opening_paragraph_is_not_mistaken_for_a_title():
-    # A wrapped block is body text however short, because titles are never wrapped.
+    # The body's own opening — short sentences about as long as what follows —
+    # stays body, even wrapped, because a title is clearly shorter than its passage.
     chapters, _ = detect_chapters("CHAPITRE I.\n\nIl faisait\nnuit.\n\nPuis le jour.")
     assert chapters[0].title is None
     assert chapters[0].paragraphs == ["Il faisait nuit.", "Puis le jour."]
+
+
+def test_a_wrapped_argument_is_recognised_as_a_title():
+    # An edition like Candide sets a descriptive argument under each chapter
+    # number, which pypdf breaks across lines. It is short and clearly introduces
+    # a much longer passage, so it is the chapter's title, not its first paragraph.
+    argument = "Comment Candide fut eleve dans un\nbeau chateau, et comment il fut chasse."
+    body = ("Il y avait en Westphalie, dans le chateau du baron, un jeune garcon a qui la "
+            "nature avait donne les moeurs les plus douces, et le jugement le plus droit, "
+            "avec l'esprit le plus simple; c'est, je crois, pour cette raison qu'on le nommait.")
+    chapters, _ = detect_chapters(f"CHAPITRE I.\n\n{argument}\n\n{body}")
+    assert chapters[0].title == "Comment Candide fut eleve dans un beau chateau, et comment il fut chasse."
+    assert chapters[0].paragraphs == [body]
 
 
 def test_chapter_with_a_single_block_keeps_it_as_body():

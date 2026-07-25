@@ -12,7 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable
 
-from .align import AlignmentReport, align_published
+from .align import AlignmentReport, align_published, trim_matter
 from .cache import Cache
 from .cleanup import Chapter
 from .config import Config
@@ -56,6 +56,12 @@ def build_reader(
     check_usable(chapters, "The book")
     if published_chapters is not None:
         check_usable(published_chapters, "The published translation")
+
+    # The book is its body from here: the title page, table of contents and
+    # licence that bracket it are dropped, so nothing before chapter one is
+    # translated or rendered. This is the same trim the aligner applies, kept in
+    # step so what the reader sees is what was aligned.
+    chapters = [c for c in trim_matter(chapters) if c.paragraphs] or chapters
 
     run = translate_book(chapters, client, cache, cfg, _stage(on_progress, "translate"), target.name)
 
@@ -122,8 +128,11 @@ def build_positional(
     check_usable(chapters, "The original")
     check_usable(published_chapters, "The published translation")
     aligned, report = align_published(chapters, published_chapters, None)
+    # Render the body only — the same trim the aligner used — so the reader opens
+    # on chapter one instead of a title page set beside a blank column.
+    body = [c for c in trim_matter(chapters) if c.paragraphs] or chapters
     html = render_html(
-        title, chapters, aligned, published=None,
+        title, body, aligned, published=None,
         published_note=published_note(report), glosses=None, target=target, solo=True,
     )
     return html, report

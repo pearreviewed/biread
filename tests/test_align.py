@@ -1,9 +1,31 @@
 import pytest
 
-from biread.align import align_published
+from biread.align import _flow_anchored, align_published
 from biread.cleanup import Chapter
 from biread.errors import AlignmentError
 from biread.translate import hash_text
+
+
+def test_anchored_flow_pins_names_so_the_columns_do_not_drift():
+    # A published chapter arriving as one blob, several shared names in it: the
+    # French paragraph naming Pangloss must draw the English naming Pangloss, not
+    # a length-proportional slice that lands a sentence early.
+    french = [
+        "Candide vivait au château de Thunder-ten-tronckh fort paisiblement.",
+        "Pangloss enseignait la métaphysique au jeune Candide chaque matin.",
+        "Cunégonde était la fille unique du vieux baron de Thunder.",
+        "Le baron chassa Candide du château à grands coups de pied.",
+    ]
+    english = [
+        "Candide lived in the castle of Thunder-ten-Tronckh most peacefully. "
+        "Pangloss taught metaphysics to young Candide every morning. "
+        "Cunegonde was the only daughter of the old Baron of Thunder. "
+        "The Baron drove Candide from the castle with great kicks."
+    ]
+    out = _flow_anchored(french, english)
+    assert len(out) == 4 and all(out)
+    assert "Pangloss" in out[1]
+    assert "Cunegonde" in out[2]
 
 
 def chapter(number, paragraphs):

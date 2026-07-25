@@ -19,11 +19,10 @@ back to distributing proportionally, which is a rough approximation.
 """
 from __future__ import annotations
 
-import bisect
 import re
 from dataclasses import dataclass, field
 
-from .anchor import align_by_anchors
+from .anchor import MIN_ANCHORS, agreements, align_by_anchors, longest_run
 from .cleanup import Chapter
 from .errors import AlignmentError
 from .numbering import chapter_number
@@ -116,45 +115,133 @@ def _distribute(french: list[str], published: list[str]) -> list[str]:
     return out
 
 
+# One sentence ends and the next begins: closing punctuation, any quotes that
+# ride on it, then space. Good enough to chop a run of prose into pieces to share
+# out; it need not be linguistically perfect, only roughly even.
+_SENTENCE_SPLIT_RE = re.compile(r'(?<=[.!?…])["»”’\')\]]*\s+')
+
+
+def _sentences(text: str) -> list[str]:
+    parts = [s.strip() for s in _SENTENCE_SPLIT_RE.split(text) if s.strip()]
+    return parts or ([text.strip()] if text.strip() else [])
+
+
+def _flow(weights: list[int], units: list[str]) -> list[str]:
+    """Pour `units` into len(weights) groups, in order and contiguously, each
+    group sized to its weight, and none left empty while units remain to fill it.
+
+    This is what keeps the two columns from going lopsided: a French paragraph is
+    never handed the whole of a chapter while its neighbours sit blank. Each unit
+    joins the current group until that group has met its share of the total, with
+    one unit always held back for every later group so the tail is never starved.
+    """
+    n = len(weights)
+    if n == 0:
+        return []
+    if not units:
+        return [""] * n
+    total_w = sum(weights) or n
+    total_u = sum(len(u) or 1 for u in units) or len(units)
+    target = [w / total_w * total_u for w in weights]
+    groups: list[list[str]] = [[] for _ in range(n)]
+    here = 0
+    filled = 0.0
+    for seen, unit in enumerate(units):
+        remaining = len(units) - seen
+        # Hold one unit back for each group still ahead, so none ends up empty.
+        if groups[here] and remaining <= n - 1 - here:
+            here += 1
+            filled = 0.0
+        groups[here].append(unit)
+        filled += len(unit) or 1
+        while here < n - 1 and filled >= target[here] and remaining - 1 > n - 1 - here:
+            here += 1
+            filled = 0.0
+    return [" ".join(g) for g in groups]
+
+
 def _match_by_length(french: list[str], published: list[str]) -> list[str]:
-    """Distribute published paragraphs by length rather than by count.
+    """Set the published text beside the French by shape, so the two columns fill
+    together instead of one running blank beside a wall of the other.
 
     With no vocabulary or number to go on, the surest thing two editions of a
     passage still share is shape: a long paragraph translates long and a short
     one short. So a French paragraph holding a given fraction of its side's text
-    (measured in characters) draws the published paragraphs holding that same
-    fraction of theirs — a long paragraph pulls the long stretch of English, a
-    short one the short — where the count-proportional split ignores size and
-    can hand a two-line paragraph the same share as a two-page one.
+    (measured in characters) draws the published text holding that same fraction
+    of theirs.
 
-    Falls back to the count-proportional split when there is nothing to weigh by:
-    equal counts pair one-to-one, and fewer published than French is a merge,
-    whose text is shown across the paragraphs it was merged from.
+    A published side that arrived under-segmented — its paragraph breaks lost in
+    extraction, so a whole chapter comes through as one or two blobs — is broken
+    back into sentences first. Otherwise one blob would land whole on a single
+    French paragraph and leave every neighbour empty, which is exactly the
+    lopsided page a reader sees as "misaligned".
     """
     n, m = len(french), len(published)
     if n == 0:
         return []
     if m == 0:
         return [""] * n
-    if m <= n:
-        return _distribute(french, published)
+    units = _sentences(" ".join(published)) if m < n else list(published)
+    if len(units) <= n:
+        return _distribute(french, units)
+    return _flow([len(p) or 1 for p in french], units)
 
-    left_lengths = [len(p) or 1 for p in french]
-    total_left = sum(left_lengths)
-    bounds, running = [], 0
-    for length in left_lengths:
-        running += length
-        bounds.append(running / total_left)
 
-    total_right = sum(len(p) or 1 for p in published)
-    groups: list[list[str]] = [[] for _ in range(n)]
-    running = 0
-    for text in published:
-        weight = len(text) or 1
-        midpoint = (running + weight / 2) / total_right
-        running += weight
-        groups[min(bisect.bisect_left(bounds, midpoint), n - 1)].append(text)
-    return [" ".join(g) for g in groups]
+def _flow_spread(left: list[str], right: list[str]) -> list[str]:
+    return _flow([len(x) or 1 for x in left], right)
+
+
+def _flow_anchored(french: list[str], published: list[str]) -> list[str]:
+    """One published string per French paragraph, pinned on the names and numbers
+    the two editions share so neither column drifts ahead of the other.
+
+    A proportional split keeps the columns the same size but not the same place:
+    with nothing holding them together the published text slides a sentence or
+    two ahead of the French carrying the same name. So both sides are cut into
+    sentences and anchored on the rare tokens they share — a proper noun, a number
+    — which pins those sentences to each other; the sentences between two anchors
+    are shared out by length, so the columns stay level and no paragraph is left
+    blank. Each French paragraph's share is joined back beneath it.
+
+    Falls back to the plain length-proportional fill when the chapter offers too
+    few shared names to anchor on.
+    """
+    owners: list[int] = []
+    fr_sentences: list[str] = []
+    for index, paragraph in enumerate(french):
+        for sentence in _sentences(paragraph):
+            owners.append(index)
+            fr_sentences.append(sentence)
+    en_sentences = _sentences(" ".join(published))
+    if len(fr_sentences) < MIN_ANCHORS or not en_sentences:
+        return _match_by_length(french, published)
+
+    anchors = longest_run(agreements(fr_sentences, en_sentences))
+    if len(anchors) < MIN_ANCHORS:
+        return _match_by_length(french, published)
+
+    # Each anchor opens a fresh segment on both sides; the sentences within it are
+    # poured by length, so an anchored name keeps its two editions level.
+    assigned = [""] * len(fr_sentences)
+    fr_prev = en_prev = 0
+    for fr_at, en_at in list(anchors) + [(len(fr_sentences), len(en_sentences))]:
+        if fr_at > fr_prev:
+            assigned[fr_prev:fr_at] = _flow_spread(
+                fr_sentences[fr_prev:fr_at], en_sentences[en_prev:en_at]
+            )
+        fr_prev, en_prev = fr_at, en_at
+
+    buckets: list[list[str]] = [[] for _ in french]
+    for text, owner in zip(assigned, owners):
+        if text:
+            buckets[owner].append(text)
+    result = [" ".join(b) for b in buckets]
+    # A paragraph the anchors happen to leave empty still takes its proportional
+    # share, so the column never runs blank beside a full one.
+    if not all(result):
+        proportional = _match_by_length(french, published)
+        result = [got or share for got, share in zip(result, proportional)]
+    return result
 
 
 def _pivot(english: list[str], published: list[str]) -> tuple[list[str], int]:
@@ -275,22 +362,60 @@ def _strip_leading_matter(chapters: list[Chapter]) -> list[Chapter]:
     return result or chapters
 
 
+# The heading a scholarly edition sets over its back matter — a bibliography, a
+# run of endnotes, an index. Matched only as a paragraph that *is* the heading and
+# nothing else, so a chapter that merely mentions notes or an index in a sentence
+# is untouched.
+BACK_MATTER_HEADINGS = frozenset({
+    "bibliographie", "bibliography", "notes", "index", "appendix", "appendice",
+    "appendices", "glossaire", "glossary", "works cited", "œuvres citées",
+    "oeuvres citées", "table des matières", "abbreviations", "abréviations",
+    "chronologie", "chronology",
+})
+
+
+def _is_back_matter_heading(paragraph: str) -> bool:
+    return paragraph.strip().rstrip(".").lower() in BACK_MATTER_HEADINGS
+
+
+def _strip_trailing_matter(chapters: list[Chapter]) -> list[Chapter]:
+    """Cut a scholarly apparatus that trails the last chapter — a bibliography,
+    endnotes, an index — which an academic edition appends after the book ends and
+    the other edition has no counterpart for. It announces itself with a heading of
+    its own ("BIBLIOGRAPHIE"); everything from there to the end goes.
+
+    Only the back half of the book is examined, since apparatus follows the text
+    and never precedes its midpoint — so a chapter early on cannot be cut short.
+    """
+    for index in range(len(chapters) // 2, len(chapters)):
+        chapter = chapters[index]
+        for position, paragraph in enumerate(chapter.paragraphs):
+            if _is_back_matter_heading(paragraph):
+                kept = list(chapters[:index])
+                if position:
+                    kept.append(Chapter(chapter.number, chapter.title, chapter.paragraphs[:position]))
+                return kept or chapters
+    return chapters
+
+
 def trim_matter(chapters: list[Chapter]) -> list[Chapter]:
     """Drop what brackets a book without being the book: a title page, a table of
-    contents, a publisher's notice or a critic's introduction in front; a licence
-    or endnotes behind. These are exactly the sections cleanup could not number.
+    contents, a publisher's notice or a critic's introduction in front; a licence,
+    a bibliography or an index behind. These are exactly the sections cleanup
+    could not number.
 
     Leaving them in is what puts two editions permanently out of step — one
     edition's forty-page introduction would otherwise shift every paragraph after
-    it. Where chapters are numbered, everything outside the numbered run goes.
-    Where none are, the book is not left untouched but combed for the boilerplate
-    that opens a file — so it still starts on real text, or on a named front
-    section, rather than on "Produced by …".
+    it. Where chapters are numbered, everything outside the numbered run goes, and
+    any apparatus that trails inside the last chapter is cut too. Where none are,
+    the book is not left untouched but combed for the boilerplate that opens a
+    file — so it still starts on real text, or on a named front section, rather
+    than on "Produced by …".
     """
     numbered = [i for i, c in enumerate(chapters) if chapter_number(c.number) is not None]
     if not numbered:
         return _strip_leading_matter(chapters)
-    return chapters[numbered[0] : numbered[-1] + 1]
+    return _strip_trailing_matter(chapters[numbered[0] : numbered[-1] + 1])
 
 
 def _pair_by_number(french: list[Chapter], published: list[Chapter]):
@@ -354,6 +479,57 @@ def _by_anchor(
     return {hash_text(p): text for p, text in zip(fr_paragraphs, texts)}
 
 
+def _by_chapter_balanced(
+    french: list[Chapter], published: list[Chapter], report: AlignmentReport
+) -> dict[str, str]:
+    """The free path when both editions number their chapters: pair on the
+    number, then fill each chapter's published text across its French by shape so
+    the two columns stay full and advance together.
+
+    This is what a reader means by "aligned" without a model in play — not a
+    paragraph-perfect match, which two independently typeset editions cannot give,
+    but two pages that fill and turn together, drifting at most within one chapter
+    and never leaving one side blank against a wall of the other. A chapter the
+    published edition simply does not carry is left blank rather than guessed.
+    """
+    report.method = "anchored"
+    aligned: dict[str, str] = {}
+    for index, (fr, pub) in enumerate(_pair_by_number(french, published)):
+        if pub is None:
+            report.unmatched += len(fr.paragraphs)
+            report.notes.append(
+                f"{_label(fr, index)}: the published edition has no chapter of that "
+                f"number, so it is left blank rather than filled with a guess."
+            )
+            for paragraph in fr.paragraphs:
+                aligned[hash_text(paragraph)] = ""
+            continue
+        # The chapter's argument (its descriptive heading) is set beside its
+        # French counterpart, so both editions open the chapter on the same line
+        # instead of the French heading facing the English body.
+        if fr.title and pub.title:
+            aligned[hash_text(fr.title)] = pub.title
+        prose = [p for p in pub.paragraphs if not FOOTNOTE_RE.match(p)]
+        report.dropped += len(pub.paragraphs) - len(prose)
+        texts = _flow_anchored(fr.paragraphs, prose)
+        blank = sum(1 for t in texts if not t)
+        report.unmatched += blank
+        if len(fr.paragraphs) == len(prose) and not blank:
+            report.exact += 1
+        else:
+            report.grouped += 1
+            if len(prose) < len(fr.paragraphs):
+                report.notes.append(
+                    f"{_label(fr, index)}: the published edition arrived with its "
+                    f"paragraph breaks lost ({len(prose)} block(s) for "
+                    f"{len(fr.paragraphs)} French paragraph(s)), so its text is shared "
+                    f"out across the French by length."
+                )
+        for paragraph, text in zip(fr.paragraphs, texts):
+            aligned[hash_text(paragraph)] = text
+    return aligned
+
+
 def align_published(
     french: list[Chapter],
     published: list[Chapter],
@@ -390,10 +566,17 @@ def align_published(
     aligned: dict[str, str] = {}
 
     # With no generated translation to pivot through, the editions are matched on
-    # what survives translation: the names and numbers they share. That needs no
-    # headings, so it carries books whose chapters are unmarked, unnumbered, or
-    # written in a language this pipeline does not detect chapters in.
+    # what survives translation: the names and numbers they share.
     if not use_pivot:
+        # When both editions number their chapters, pair on the number and fill
+        # each chapter so the two columns stay balanced (`_by_chapter_balanced`).
+        # This is preferred over paragraph anchoring because anchoring pins a few
+        # paragraphs and leaves the rest to a spread that goes lopsided when one
+        # edition is under-segmented — the very failure that reads as "misaligned".
+        if by_number:
+            return _by_chapter_balanced(fr_bodies, pub_bodies, report), report
+        # No shared chapter numbers: anchor on names/numbers instead. That needs
+        # no headings, so it carries books whose chapters are unmarked or unnumbered.
         anchored = _by_anchor(fr_bodies, pub_bodies, report)
         if anchored is not None:
             return anchored, report
