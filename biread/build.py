@@ -21,7 +21,7 @@ from .gloss import GlossRun, gloss_book
 from .llm import LLMClient
 from .render import render_html
 from .targets import ENGLISH, Target
-from .translate import TranslationRun, translate_book
+from .translate import BatchFn, TranslationRun, translate_book
 
 #: (stage, done, total); stage is "translate" or "gloss".
 ProgressFn = Callable[[str, int, int], None]
@@ -50,6 +50,7 @@ def build_reader(
     gloss_cache: Cache | None = None,
     gloss_cfg: Config | None = None,
     on_progress: ProgressFn | None = None,
+    on_text: BatchFn | None = None,
 ) -> BuildResult:
     # Checked before a single call is paid for: a book that never broke into
     # paragraphs would otherwise be translated in vast blocks, at vast cost.
@@ -63,7 +64,9 @@ def build_reader(
     # step so what the reader sees is what was aligned.
     chapters = [c for c in trim_matter(chapters) if c.paragraphs] or chapters
 
-    run = translate_book(chapters, client, cache, cfg, _stage(on_progress, "translate"), target.name)
+    run = translate_book(
+        chapters, client, cache, cfg, _stage(on_progress, "translate"), target.name, on_text
+    )
 
     published = alignment = None
     note = ""

@@ -25,6 +25,11 @@ BATCH_MAX_CHARS = 6000  # keeps a batch of long paragraphs inside MAX_TOKENS
 MAX_TOKENS = 8192
 CHARS_PER_TOKEN = 4  # rough heuristic, estimates only — no tokenizer call
 
+#: Freshly translated (French, translation) pairs, one call per batch. What the
+#: builder's progress screen sets on the page as the prose arrives, instead of
+#: showing a bar and the finished book an hour later.
+BatchFn = Callable[[list[tuple[str, str]]], None]
+
 # Templated on the target language's name; `system_prompt("English")` is the
 # byte-for-byte prompt this shipped with. The source is always French.
 SYSTEM_PROMPT_TEMPLATE = """You are translating literary French prose into {target} for a bilingual \
@@ -263,6 +268,7 @@ def translate_book(
     cfg: Config,
     on_progress: Callable[[int, int], None] | None = None,
     target: str = "English",
+    on_batch: BatchFn | None = None,
 ) -> TranslationRun:
     """Translate every uncached paragraph. Returns hash -> translation for the
     whole book, previously-cached entries included.
@@ -289,6 +295,8 @@ def translate_book(
         run.batches.append(group)
         if on_progress:
             on_progress(len(translations), run.total)
+        if on_batch:
+            on_batch([(units[idx].text, parsed[n]) for n, idx in enumerate(group)])
 
         run.cost = cfg.estimate_cost(client.input_tokens, client.output_tokens)
         if run.cost is not None and run.cost >= cfg.max_cost_usd:

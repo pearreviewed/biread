@@ -81,6 +81,11 @@ class AlignmentReport:
         return self.total > 0 and self.coverage < MIN_COVERAGE
 
 
+def prose_only(paragraphs: list[str]) -> list[str]:
+    """The body, with the published edition's own notes left out."""
+    return [p for p in paragraphs if not FOOTNOTE_RE.match(p)]
+
+
 def tokenize(text: str) -> set[str]:
     return {w for w in TOKEN_RE.findall(text.lower()) if w not in STOPWORDS and len(w) > 2}
 
@@ -542,9 +547,7 @@ def _by_anchor(
 ) -> dict[str, str] | None:
     """Match two editions on the names and numbers they share, or None."""
     fr_paragraphs = [p for c in french for p in c.paragraphs]
-    pub_paragraphs = [
-        p for c in published for p in c.paragraphs if not FOOTNOTE_RE.match(p)
-    ]
+    pub_paragraphs = prose_only([p for c in published for p in c.paragraphs])
     texts = align_by_anchors(
         fr_paragraphs, pub_paragraphs, _match_by_length, _chapter_agreements(french, published)
     )
@@ -587,7 +590,7 @@ def _by_chapter_balanced(
         # instead of the French heading facing the English body.
         if fr.title and pub.title:
             aligned[hash_text(fr.title)] = pub.title
-        prose = [p for p in pub.paragraphs if not FOOTNOTE_RE.match(p)]
+        prose = prose_only(pub.paragraphs)
         report.dropped += len(pub.paragraphs) - len(prose)
         texts = _flow_anchored(fr.paragraphs, prose)
         blank = sum(1 for t in texts if not t)
@@ -661,6 +664,21 @@ def _embedding_pivot(
     return [" ".join(reversed(g)) for g in groups]
 
 
+def embed_match(french: list[str], published: list[str], embed: Embed) -> list[str]:
+    """One published string per French paragraph, matched by meaning.
+
+    The whole of the embedding path in one call: whole-book alignment runs it per
+    chapter, a sample page runs it over a window. Guarding the empty cases here
+    keeps `embed` from being called with nothing to embed, which some providers
+    refuse outright.
+    """
+    if not french:
+        return []
+    if not published:
+        return [""] * len(french)
+    return _embedding_pivot(french, published, embed(french), embed(published))
+
+
 def _by_embeddings(
     french: list[Chapter], published: list[Chapter], embed: Embed, report: AlignmentReport,
     progress: Callable[[int, int], None] | None = None,
@@ -690,9 +708,9 @@ def _by_embeddings(
             for paragraph in fr.paragraphs:
                 aligned[hash_text(paragraph)] = ""
             continue
-        prose = [p for p in pub.paragraphs if not FOOTNOTE_RE.match(p)]
+        prose = prose_only(pub.paragraphs)
         report.dropped += len(pub.paragraphs) - len(prose)
-        texts = _embedding_pivot(fr.paragraphs, prose, embed(fr.paragraphs), embed(prose)) if prose else [""] * len(fr.paragraphs)
+        texts = embed_match(fr.paragraphs, prose, embed)
         report.unmatched += sum(1 for t in texts if not t)
         report.exact += 1
         for paragraph, text in zip(fr.paragraphs, texts):
@@ -788,7 +806,7 @@ def align_published(
             continue
         if use_pivot:
             english = [translations.get(hash_text(p), "") for p in fr.paragraphs]
-            prose = [p for p in pub.paragraphs if not FOOTNOTE_RE.match(p)]
+            prose = prose_only(pub.paragraphs)
             report.dropped += len(pub.paragraphs) - len(prose)
             texts, dropped = _pivot(english, prose)
             report.dropped += dropped

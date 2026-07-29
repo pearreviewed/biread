@@ -16,26 +16,28 @@ from .html import html_to_text
 CONTAINER = "META-INF/container.xml"
 
 
+def opf_path(zf: zipfile.ZipFile) -> str:
+    """Where the package document lives, per the container manifest. Shared with
+    `meta.py`, which reads the same OPF for the book's title and author."""
+    rootfile = ET.fromstring(zf.read(CONTAINER)).find(".//{*}rootfile")
+    full_path = rootfile.get("full-path") if rootfile is not None else None
+    if not full_path:
+        raise ExtractError("EPUB container names no rootfile.")
+    return full_path
+
+
 class EpubExtractor(Extractor):
     suffixes = (".epub",)
 
     def extract(self, path: Path, on_page=None) -> str:
         try:
             with zipfile.ZipFile(path) as zf:
-                opf_path = self._opf_path(zf)
-                text = self._spine_text(zf, opf_path)
+                text = self._spine_text(zf, opf_path(zf))
         except (zipfile.BadZipFile, KeyError, ET.ParseError) as e:
             raise ExtractError(f"{path.name} is not a readable EPUB ({e}).") from e
         if not text.strip():
             raise ExtractError(f"no readable text found in {path.name}.")
         return text
-
-    def _opf_path(self, zf: zipfile.ZipFile) -> str:
-        rootfile = ET.fromstring(zf.read(CONTAINER)).find(".//{*}rootfile")
-        full_path = rootfile.get("full-path") if rootfile is not None else None
-        if not full_path:
-            raise ExtractError("EPUB container names no rootfile.")
-        return full_path
 
     def _spine_text(self, zf: zipfile.ZipFile, opf_path: str) -> str:
         opf = ET.fromstring(zf.read(opf_path))

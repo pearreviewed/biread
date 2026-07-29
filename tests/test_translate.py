@@ -200,3 +200,23 @@ def test_progress_is_reported(tmp_path, book, client, config):
         lambda done, total: seen.append((done, total)),
     )
     assert seen[-1] == (6, 6)
+
+
+def test_each_batch_hands_back_its_text_as_it_lands(tmp_path, book, client, config):
+    """What lets the builder fill the page with real prose while it works,
+    instead of showing a bar and the finished book at the end."""
+    batches = []
+    translate_book(
+        book, client, Cache.load(tmp_path / "c.json"), config(), on_batch=batches.append
+    )
+    pairs = [pair for group in batches for pair in group]
+    assert [french for french, _ in pairs] == [u.text for u in flatten(book)]
+    assert all(english == f"English rendering of {french}" for french, english in pairs)
+
+
+def test_no_text_is_handed_back_for_work_already_cached(tmp_path, book, config, make_client):
+    path = tmp_path / "c.json"
+    translate_book(book, make_client(), Cache.load(path), config())
+    batches = []
+    translate_book(book, make_client(), Cache.load(path), config(), on_batch=batches.append)
+    assert batches == []
