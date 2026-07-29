@@ -82,6 +82,21 @@ const BUILD = [
   "res.html",
 ].join("\n");
 
+// Align-only: no translation. Match a brought published edition to the French by
+// meaning, with an embedding model — BGE-M3 on a local Ollama (free) or a cloud
+// model (pennies). The published English becomes the single reading column.
+const ALIGN = [
+  "from biread.targets import get_target",
+  "orig_chapters = read_book(orig_path, 'read-orig')",
+  "pub_chapters = read_book(pub_path, 'read-pub')",
+  "target = get_target(lang_key)",
+  "from biread.build import build_aligned",
+  "from biread.llm.pyodide_embed import PyodideEmbedder",
+  "embedder = PyodideEmbedder(embed_model, api_key, base_url or 'https://openrouter.ai/api/v1')",
+  "html, _ = build_aligned(title=title, chapters=orig_chapters, published_chapters=pub_chapters, embed=embedder.embed, target=target)",
+  "html",
+].join("\n");
+
 self.onmessage = async (e) => {
   await ready;
   const m = e.data;
@@ -105,6 +120,7 @@ self.onmessage = async (e) => {
     pyodide.globals.set("base_url", m.baseUrl || "");
     pyodide.globals.set("price_in", m.priceIn || 0);
     pyodide.globals.set("price_out", m.priceOut || 0);
+    pyodide.globals.set("embed_model", m.embedModel || "bge-m3");
     // Live from here on: reading a PDF reports its pages during pricing and the
     // free build alike, not only while translating.
     pyodide.globals.set("js_progress", (s, d, t) => postMessage({ type: "progress", stage: s, done: d, total: t }));
@@ -113,6 +129,8 @@ self.onmessage = async (e) => {
       postMessage({ type: "estimate", data: JSON.parse(await pyodide.runPythonAsync(ESTIMATE)) });
     } else if (m.type === "build") {
       postMessage({ type: "done", html: await pyodide.runPythonAsync(BUILD) });
+    } else if (m.type === "align") {
+      postMessage({ type: "done", html: await pyodide.runPythonAsync(ALIGN) });
     }
   } catch (err) {
     postMessage({ type: "error", error: cleanError(err) });

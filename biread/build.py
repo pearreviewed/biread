@@ -12,7 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable
 
-from .align import AlignmentReport, align_published, trim_matter
+from .align import AlignmentReport, Embed, align_published, trim_matter
 from .cache import Cache
 from .cleanup import Chapter
 from .config import Config
@@ -130,6 +130,33 @@ def build_positional(
     aligned, report = align_published(chapters, published_chapters, None)
     # Render the body only — the same trim the aligner used — so the reader opens
     # on chapter one instead of a title page set beside a blank column.
+    body = [c for c in trim_matter(chapters) if c.paragraphs] or chapters
+    html = render_html(
+        title, body, aligned, published=None,
+        published_note=published_note(report), glosses=None, target=target, solo=True,
+    )
+    return html, report
+
+
+def build_aligned(
+    *,
+    title: str,
+    chapters: list[Chapter],
+    published_chapters: list[Chapter],
+    embed: Embed,
+    target: Target = ENGLISH,
+) -> tuple[str, AlignmentReport]:
+    """Set a brought published translation beside the French by *meaning*, using a
+    multilingual embedding model, with no translation of our own.
+
+    The cheap-or-free path: the embedding runs on a local Ollama (BGE-M3, free) or a
+    cloud model (pennies), and matches the two editions in a shared semantic space —
+    so the columns line up even in dialogue and prose that share no words, where the
+    surface heuristics could not. The published English is the single reading column.
+    """
+    check_usable(chapters, "The original")
+    check_usable(published_chapters, "The published translation")
+    aligned, report = align_published(chapters, published_chapters, embed=embed)
     body = [c for c in trim_matter(chapters) if c.paragraphs] or chapters
     html = render_html(
         title, body, aligned, published=None,

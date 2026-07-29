@@ -91,6 +91,15 @@
   .tier.selected b { color: var(--ink-bright); }
   .anymodel { width: 220px; max-width: 46vw; background: rgba(0,0,0,.18); border: 1px solid var(--gold); border-radius: 6px; color: var(--ink); padding: 3px 8px; font-size: 12px; font-family: inherit; }
   .privacy a, .key-copy a { color: #c8b891; text-decoration: underline; text-underline-offset: 2px; }
+  .provider-switch { display: flex; gap: 8px; margin: 4px 0 14px; }
+  .prov { display: flex; flex-direction: column; gap: 1px; padding: 9px 16px; border-radius: 9px; background: transparent; border: 1px solid var(--gold); color: var(--ink-soft); cursor: pointer; transition: background .15s ease, border-color .15s ease; }
+  .prov b { font-size: 14px; font-weight: 600; color: var(--ink); }
+  .prov i { font-style: normal; font-size: 11.5px; color: var(--muted); }
+  .prov.selected { background: var(--fill); border-color: #c8b891; }
+  .prov.selected b { color: var(--ink-bright); }
+  .setup { background: rgba(0,0,0,.28); border: 1px solid var(--gold); border-radius: 8px; padding: 11px 13px; margin: 2px 0 12px; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; line-height: 1.7; color: #c9d6a8; white-space: pre-wrap; overflow-x: auto; }
+  .local-models { display: flex; gap: 18px; flex-wrap: wrap; margin-bottom: 8px; }
+  .local-models label { font-size: 13px; color: var(--ink-soft); display: flex; align-items: center; gap: 7px; }
 
   .foot { display: flex; align-items: flex-end; justify-content: space-between; gap: 26px; margin-top: 14px; padding-top: 13px; border-top: 1px solid var(--gold); flex-wrap: wrap; }
   .opts { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; }
@@ -147,10 +156,27 @@
 
     <section class="keyblock" id="keyblock">
       <h2>The finest reading matches your books by meaning — so you bring the model.</h2>
-      <p class="key-copy">Two translations share <em>meaning</em>, not words, so lining them up well takes a model rather than a trick. You bring your own key: it stays in your browser, goes straight to OpenRouter, and never reaches us. The tool is free — you pay only the model, and you see the exact price for your whole book before anything runs.</p>
-      <input class="keyinput" type="password" id="key" placeholder="OpenRouter key — sk-or-…" autocomplete="off">
-      <label class="check"><input type="checkbox" id="remember"> Remember on this device</label>
-      <div class="privacy">No key yet? One key covers every model — <a href="https://openrouter.ai/keys" target="_blank" rel="noopener">openrouter.ai/keys</a>.</div>
+      <div class="provider-switch" id="provider-switch">
+        <button type="button" class="prov selected" data-prov="openrouter"><b>OpenRouter</b><i>any model · pay per book</i></button>
+        <button type="button" class="prov" data-prov="local"><b>Local · Ollama</b><i>free · runs on your machine</i></button>
+      </div>
+
+      <div id="or-block">
+        <p class="key-copy">Two translations share <em>meaning</em>, not words, so lining them up takes a model rather than a trick. You bring your own key: it stays in your browser, goes straight to OpenRouter, and never reaches us. The tool is free — you pay only the model, and you see the exact price before anything runs.</p>
+        <input class="keyinput" type="password" id="key" placeholder="OpenRouter key — sk-or-…" autocomplete="off">
+        <label class="check"><input type="checkbox" id="remember"> Remember on this device</label>
+        <div class="privacy">No key yet? One key covers every model — <a href="https://openrouter.ai/keys" target="_blank" rel="noopener">openrouter.ai/keys</a>.</div>
+      </div>
+
+      <div id="local-block" hidden>
+        <p class="key-copy">Runs on <em>your own machine</em> — free and private, nothing leaves your computer, no key. One-time setup: start Ollama so it lets this page in, then pull the models.</p>
+        <pre class="setup" id="setup-cmd"></pre>
+        <div class="local-models">
+          <label>Translate with <input id="local-chat" class="anymodel" value="gpt-oss:20b" spellcheck="false"></label>
+          <label>Align with <input id="local-embed" class="anymodel" value="bge-m3" spellcheck="false"></label>
+        </div>
+        <div class="privacy">Needs a capable computer (GPT-OSS 20B wants ~16&nbsp;GB RAM; BGE-M3 is tiny). <a href="https://ollama.com/download" target="_blank" rel="noopener">Get Ollama</a>.</div>
+      </div>
     </section>
 
     <section class="pub-block">
@@ -168,7 +194,7 @@
       <div class="opts-col">
         <div class="opts">
           <div class="lang"><span>Translate into</span><select id="lang"><option>English</option></select></div>
-          <div class="lang tiers-wrap"><span>Model</span>
+          <div class="lang tiers-wrap" id="tiers-wrap"><span>Model</span>
             <div class="tiers" id="tiers">
               <button type="button" class="tier" data-tier="cheapest"><b>Cheapest</b><i id="tm-cheapest">Qwen 3 8B</i><em id="tp-cheapest">…</em></button>
               <button type="button" class="tier selected" data-tier="balanced"><b>Balanced</b><i id="tm-balanced">DeepSeek</i><em id="tp-balanced">…</em></button>
@@ -177,7 +203,7 @@
           </div>
           <label class="check"><input type="checkbox" id="gloss" checked> Hover-to-translate</label>
         </div>
-        <div class="opt-hint">Or any OpenRouter model: <input id="anymodel" class="anymodel" placeholder="e.g. mistralai/mistral-small-3.2" spellcheck="false" autocomplete="off"> — its price shows before you build. Hover-to-translate is charged once at build, never per hover.</div>
+        <div class="opt-hint" id="or-hint">Or any OpenRouter model: <input id="anymodel" class="anymodel" placeholder="e.g. mistralai/mistral-small-3.2" spellcheck="false" autocomplete="off"> — its price shows before you build. Hover-to-translate is charged once at build, never per hover.</div>
       </div>
       <div class="build-wrap">
         <button class="build" id="build" disabled>Build my reader</button>
@@ -212,7 +238,7 @@
 
 <script>
 const $ = (id) => document.getElementById(id);
-let workerReady = false, builtHtml = null, builtName = "book", pending = null;
+let workerReady = false, builtHtml = null, builtName = "book", pending = null, provider = "openrouter";
 
 const worker = new Worker("worker.js");
 
@@ -230,7 +256,7 @@ function wireDrop(dropId, inputId, chosenId, onPick) {
   });
   input.addEventListener("change", onPick);
 }
-function refreshBuild() { $("build").disabled = !(workerReady && $("file").files[0] && $("key").value.trim()); }
+function refreshBuild() { $("build").disabled = !(workerReady && $("file").files[0] && (provider === "local" || $("key").value.trim())); }
 wireDrop("drop", "file", "chosen", () => { $("chosen").textContent = $("file").files[0]?.name || ""; refreshBuild(); });
 wireDrop("drop-pub", "file-pub", "chosen-pub", () => { $("chosen-pub").textContent = $("file-pub").files[0]?.name || ""; });
 $("key").addEventListener("input", refreshBuild);
@@ -277,6 +303,24 @@ $("anymodel").addEventListener("input", () => {
   for (const b of document.querySelectorAll(".tier")) b.classList.toggle("selected", !typed && b.dataset.tier === selectedTier);
 });
 
+// --- provider: OpenRouter (paid, live-priced) or a local Ollama (free) ---
+const LOCAL_BASE = "http://localhost:11434/v1";
+function setProvider(p) {
+  provider = p;
+  for (const b of document.querySelectorAll(".prov")) b.classList.toggle("selected", b.dataset.prov === p);
+  $("or-block").hidden = p !== "openrouter";
+  $("local-block").hidden = p !== "local";
+  $("tiers-wrap").hidden = p === "local";          // local names its own model
+  $("or-hint").hidden = p === "local";
+  if (p === "local") $("setup-cmd").textContent =
+    'OLLAMA_ORIGINS="' + location.origin + '" ollama serve\nollama pull gpt-oss:20b\nollama pull bge-m3';
+  refreshBuild();
+}
+for (const b of document.querySelectorAll(".prov")) b.addEventListener("click", () => setProvider(b.dataset.prov));
+// A key typed while remembered is restored; providers start on OpenRouter.
+try { const k = localStorage.getItem("or_key"); if (k) { $("key").value = k; $("remember").checked = true; } } catch (e) {}
+setProvider("openrouter");
+
 function fmtCost(c) {
   if (c == null) return "cost unknown";
   if (c < 0.01) return "under $0.01";
@@ -320,24 +364,44 @@ worker.onmessage = (e) => {
 };
 
 $("build").addEventListener("click", async () => {
-  const key = $("key").value.trim();
-  if (!workerReady || !$("file").files[0] || !key) return;
+  if ($("build").disabled) return;
   $("boot").textContent = "";
+  const local = provider === "local";
+  try { if (!local && $("remember").checked) localStorage.setItem("or_key", $("key").value.trim()); else localStorage.removeItem("or_key"); } catch (e) {}
   const title = stem($("file").files[0].name);
   builtName = title + " - bilingual reader.html";
-  const model = chosenModel();
-  const price = PRICES[model.id] || [0, 0];
-  pending = {
+  const base = {
     orig: await bytes($("file")), origName: $("file").files[0].name,
     pub: await bytes($("file-pub")), pubName: $("file-pub").files[0]?.name || null,
-    lang: $("lang").value, gloss: $("gloss").checked, title, key,
-    provider: "openrouter", baseUrl: OR_BASE,
-    model: model.id, modelName: model.label,
-    priceIn: price[0], priceOut: price[1],
+    lang: $("lang").value, title,
+    provider, baseUrl: local ? LOCAL_BASE : OR_BASE,
+    key: local ? "ollama" : $("key").value.trim(),
+    embedModel: local ? $("local-embed").value.trim() : "openai/text-embedding-3-small",
   };
-  screen("progress"); $("stage").textContent = "Pricing the run…"; $("bar").style.width = "5%";
-  const { key: _k, ...noKey } = pending;
-  worker.postMessage({ type: "estimate", ...noKey });
+
+  if (base.pub) {
+    // A published edition is here — align it by meaning (embeddings). Cheap or
+    // free, and no translation of our own, so it needs no cost gate.
+    screen("progress");
+    $("stage").textContent = local ? "Aligning on your machine…" : "Aligning by meaning…";
+    $("bar").style.width = "6%";
+    worker.postMessage({ type: "align", ...base });
+    return;
+  }
+
+  // Just the French — translate it with a chat model.
+  const model = local ? { id: $("local-chat").value.trim(), label: $("local-chat").value.trim() } : chosenModel();
+  const price = local ? [0, 0] : (PRICES[model.id] || [0, 0]);
+  pending = { ...base, gloss: $("gloss").checked, model: model.id, modelName: model.label, priceIn: price[0], priceOut: price[1] };
+  if (local) {
+    // Free — build straight away, no price to gate on.
+    screen("progress"); $("stage").textContent = "Translating on your machine…"; $("bar").style.width = "5%";
+    worker.postMessage({ type: "build", ...pending });
+  } else {
+    screen("progress"); $("stage").textContent = "Pricing the run…"; $("bar").style.width = "5%";
+    const { key: _k, ...noKey } = pending;
+    worker.postMessage({ type: "estimate", ...noKey });
+  }
 });
 
 $("confirm-go").addEventListener("click", () => {
