@@ -125,12 +125,19 @@ order; anything resembling nothing — front matter, footnotes — is left out, 
 a French paragraph with no counterpart is left blank rather than filled with a
 guess. The toggle in the header cross-fades between the two English columns.
 
-Alignment therefore runs after the translation and depends on it. There is no
-wordless shortcut: two translations of the same book share their *meaning*, not
-their vocabulary, so matching them without a model means matching on surface
-tokens, and that has a ceiling no amount of tuning raises. Where the two
-editions still refuse to line up, biread reports the coverage it got and warns
-that the published column is thin — it never fills the gap with a guess.
+On the command line this runs after the translation and depends on it — the
+pivot is what makes the match trustworthy. There is no wordless shortcut: two
+translations of the same book share their *meaning*, not their vocabulary, so
+matching them without a model means matching on surface tokens, and that has a
+ceiling no amount of tuning raises. Where the two editions still refuse to line
+up, biread reports the coverage it got and warns that the published column is
+thin — it never fills the gap with a guess.
+
+`align.py` also takes an embedding function instead, and then matches the two
+editions directly in a shared multilingual space — by meaning, with no
+translation of its own to pivot through. That is the path the
+[web builder](web/README.md) uses for a reader who brings both books, on a local
+model or a cloud one. The CLI does not expose it yet.
 
 ## How pages are laid out
 
