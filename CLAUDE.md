@@ -276,6 +276,21 @@ Recorded because the reasoning matters more than the outcome.
   punishes size asymmetry, but a translator splitting one long paragraph into a
   dozen dialogue lines makes the published fragment smaller *by construction*.
   Chapitre II was discarding 15 of 23 real paragraphs as unmatchable.
+- **Reusing the whole-book matcher for a sample page** was built, tested, shipped,
+  and wrong — caught on the first run against a real embedding model, which paired
+  a French paragraph with the opening line of the book. `_embedding_pivot` is
+  monotonic and many-to-one: it must place *every* published paragraph somewhere.
+  Over a whole chapter that is exactly right. Over a sample window running
+  twenty-five times the length of the page it hands the entire window out among
+  three paragraphs. `embed_nearest` matches each paragraph to the one counterpart
+  that stands clearly above the rest, or to nothing.
+  Two lessons, and the second is the expensive one: a threshold is judged against
+  the window's own median rather than an absolute cosine, because each embedding
+  model scores on its own scale and a number tuned to one would quietly blank every
+  page on another. And **every test passed through this bug**, because they all
+  aligned three paragraphs against three — the one regime where the old code is
+  fine. A fake embedder proves the wiring, not the matching; the fixture has to
+  have the shape of the real problem.
 - **The reflowable EPUB with tap-to-reveal glosses** was built, shipped, and
   reverted. Two faults, seen in Apple Books: glossing every phrase makes every
   phrase a footnote link, which Apple Books renders in hyperlink **blue** — the
