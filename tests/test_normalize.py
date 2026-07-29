@@ -46,3 +46,40 @@ def test_a_clean_text_is_returned_unchanged_with_no_repairs():
     text, removed = repair(raw)
     assert text == raw
     assert removed == []
+
+
+# ---- paragraphs a PDF ran together ----
+
+FUSED = "\n".join([
+    "At length they descried the coast of France.",
+    '"Were you ever in France, Mr. Martin?" said Candide.',
+    '"Yes," said Martin, "I have been in several provinces. In some one-half of the people are fools, in others they are too cunning; in some they are weak and',
+    "simple, in others they affect to be witty.",
+])
+
+
+def test_a_short_line_that_ends_a_sentence_ends_its_paragraph():
+    text, removed = repair(FUSED, from_pdf=True)
+    assert text.split("\n\n")[0] == "At length they descried the coast of France."
+    assert any(r.kind == "Paragraph break restored" for r in removed)
+
+
+def test_a_full_line_carries_on_into_the_next():
+    # The third line runs the full measure, so it did not stop because its
+    # paragraph ended — it stopped because the line did.
+    text, _ = repair(FUSED, from_pdf=True)
+    assert "they are weak and simple" in " ".join(text.split())
+
+
+def test_a_format_that_can_mark_its_own_paragraphs_is_left_alone():
+    # The same text from a .txt or EPUB is saying what it means by omitting the
+    # blank lines, and guessing over it would be a liberty.
+    assert repair(FUSED, from_pdf=False)[0] == FUSED
+
+
+def test_nothing_is_split_where_the_next_line_continues_the_sentence():
+    wrapped = "\n".join([
+        "Il ne fut que médiocrement affligé d'être banni d'une cour qui",
+        "n'était remplie que de tracasseries et de petites intrigues.",
+    ])
+    assert repair(wrapped, from_pdf=True)[0] == wrapped

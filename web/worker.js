@@ -20,7 +20,7 @@ const SETUP = [
   "    if path and path not in _BOOKS:",
   "        ext = get_extractor(Path(path))",
   "        raw = ext.extract(Path(path), on_page=lambda d, t: js_progress(stage, d, t))",
-  "        _BOOKS[path] = clean(raw)[0]",
+  "        _BOOKS[path] = clean(raw, from_pdf=Path(path).suffix.lower() == '.pdf')[0]",
   "    return _BOOKS.get(path)",
 ].join("\n");
 

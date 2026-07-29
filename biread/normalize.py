@@ -78,8 +78,61 @@ def _dehyphenate(lines: list[str]) -> tuple[list[str], int]:
     return out, healed
 
 
-def repair(raw: str) -> tuple[str, list[Removal]]:
-    """Raw extractor text -> (repaired text, what was repaired)."""
+#: How far below the page's measure a line must fall to have ended its paragraph
+#: rather than merely run out of room. Judged against the 90th-percentile line
+#: length, which is the measure the page was set to.
+SHORT_LINE = 0.8
+
+SENTENCE_END_RE = re.compile(r"[.!?…][\"”»’']?$")
+SENTENCE_START_RE = re.compile(r"[\"“«‘(]?[A-ZÀ-Þ]")
+
+
+def _measure(lines: list[str]) -> int:
+    lengths = sorted(len(line.strip()) for line in lines if line.strip())
+    return lengths[int(len(lengths) * 0.9)] if lengths else 0
+
+
+def _unfuse_paragraphs(lines: list[str]) -> tuple[list[str], int]:
+    """Put back the blank lines a PDF never had.
+
+    A page is set to a measure — one fixed column width — so a line stopping well
+    short of it stopped because its paragraph ended, not because it ran out of
+    room. Where such a line also closes a sentence and the next one opens a
+    sentence, they belong to different paragraphs, and a blank line goes between.
+
+    Without this, a run of dialogue arrives as a single block: Candide's published
+    edition came out as 120 paragraphs, one of them four pages long, against the
+    French's 630 — and nothing can be aligned against that.
+
+    PDFs only. A text or EPUB file that omits blank lines between paragraphs is
+    saying something about itself; a PDF has no way to say it either way, which is
+    what makes the guess safe here and presumptuous anywhere else.
+    """
+    measure = _measure(lines)
+    if not measure:
+        return lines, 0
+    out: list[str] = []
+    split = 0
+    for i, line in enumerate(lines):
+        out.append(line)
+        text = line.strip()
+        following = lines[i + 1].strip() if i + 1 < len(lines) else ""
+        if not text or not following:
+            continue
+        if (len(text) < measure * SHORT_LINE
+                and SENTENCE_END_RE.search(text)
+                and SENTENCE_START_RE.match(following)):
+            out.append("")
+            split += 1
+    return out, split
+
+
+def repair(raw: str, from_pdf: bool = False) -> tuple[str, list[Removal]]:
+    """Raw extractor text -> (repaired text, what was repaired).
+
+    `from_pdf` turns on the repairs that are only safe where the format itself
+    lost the information — see `_unfuse_paragraphs`.
+    """
     removed: list[Removal] = []
 
     first = PAGE_MARKER_RE.search(raw)
@@ -95,5 +148,12 @@ def repair(raw: str) -> tuple[str, list[Removal]]:
     lines, healed = _dehyphenate(lines)
     if healed:
         removed.append(Removal("Line-broken word rejoined", f"{healed} hyphenated word(s) made whole"))
+
+    if from_pdf:
+        lines, split = _unfuse_paragraphs(lines)
+        if split:
+            removed.append(Removal(
+                "Paragraph break restored", f"{split} run-together paragraph(s) separated"
+            ))
 
     return "\n".join(lines), removed

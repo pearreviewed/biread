@@ -113,7 +113,7 @@ def truncate(text: str, limit: int) -> str:
 def load_book(path: Path) -> tuple[list[Chapter], list[Removal]]:
     if not path.exists():
         raise BireadError(f"input file not found: {path}")
-    return clean(get_extractor(path).extract(path))
+    return clean(get_extractor(path).extract(path), from_pdf=path.suffix.lower() == ".pdf")
 
 
 def report_removals(removals: list[Removal]) -> None:

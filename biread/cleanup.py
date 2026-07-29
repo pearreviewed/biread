@@ -331,11 +331,15 @@ def detect_chapters(text: str) -> tuple[list[Chapter], list[Removal]]:
     return chapters, removed
 
 
-def clean(raw: str) -> tuple[list[Chapter], list[Removal]]:
-    """Raw text -> (chapters, everything that was removed)."""
+def clean(raw: str, from_pdf: bool = False) -> tuple[list[Chapter], list[Removal]]:
+    """Raw text -> (chapters, everything that was removed).
+
+    `from_pdf` admits the repairs that only a PDF needs, and that would be a
+    liberty taken with any format able to mark its own paragraphs.
+    """
     from .normalize import repair
 
-    text, repaired = repair(raw)
+    text, repaired = repair(raw, from_pdf)
     text, removed = strip_boilerplate(text)
     chapters, more = detect_chapters(text)
     return chapters, repaired + removed + more

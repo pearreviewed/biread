@@ -72,6 +72,22 @@ The goal: a user drops in *their own* published edition — any PDF, EPUB, TXT,
 DOCX, HTML — and it lands beside the French correctly, or fails **loudly** with a
 reason. Today it can fail **silently**.
 
+> [!NOTE]
+> **Candide now loads clean on both sides.** The diagnosis below is kept because
+> the reasoning still governs, but two of its findings are fixed and the account
+> of the damage has moved twice. Chapter detection was repaired first (all 30
+> found on both sides, `normalize.py`). The fault that remained was **paragraph
+> segmentation**: the published PDF came apart into 120 lumps against the
+> French's 630, one of them four pages long, because that PDF does not put a
+> blank line between every paragraph and `_blocks` fused whole runs of dialogue.
+> `normalize._unfuse_paragraphs` restores the breaks — a line stopping well short
+> of the page's measure, closing a sentence, followed by one opening a sentence,
+> ended its paragraph. Now 632 against 713, both opening on Candide's real first
+> line. **Gated to PDFs**, because a text or EPUB file that omits blank lines is
+> saying something about itself and a PDF cannot; that gate is what keeps the
+> verified Micromégas corpus untouched, which three ungated versions of the rule
+> did not.
+
 **The failure that prompted this (Candide, Gutenberg PDF).** The built reader
 shipped with `publishedAvailable: false`, no published column at all, and a note
 claiming the translation was "placed beside the French by position" — when in

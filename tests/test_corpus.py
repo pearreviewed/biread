@@ -24,14 +24,14 @@ pytestmark = pytest.mark.skipif(not CANDIDE.exists(), reason="Candide corpus PDF
 @pytest.fixture(scope="module")
 def candide_chapters():
     raw = PdfExtractor().extract(CANDIDE)
-    chapters, removed = clean(raw)
+    chapters, removed = clean(raw, from_pdf=True)
     return chapters, removed
 
 
 @pytest.fixture(scope="module")
 def candide_french():
     raw = PdfExtractor().extract(CANDIDE_FR)
-    chapters, removed = clean(raw)
+    chapters, removed = clean(raw, from_pdf=True)
     return chapters, removed
 
 
@@ -118,3 +118,40 @@ class TestFrenchCandide:
         assert "" not in aligned.values()
         repeats = Counter(t for t in aligned.values() if t)
         assert max(repeats.values()) <= 3
+
+
+# ---- paragraphs, which is where the damage moved once chapters were found ----
+
+def test_the_published_edition_comes_apart_into_paragraphs(candide_chapters):
+    """It used to arrive as 120 lumps, one of them four pages long, because this
+    PDF does not put a blank line between every paragraph."""
+    chapters, _ = candide_chapters
+    paragraphs = [p for c in chapters for p in c.paragraphs]
+    assert len(paragraphs) > 600
+    # Four pages of prose is not a paragraph; it is several with the seams lost.
+    assert max(len(p) for p in paragraphs) < 4000
+
+
+def test_the_two_editions_are_of_comparable_scale(candide_chapters, candide_french):
+    """Alignment matches paragraph to paragraph, so one side arriving in lumps
+    five times the size of the other is fatal however good the matcher is."""
+    published = [p for c in candide_chapters[0] for p in c.paragraphs]
+    french = [p for c in candide_french[0] for p in c.paragraphs]
+    assert 0.5 < len(french) / len(published) < 2.0
+
+
+def test_both_editions_open_on_the_same_first_line(candide_chapters, candide_french):
+    from biread.align import trim_matter
+
+    def opening(chapters):
+        body = [c for c in trim_matter(chapters) if c.paragraphs] or chapters
+        return body[0].paragraphs[0]
+
+    # Not the licence, not the transcriber's note, not the title page.
+    assert "Vestphalie" in opening(candide_french[0])
+    assert "Westphalia" in opening(candide_chapters[0])
+
+
+def test_the_repair_is_reported_not_silent(candide_chapters):
+    _, removed = candide_chapters
+    assert any(r.kind == "Paragraph break restored" for r in removed)
