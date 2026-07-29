@@ -341,10 +341,6 @@ Recorded because the reasoning matters more than the outcome.
   are pennies — but it is under-promising, which is the wrong direction to be
   wrong in, and it will matter on a long book. `GlossRun.rescued` already counts
   the retries, so the signal to fold in is there when it is worth doing.
-- **The builder has no automated browser tests.** The reader has 54; the builder
-  has none, because every path through it boots Pyodide from a CDN and the suite
-  is offline by design. It is driven by hand with Playwright against
-  `web/dist` instead, which is not a regression net.
 - **An embedding run is priced only when OpenRouter lists the model.** The align
   route's cost gate shows a dollar figure when the rate is known and an honest
   token count when it is not, rather than a plausible cent.
@@ -390,10 +386,20 @@ selector must be scoped to `#stage-wrap`.
 ## Tests
 
 ```sh
-pip install -e ".[dev]" && pytest              # ~230 Python tests, no network
+pip install -e ".[dev]" && pytest              # ~355 Python tests, no network
 pip install -e ".[browser]" && playwright install chromium
-pytest tests/test_reader_js.py                 # 54 browser tests
+pytest tests/test_reader_js.py                 # 54 browser tests, the reader
+pytest tests/test_builder_js.py                # 28 browser tests, the builder
 ```
+
+The builder's tests serve `web/builder.html` beside `tests/builder_worker_stub.js`,
+which answers the worker protocol with canned replies. The page reaches its engine
+by a relative `new Worker("worker.js")`, so swapping it needs **no seam in the
+page** — what runs is the shipped builder, unmodified, and the suite stays offline
+and fast (14s) instead of booting Pyodide from a CDN. A test steers the stub by
+what it puts *inside* the uploaded file: text beginning `SCENARIO:` followed by
+JSON overrides any reply, so error paths and odd metadata are reachable without a
+control the reader could ever meet.
 
 The EPUB and PDF export tests also need `[browser]` — the exporters paginate and
 print in headless Chromium — and skip themselves without it.
