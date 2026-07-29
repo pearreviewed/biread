@@ -161,3 +161,22 @@ def test_sample_align_refuses_an_unusable_published_edition():
     blob = [Chapter("I", None, ["x" * 20_000])]
     with pytest.raises(ExtractError, match="published translation"):
         sample_align(french, blob, embed)
+
+
+def test_a_sample_page_takes_its_matches_not_the_whole_window():
+    """The window runs many times the length of the page, and a matcher that must
+    place every published paragraph somewhere hands the whole window out among
+    three. Each paragraph takes the one counterpart that answers to it."""
+    filler = [f"The horse number {i} runs." for i in range(15)]
+    french = [chapter("I", ["Le chat dort.", "Le chien court.", "L'oiseau vole."])]
+    published = [chapter("I", filler + ["The cat sleeps.", "The dog runs.", "The bird flies."] + filler)]
+    page = sample_align(french, published, embed, window=40)
+    assert page.target == ["The cat sleeps.", "The dog runs.", "The bird flies."]
+
+
+def test_a_sample_page_stays_blank_rather_than_guess():
+    # Nothing in the window answers to the French: a wrong pairing shown as a
+    # sample is worse than an honest gap, because it is what the reader judges on.
+    french = [chapter("I", ["Le chat dort."])]
+    published = [chapter("I", [f"The horse number {i} runs." for i in range(20)])]
+    assert sample_align(french, published, embed).target == [""]

@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from statistics import median
 from typing import Callable
 
 from .anchor import MIN_ANCHORS, agreements, align_by_anchors, longest_run
@@ -618,6 +619,11 @@ def _by_chapter_balanced(
 Embed = Callable[[list[str]], list[list[float]]]
 
 
+def _unit(v: list[float]) -> list[float]:
+    scale = sum(x * x for x in v) ** 0.5 or 1.0
+    return [x / scale for x in v]
+
+
 def _embedding_pivot(
     french: list[str], published: list[str],
     fr_vecs: list[list[float]], pub_vecs: list[list[float]],
@@ -636,12 +642,8 @@ def _embedding_pivot(
     if not m:
         return [""] * n
 
-    def unit(v: list[float]) -> list[float]:
-        scale = sum(x * x for x in v) ** 0.5 or 1.0
-        return [x / scale for x in v]
-
-    fr = [unit(v) for v in fr_vecs]
-    pub = [unit(v) for v in pub_vecs]
+    fr = [_unit(v) for v in fr_vecs]
+    pub = [_unit(v) for v in pub_vecs]
 
     NEG = float("-inf")
     best = [[NEG] * (n + 1) for _ in range(m + 1)]
@@ -667,16 +669,57 @@ def _embedding_pivot(
 def embed_match(french: list[str], published: list[str], embed: Embed) -> list[str]:
     """One published string per French paragraph, matched by meaning.
 
-    The whole of the embedding path in one call: whole-book alignment runs it per
-    chapter, a sample page runs it over a window. Guarding the empty cases here
-    keeps `embed` from being called with nothing to embed, which some providers
-    refuse outright.
+    Guarding the empty cases here keeps `embed` from being called with nothing to
+    embed, which some providers refuse outright.
     """
     if not french:
         return []
     if not published:
         return [""] * len(french)
     return _embedding_pivot(french, published, embed(french), embed(published))
+
+
+#: How far a paragraph's best match must stand above the window's typical score
+#: before it counts as the same passage rather than merely more prose. Judged
+#: against the window's own median, not an absolute cosine, because each embedding
+#: model scores on its own scale and a number tuned to one would quietly blank
+#: every page on another. Measured on Micromégas against text-embedding-3-large:
+#: true pairs stand .43–.56 above the median, wrong ones .28–.31.
+NEAREST_MARGIN = 0.38
+
+
+def embed_nearest(
+    french: list[str], published: list[str], embed: Embed, margin: float = NEAREST_MARGIN
+) -> list[str]:
+    """The published paragraph nearest each French one, or nothing where none stands out.
+
+    For a window rather than a whole book. `_embedding_pivot` must place *every*
+    published paragraph somewhere, which is right when the two lists cover the same
+    span and badly wrong when the window runs twenty times the length of the page —
+    it hands the whole window out among three paragraphs instead of finding the
+    three that answer to them. Here each French paragraph takes the one match that
+    rises clearly above the rest, or none; and matches only move forward, because
+    two editions run in the same order.
+    """
+    if not french:
+        return []
+    if not published:
+        return [""] * len(french)
+    fr = [_unit(v) for v in embed(french)]
+    pub = [_unit(v) for v in embed(published)]
+
+    out: list[str] = []
+    start = 0
+    for vec in fr:
+        scores = [sum(a * b for a, b in zip(vec, p)) for p in pub]
+        typical = median(scores)
+        at = max(range(start, len(scores)), key=scores.__getitem__, default=None)
+        if at is None or scores[at] - typical < margin:
+            out.append("")
+            continue
+        out.append(published[at])
+        start = at + 1
+    return out
 
 
 def _by_embeddings(

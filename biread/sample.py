@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .align import Embed, embed_match, prose_only, trim_matter
+from .align import Embed, embed_nearest, prose_only, trim_matter
 from .build import check_usable
 from .cache import Cache
 from .cleanup import Chapter
@@ -85,7 +85,7 @@ def sample_align(
         index=index,
         total=total,
         source=source,
-        target=embed_match(source, _window(published, index, total, window), embed),
+        target=embed_nearest(source, _window(published, index, total, window), embed),
         cost=None,
     )
 
