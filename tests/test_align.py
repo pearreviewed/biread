@@ -1,6 +1,6 @@
 import pytest
 
-from biread.align import _flow_anchored, align_published
+from biread.align import _flow_anchored, _shape_spread, align_published
 from biread.anchor import agreements
 from biread.cleanup import Chapter
 from biread.errors import AlignmentError
@@ -15,6 +15,23 @@ def test_spelled_numbers_read_to_the_same_token_across_languages():
     assert "num350" in number_tokens("three hundred and fifty pounds")
     assert "num350" in number_tokens("trois cent cinquante livres")
     assert "num80" in number_tokens("quatre-vingts")  # four twenties, not four then twenty
+
+
+def test_length_fill_pairs_dialogue_and_merges_without_loss():
+    # A run of terse dialogue with nothing to anchor on: the French sets each turn
+    # on its own line, the English fuses two. Length alignment pairs short with
+    # short, lets two lines meet one, and loses no text — where a proportional
+    # pour would slide the answers a line out of step.
+    left = ["—Oui.", "—Je le veux bien absolument.", "—Tout de suite, dit-il.", "Il sourit."]
+    right = ["Yes.", "I should like nothing better.", "At once, said he.", "He smiled."]
+    out = _shape_spread(left, right)
+    assert len(out) == 4
+    assert out[0] == "Yes."                       # short pairs with short, not a slice
+    assert "nothing better" in out[1]             # long pairs with long
+    assert out[-1] == "He smiled."                # the tail stays put
+    joined = " ".join(out)
+    assert "At once, said he." in joined          # nothing dropped
+    assert joined.count("He smiled.") == 1        # nothing duplicated
 
 
 def test_a_spelled_number_anchors_where_names_and_cognates_cannot():

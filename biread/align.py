@@ -191,17 +191,76 @@ def _flow_spread(left: list[str], right: list[str]) -> list[str]:
     return _flow([len(x) or 1 for x in left], right)
 
 
-def _shape_spread(left: list[str], right: list[str]) -> list[str]:
-    """Fill a segment between two anchors, keeping the sentences' shape.
+# Gale & Church (1993): a sentence's translation runs about `ratio` times its
+# length, and the cost of a proposed pairing is how far the lengths stray from
+# that. 6.8 is their variance constant. The step set lets a sentence pair one to
+# one, split into two, merge from two, or (rarely) drop or appear — enough to
+# follow a translator who breaks one line of dialogue into two or fuses two.
+_GALE_CHURCH_STEPS = ((1, 1, 0.0), (1, 2, 1.0), (2, 1, 1.0), (2, 2, 2.2), (1, 0, 3.0), (0, 1, 3.0))
 
-    When the segment holds the same number of sentences on both sides — the usual
-    case between two tight anchors — they are paired one to one, which keeps a long
-    sentence beside a long one instead of slicing it by character count and letting
-    a clause slip into the neighbour. Otherwise the text is poured by length.
+
+def _shape_spread(left: list[str], right: list[str]) -> list[str]:
+    """Fill a segment between two anchors by pairing sentences on length.
+
+    A proportional pour keeps a segment the right size but slips where the two
+    sides split their sentences differently — a run of terse dialogue, where the
+    French sets each "—Oui." on its own line and the English fuses two into
+    "Yes, I should like nothing better," has no name or number to pin it, so it
+    drifts a line. Aligning by length instead (Gale & Church) pairs a short line
+    with a short one and lets two lines meet one, which is exactly that case.
     """
-    if len(left) == len(right):
-        return list(right)
-    return _flow([len(x) or 1 for x in left], right)
+    n, m = len(left), len(right)
+    if n == 0:
+        return []
+    if m == 0:
+        return [""] * n
+    left_len = [len(s) or 1 for s in left]
+    right_len = [len(s) or 1 for s in right]
+    ratio = sum(right_len) / sum(left_len)
+
+    def cost(li: int, lj: int) -> float:
+        mean = li * ratio
+        return (lj - mean) ** 2 / (mean * 6.8 or 1)
+
+    inf = float("inf")
+    best = [[inf] * (m + 1) for _ in range(n + 1)]
+    step = [[None] * (m + 1) for _ in range(n + 1)]
+    best[0][0] = 0.0
+    for i in range(n + 1):
+        for j in range(m + 1):
+            if best[i][j] == inf:
+                continue
+            for di, dj, penalty in _GALE_CHURCH_STEPS:
+                if i + di > n or j + dj > m:
+                    continue
+                total = best[i][j] + cost(sum(left_len[i:i + di]) or 1, sum(right_len[j:j + dj]) or 1) + penalty
+                if total < best[i + di][j + dj]:
+                    best[i + di][j + dj] = total
+                    step[i + di][j + dj] = (di, dj)
+
+    beads: list[tuple[int, int, int, int]] = []
+    i, j = n, m
+    while (i, j) != (0, 0):
+        di, dj = step[i][j]
+        beads.append((i - di, i, j - dj, j))
+        i, j = i - di, j - dj
+    beads.reverse()
+
+    out = [""] * n
+    pending = ""  # a right sentence matched to no left one waits for the next bead
+    for left_from, left_to, right_from, right_to in beads:
+        text = " ".join(right[right_from:right_to])
+        if left_from == left_to:
+            pending = f"{pending} {text}".strip()
+            continue
+        out[left_from] = f"{pending} {text}".strip()
+        pending = ""
+    if pending:
+        for k in range(n - 1, -1, -1):
+            if out[k] or k == 0:
+                out[k] = f"{out[k]} {pending}".strip()
+                break
+    return out
 
 
 def _flow_anchored(french: list[str], published: list[str]) -> list[str]:
