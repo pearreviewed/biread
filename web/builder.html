@@ -73,6 +73,24 @@
   .free .drop { flex: none; min-height: 92px; padding: 14px 20px; display: flex; flex-direction: column; justify-content: center; margin-left: -21px; margin-top: 8px; }
   .free .drop .big { font-size: 14px; font-weight: 500; color: var(--ink-soft); }
   .pub-hint { font-size: 12.5px; line-height: 1.5; color: var(--muted); margin: 10px 0 0; text-wrap: pretty; }
+  .keyblock { margin-top: 22px; }
+  .keyblock h2 { font-size: 17.5px; font-weight: 600; margin: 0 0 6px; color: var(--ink-bright); text-wrap: balance; }
+  .key-copy { font-size: 13.5px; line-height: 1.6; color: var(--ink); margin: 0 0 13px; text-wrap: pretty; }
+  .key-copy em { font-style: italic; color: var(--ink-bright); }
+  .pub-block { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--gold); }
+  .pub-head { font-size: 15.5px; font-weight: 600; color: var(--ink-bright); }
+  .pub-head .opt { font-size: 12px; font-weight: 400; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; margin-left: 4px; }
+  .pub-sub { font-size: 13.5px; color: var(--ink-soft); margin: 4px 0 10px; text-wrap: pretty; }
+  .tiers-wrap { align-items: flex-start; }
+  .tiers { display: flex; gap: 6px; }
+  .tier { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; padding: 6px 12px; border-radius: 8px; background: transparent; border: 1px solid var(--gold); color: var(--ink-soft); cursor: pointer; transition: background .15s ease, border-color .15s ease; }
+  .tier b { font-size: 12.5px; font-weight: 600; color: var(--ink); }
+  .tier i { font-style: normal; font-size: 10.5px; color: var(--muted); }
+  .tier em { font-style: normal; font-size: 10.5px; color: #b9c99a; font-variant-numeric: tabular-nums; }
+  .tier.selected { background: var(--fill); border-color: #c8b891; }
+  .tier.selected b { color: var(--ink-bright); }
+  .anymodel { width: 220px; max-width: 46vw; background: rgba(0,0,0,.18); border: 1px solid var(--gold); border-radius: 6px; color: var(--ink); padding: 3px 8px; font-size: 12px; font-family: inherit; }
+  .privacy a, .key-copy a { color: #c8b891; text-decoration: underline; text-underline-offset: 2px; }
 
   .foot { display: flex; align-items: flex-end; justify-content: space-between; gap: 26px; margin-top: 14px; padding-top: 13px; border-top: 1px solid var(--gold); flex-wrap: wrap; }
   .opts { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; }
@@ -127,44 +145,39 @@
       <input type="file" id="file" accept=".txt,.epub,.pdf,.html,.htm,.docx" hidden>
     </div>
 
-    <div class="paths">
-      <section class="path keyblock">
-        <h2>Add your AI key to translate anything.</h2>
-        <ul class="benefits">
-          <li>the whole book, translated to stay as close to the original as possible while still sounding natural</li>
-          <li>hover any phrase in the French for its meaning in context, right where you are</li>
-        </ul>
-        <input class="keyinput" type="password" id="key" placeholder="sk-ant-…  (optional)" autocomplete="off">
-        <div><label class="check"><input type="checkbox" id="remember"> Remember on this device</label></div>
-        <div class="privacy">Your key stays on your device – we never see it, and you'll see the cost before anything runs.</div>
-      </section>
+    <section class="keyblock" id="keyblock">
+      <h2>The finest reading matches your books by meaning — so you bring the model.</h2>
+      <p class="key-copy">Two translations share <em>meaning</em>, not words, so lining them up well takes a model rather than a trick. You bring your own key: it stays in your browser, goes straight to OpenRouter, and never reaches us. The tool is free — you pay only the model, and you see the exact price for your whole book before anything runs.</p>
+      <input class="keyinput" type="password" id="key" placeholder="OpenRouter key — sk-or-…" autocomplete="off">
+      <label class="check"><input type="checkbox" id="remember"> Remember on this device</label>
+      <div class="privacy">No key yet? One key covers every model — <a href="https://openrouter.ai/keys" target="_blank" rel="noopener">openrouter.ai/keys</a>.</div>
+    </section>
 
-      <div class="vrule"><span>or</span></div>
-
-      <section class="path free">
-        <h2>Already own a published translation of it?</h2>
-        <p>Bring both books and read them together in one reader – the French page beside the translation you already trust. No key, no cost, no account: a side-by-side edition of a book you own, that no shop sells.</p>
-        <div class="drop" id="drop-pub">
-          <div class="big">Drop the translation, or <span class="pick">choose a file</span></div>
-          <div class="chosen" id="chosen-pub"></div>
-          <input type="file" id="file-pub" accept=".txt,.epub,.pdf,.html,.htm,.docx" hidden>
-        </div>
-        <p class="pub-hint">An EPUB or plain-text copy lines up most closely — a PDF often loses its paragraph breaks, and its text is then shared across the French more loosely.</p>
-      </section>
-    </div>
+    <section class="pub-block">
+      <div class="pub-head">Own a published translation? <span class="opt">optional</span></div>
+      <p class="pub-sub">Add it and read the French beside the edition you already trust — matched to it by meaning, paragraph by paragraph.</p>
+      <div class="drop" id="drop-pub">
+        <div class="big">Drop the translation, or <span class="pick">choose a file</span></div>
+        <div class="chosen" id="chosen-pub"></div>
+        <input type="file" id="file-pub" accept=".txt,.epub,.pdf,.html,.htm,.docx" hidden>
+      </div>
+      <p class="pub-hint">An EPUB or plain-text copy lines up closest — a PDF often loses its paragraph breaks.</p>
+    </section>
 
     <div class="foot">
       <div class="opts-col">
         <div class="opts">
           <div class="lang"><span>Translate into</span><select id="lang"><option>English</option></select></div>
-          <div class="lang"><span>Model</span><select id="model">
-            <option value="claude-haiku-4-5-20251001">Haiku 4.5 · cheapest</option>
-            <option value="claude-sonnet-5" selected>Sonnet 5 · balanced</option>
-            <option value="claude-opus-4-8">Opus 4.8 · most faithful</option>
-          </select></div>
+          <div class="lang tiers-wrap"><span>Model</span>
+            <div class="tiers" id="tiers">
+              <button type="button" class="tier" data-tier="cheapest"><b>Cheapest</b><i id="tm-cheapest">Qwen 3 8B</i><em id="tp-cheapest">…</em></button>
+              <button type="button" class="tier selected" data-tier="balanced"><b>Balanced</b><i id="tm-balanced">DeepSeek</i><em id="tp-balanced">…</em></button>
+              <button type="button" class="tier" data-tier="finest"><b>Finest</b><i id="tm-finest">Sonnet</i><em id="tp-finest">…</em></button>
+            </div>
+          </div>
           <label class="check"><input type="checkbox" id="gloss" checked> Hover-to-translate</label>
         </div>
-        <div class="opt-hint">Hover-to-translate is made once when you build, then free as you read, never charged per hover.</div>
+        <div class="opt-hint">Or any OpenRouter model: <input id="anymodel" class="anymodel" placeholder="e.g. mistralai/mistral-small-3.2" spellcheck="false" autocomplete="off"> — its price shows before you build. Hover-to-translate is charged once at build, never per hover.</div>
       </div>
       <div class="build-wrap">
         <button class="build" id="build" disabled>Build my reader</button>
@@ -217,9 +230,52 @@ function wireDrop(dropId, inputId, chosenId, onPick) {
   });
   input.addEventListener("change", onPick);
 }
-function refreshBuild() { $("build").disabled = !(workerReady && $("file").files[0]); }
+function refreshBuild() { $("build").disabled = !(workerReady && $("file").files[0] && $("key").value.trim()); }
 wireDrop("drop", "file", "chosen", () => { $("chosen").textContent = $("file").files[0]?.name || ""; refreshBuild(); });
 wireDrop("drop-pub", "file-pub", "chosen-pub", () => { $("chosen-pub").textContent = $("file-pub").files[0]?.name || ""; });
+$("key").addEventListener("input", refreshBuild);
+
+// --- model choice: OpenRouter (one key, every model), priced live ---
+const OR_BASE = "https://openrouter.ai/api/v1";
+const TIERS = {
+  cheapest: { id: "qwen/qwen3-8b",               label: "Qwen 3 8B" },
+  balanced: { id: "deepseek/deepseek-chat-v3.1", label: "DeepSeek v3.1" },
+  finest:   { id: "anthropic/claude-sonnet-4.6", label: "Claude Sonnet" },
+};
+let PRICES = {};            // model id -> [input $/Mtok, output $/Mtok]
+let selectedTier = "balanced";
+
+function chosenModel() {
+  const any = $("anymodel").value.trim();
+  return any ? { id: any, label: any } : TIERS[selectedTier];
+}
+function fmtRate(id) {
+  const p = PRICES[id];
+  if (!p) return "price at build";
+  if (!p[0] && !p[1]) return "free";
+  return "$" + p[0].toFixed(2) + " / $" + p[1].toFixed(2) + " ·Mtok";
+}
+function refreshTiers() {
+  for (const t in TIERS) { $("tm-" + t).textContent = TIERS[t].label; $("tp-" + t).textContent = fmtRate(TIERS[t].id); }
+}
+// Every model's live rate, so a tier — or any model a reader pastes — prices exactly.
+fetch(OR_BASE + "/models").then(r => r.json()).then(d => {
+  for (const m of (d.data || [])) {
+    const p = m.pricing || {};
+    PRICES[m.id] = [(+p.prompt || 0) * 1e6, (+p.completion || 0) * 1e6];
+  }
+  refreshTiers();
+}).catch(() => {});
+for (const btn of document.querySelectorAll(".tier")) {
+  btn.addEventListener("click", () => {
+    selectedTier = btn.dataset.tier; $("anymodel").value = "";
+    for (const b of document.querySelectorAll(".tier")) b.classList.toggle("selected", b === btn);
+  });
+}
+$("anymodel").addEventListener("input", () => {
+  const typed = !!$("anymodel").value.trim();
+  for (const b of document.querySelectorAll(".tier")) b.classList.toggle("selected", !typed && b.dataset.tier === selectedTier);
+});
 
 function fmtCost(c) {
   if (c == null) return "cost unknown";
@@ -264,29 +320,24 @@ worker.onmessage = (e) => {
 };
 
 $("build").addEventListener("click", async () => {
-  if (!workerReady || !$("file").files[0]) return;
-  $("boot").textContent = "";
   const key = $("key").value.trim();
+  if (!workerReady || !$("file").files[0] || !key) return;
+  $("boot").textContent = "";
   const title = stem($("file").files[0].name);
   builtName = title + " - bilingual reader.html";
-  const modelSel = $("model");
+  const model = chosenModel();
+  const price = PRICES[model.id] || [0, 0];
   pending = {
     orig: await bytes($("file")), origName: $("file").files[0].name,
     pub: await bytes($("file-pub")), pubName: $("file-pub").files[0]?.name || null,
     lang: $("lang").value, gloss: $("gloss").checked, title, key,
-    model: modelSel.value,
-    modelName: modelSel.options[modelSel.selectedIndex].text.split("·")[0].trim(),
+    provider: "openrouter", baseUrl: OR_BASE,
+    model: model.id, modelName: model.label,
+    priceIn: price[0], priceOut: price[1],
   };
-  if (key) {
-    screen("progress"); $("stage").textContent = "Pricing the run…"; $("bar").style.width = "5%";
-    const { key: _k, ...noKey } = pending;
-    worker.postMessage({ type: "estimate", ...noKey });
-  } else if (pending.pub) {
-    screen("progress"); $("stage").textContent = "Reading your books…"; $("bar").style.width = "6%";
-    worker.postMessage({ type: "build-free", orig: pending.orig, origName: pending.origName, pub: pending.pub, pubName: pending.pubName, lang: pending.lang, title: pending.title });
-  } else {
-    $("boot").textContent = "Add your AI key, or a published translation to read side by side.";
-  }
+  screen("progress"); $("stage").textContent = "Pricing the run…"; $("bar").style.width = "5%";
+  const { key: _k, ...noKey } = pending;
+  worker.postMessage({ type: "estimate", ...noKey });
 });
 
 $("confirm-go").addEventListener("click", () => {

@@ -46,7 +46,10 @@ const LOAD = [
   "orig_chapters = read_book(orig_path, 'read-orig')",
   "pub_chapters = read_book(pub_path, 'read-pub')",
   "target = get_target(lang_key)",
-  "cfg = Config(provider='anthropic', model=MODEL, model_gloss=MODEL, api_key=(api_key or None), ollama_host='', base_url=None, max_cost_usd=10**9, price_per_mtok=lookup_price(MODEL))",
+  // Price comes live from the provider (OpenRouter lists every model's rate), so
+  // a model absent from the built-in table — Qwen 3 8B, say — still prices exactly.
+  "price = (price_in, price_out) if price_in else lookup_price(MODEL)",
+  "cfg = Config(provider=provider, model=MODEL, model_gloss=MODEL, api_key=(api_key or None), ollama_host='', base_url=(base_url or None), max_cost_usd=10**9, price_per_mtok=price)",
 ].join("\n");
 
 const ESTIMATE = [
@@ -69,25 +72,14 @@ const BUILD = [
   "MODEL = model_id",
   LOAD,
   "from biread.build import build_reader",
-  "from biread.llm.pyodide_client import PyodideAnthropicClient",
-  "client = PyodideAnthropicClient(MODEL, api_key)",
+  "if provider == 'anthropic':",
+  "    from biread.llm.pyodide_client import PyodideAnthropicClient",
+  "    client = PyodideAnthropicClient(MODEL, api_key)",
+  "else:",
+  "    from biread.llm.pyodide_openai_client import PyodideOpenAIClient",
+  "    client = PyodideOpenAIClient(MODEL, api_key, base_url or 'https://api.openai.com/v1')",
   "res = build_reader(title=title, chapters=orig_chapters, client=client, cache=Cache(None), cfg=cfg, target=target, published_chapters=pub_chapters, gloss=bool(want_gloss), on_progress=lambda s, d, t: js_progress(s, d, t))",
   "res.html",
-].join("\n");
-
-// Free path: no key, no AI — set a brought translation beside the French by position.
-const LOAD_FREE = [
-  "from biread.targets import get_target",
-  "orig_chapters = read_book(orig_path, 'read-orig')",
-  "pub_chapters = read_book(pub_path, 'read-pub')",
-  "target = get_target(lang_key)",
-].join("\n");
-
-const BUILD_FREE = [
-  LOAD_FREE,
-  "from biread.build import build_positional",
-  "html, _ = build_positional(title=title, chapters=orig_chapters, published_chapters=pub_chapters, target=target)",
-  "html",
 ].join("\n");
 
 self.onmessage = async (e) => {
@@ -107,6 +99,12 @@ self.onmessage = async (e) => {
     pyodide.globals.set("api_key", m.key || "");
     pyodide.globals.set("title", m.title || "book");
     pyodide.globals.set("model_id", m.model || "claude-sonnet-5");
+    // Provider, its base URL, and the model's live price (input/output $ per Mtok)
+    // all come from the page, which knows what the reader picked and what it costs.
+    pyodide.globals.set("provider", m.provider || "anthropic");
+    pyodide.globals.set("base_url", m.baseUrl || "");
+    pyodide.globals.set("price_in", m.priceIn || 0);
+    pyodide.globals.set("price_out", m.priceOut || 0);
     // Live from here on: reading a PDF reports its pages during pricing and the
     // free build alike, not only while translating.
     pyodide.globals.set("js_progress", (s, d, t) => postMessage({ type: "progress", stage: s, done: d, total: t }));
@@ -115,8 +113,6 @@ self.onmessage = async (e) => {
       postMessage({ type: "estimate", data: JSON.parse(await pyodide.runPythonAsync(ESTIMATE)) });
     } else if (m.type === "build") {
       postMessage({ type: "done", html: await pyodide.runPythonAsync(BUILD) });
-    } else if (m.type === "build-free") {
-      postMessage({ type: "done", html: await pyodide.runPythonAsync(BUILD_FREE) });
     }
   } catch (err) {
     postMessage({ type: "error", error: cleanError(err) });
