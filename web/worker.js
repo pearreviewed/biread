@@ -104,20 +104,25 @@ const SAMPLE = [
   "json.dumps({'index': s.index, 'total': s.total, 'source': s.source, 'target': s.target, 'cost': s.cost})",
 ].join("\n");
 
+// The aligned route translates nothing, so only its glosses are priced here; its
+// embedding run is counted on the page, which knows the model's rate.
 const ESTIMATE = [
   "MODEL = model_id",
   LOAD,
   "from biread.translate import estimate as est_tr",
   "from biread.gloss import estimate as est_gl",
   "import json",
-  "e = est_tr(orig_chapters, Cache(None), cfg, target.name)",
-  "cost = e.cost or 0.0",
-  "gloss_cost = None",
+  "out = {'model': MODEL, 'translate_cost': None, 'gloss_cost': None}",
+  "if route == 'align':",
+  "    out['paragraphs'] = sum(len(c.paragraphs) for c in orig_chapters)",
+  "else:",
+  "    e = est_tr(orig_chapters, Cache(None), cfg, target.name)",
+  "    out.update(paragraphs=e.total, pending=e.pending, translate_cost=e.cost)",
   "if want_gloss:",
   "    g = est_gl(orig_chapters, Cache(None), cfg.for_glossing(), target.name)",
-  "    gloss_cost = g.cost or 0.0",
-  "    cost += gloss_cost",
-  "json.dumps({'paragraphs': e.total, 'pending': e.pending, 'translate_cost': e.cost, 'gloss_cost': gloss_cost, 'cost': cost, 'model': MODEL})",
+  "    out['gloss_cost'] = g.cost or 0.0",
+  "out['cost'] = (out['translate_cost'] or 0.0) + (out['gloss_cost'] or 0.0)",
+  "json.dumps(out)",
 ].join("\n");
 
 const BUILD = [
@@ -135,17 +140,22 @@ const BUILD = [
 // meaning, with an embedding model — BGE-M3 on a local Ollama (free) or a cloud
 // model (pennies). The published English becomes the single reading column.
 const ALIGN = [
+  "MODEL = model_id",
+  LOAD,
   "import json",
-  "from biread.targets import get_target",
-  READ,
-  "target = get_target(lang_key)",
   "from biread.build import build_aligned",
   EMBEDDER,
+  // Glossing is chat-model work the embedding key usually also reaches, so the
+  // hover survives the route that translates nothing.
+  "gloss_client = None",
+  "if want_gloss:",
+  indent(CHAT_CLIENT),
+  "    gloss_client = client",
   // The left page of the progress spread turns through the real book, so what it
   // shows at "paragraph 812 of 3,684" is the paragraph actually being matched.
   "js_text(json.dumps([[p, ''] for c in orig_chapters for p in c.paragraphs][:400]))",
-  "html, _ = build_aligned(title=title, chapters=orig_chapters, published_chapters=pub_chapters, embed=embedder.embed, target=target, on_progress=lambda s, d, t: js_progress(s, d, t))",
-  "json.dumps({'html': html, 'spent': None})",
+  "res = build_aligned(title=title, chapters=orig_chapters, published_chapters=pub_chapters, embed=embedder.embed, target=target, gloss=bool(want_gloss), gloss_client=gloss_client, gloss_cfg=cfg.for_glossing(), on_progress=lambda s, d, t: js_progress(s, d, t))",
+  "json.dumps({'html': res.html, 'spent': (res.gloss.cost or 0.0) if res.gloss else None})",
 ].join("\n");
 
 self.onmessage = async (e) => {

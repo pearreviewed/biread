@@ -30,7 +30,9 @@ ProgressFn = Callable[[str, int, int], None]
 @dataclass
 class BuildResult:
     html: str
-    translation: TranslationRun
+    #: None on the aligned path, which sets an edition the reader owns beside the
+    #: original and translates nothing of its own.
+    translation: TranslationRun | None = None
     alignment: AlignmentReport | None = None
     published_note: str = ""
     gloss: GlossRun | None = None
@@ -148,8 +150,12 @@ def build_aligned(
     published_chapters: list[Chapter],
     embed: Embed,
     target: Target = ENGLISH,
+    gloss: bool = False,
+    gloss_client: LLMClient | None = None,
+    gloss_cache: Cache | None = None,
+    gloss_cfg: Config | None = None,
     on_progress: ProgressFn | None = None,
-) -> tuple[str, AlignmentReport]:
+) -> BuildResult:
     """Set a brought published translation beside the French by *meaning*, using a
     multilingual embedding model, with no translation of our own.
 
@@ -157,18 +163,37 @@ def build_aligned(
     cloud model (pennies), and matches the two editions in a shared semantic space —
     so the columns line up even in dialogue and prose that share no words, where the
     surface heuristics could not. The published English is the single reading column.
+
+    Glossing is separate work on a chat model, so it needs a client and a config of
+    its own; the embedding key usually reaches one. Without them the book reads the
+    same, minus the hover.
     """
     check_usable(chapters, "The original")
     check_usable(published_chapters, "The published translation")
     aligned, report = align_published(
         chapters, published_chapters, embed=embed, on_progress=_stage(on_progress, "align")
     )
+    # Render the body only — the same trim the aligner used — and gloss exactly what
+    # is rendered, so no call is paid for on a paragraph the reader never sees.
     body = [c for c in trim_matter(chapters) if c.paragraphs] or chapters
+
+    gloss_run = None
+    if gloss and gloss_client is not None and gloss_cfg is not None:
+        gloss_run = gloss_book(
+            body,
+            gloss_client,
+            gloss_cache if gloss_cache is not None else Cache(None),
+            gloss_cfg,
+            _stage(on_progress, "gloss"),
+            target.name,
+        )
+
+    note = published_note(report)
     html = render_html(
-        title, body, aligned, published=None,
-        published_note=published_note(report), glosses=None, target=target, solo=True,
+        title, body, aligned, published=None, published_note=note,
+        glosses=gloss_run.glosses if gloss_run else None, target=target, solo=True,
     )
-    return html, report
+    return BuildResult(html=html, alignment=report, published_note=note, gloss=gloss_run)
 
 
 def published_note(report: AlignmentReport) -> str:

@@ -313,6 +313,7 @@
           <button class="tier" data-tier="balanced" aria-pressed="true"><div class="row"><b>Balanced</b><div class="rec">rec</div></div><div class="of"></div><div class="rate"></div></button>
           <button class="tier" data-tier="finest" aria-pressed="false"><div class="row"><b>Finest</b></div><div class="of"></div><div class="rate"></div></button>
         </div>
+        <div class="note" id="model-why" hidden>Used for the hover translations only — the reading column stays your edition's, word for word.</div>
         <div class="note">Balanced is the recommendation: it reads within a hair of the finest at a fraction of the cost.</div>
         <input class="inline" id="any-model" placeholder="or paste any model id" spellcheck="false" autocomplete="off">
       </div>
@@ -574,7 +575,7 @@ for (const b of $("tiers").children) {
   b.addEventListener("click", () => { S.tier = b.dataset.tier; $("any-model").value = ""; paintTiers(); priceIt(); });
 }
 $("any-model").addEventListener("input", () => { paintTiers(); priceIt(); });
-$("gloss").addEventListener("change", priceIt);
+$("gloss").addEventListener("change", () => { setProvider(S.provider); priceIt(); });
 
 /* --- step two ------------------------------------------------------------ */
 const PROV_NOTE = {
@@ -594,11 +595,11 @@ function setProvider(prov) {
   $("prov-note").innerHTML = PROV_NOTE[prov] || "";
   $("key-block").hidden = S.local;
   $("local-block").hidden = !S.local;
-  $("model-block").hidden = S.local || S.route === "align";
+  // On the aligned route the chat model does nothing but the hover translations,
+  // so it is asked for only once those are wanted.
+  $("model-block").hidden = S.local || (S.route === "align" && !$("gloss").checked);
+  $("model-why").hidden = S.route !== "align";
   $("embed-block").hidden = S.local || S.route !== "align";
-  // Alignment sets a published edition beside the original; there is no
-  // generated column to gloss, so the option would promise what it cannot do.
-  $("gloss-block").hidden = S.route === "align";
   $("setup").textContent =
     'OLLAMA_ORIGINS="' + location.origin + '" ollama serve\nollama pull ' + $("local-chat").value.trim() +
     (S.route === "align" ? "\nollama pull " + $("local-embed").value.trim() : "");
@@ -607,6 +608,7 @@ function setProvider(prov) {
 for (const b of $("providers").children) b.addEventListener("click", () => { if (!b.disabled) { setProvider(b.dataset.prov); priceIt(); } });
 $("key").addEventListener("input", () => { paintKeyChip(); refreshBuild(); });
 $("local-chat").addEventListener("input", () => setProvider(S.provider));
+$("or-embed").addEventListener("input", () => { S.sample = null; paintProof(); priceIt(); });
 
 function paintKeyChip() {
   const key = $("key").value.trim();
@@ -719,29 +721,48 @@ function priceIt() {
     $("fig-detail").textContent = "Nothing leaves this computer, and nothing is charged.";
     return refreshBuild();
   }
-  if (S.route === "align") {
+  // The aligned route translates nothing, so with no glosses to price there is
+  // nothing to ask the worker: the embedding run is counted on the page.
+  if (S.route === "align" && !$("gloss").checked) {
     S.estimate = null;
-    // Both editions are read once by the embedding model. Its rate is quoted only
-    // where OpenRouter actually lists it — a made-up cent is worse than none.
-    const model = $("or-embed").value.trim();
-    const tokens = Math.round(((S.info.orig || {}).chars + (S.info.pub || {}).chars || 0) / 4);
-    const rate = (S.prices[model] || [])[0];
-    $("fig").textContent = rate ? "≈ " + money(tokens / 1e6 * rate) : tokens.toLocaleString();
-    $("fig-of").textContent = rate ? "the whole book" : "tokens to read";
-    $("fig-detail").textContent = "Both editions read once by " + (model || "an embedding model")
-      + (rate ? ", charged to your key." : " — priced at your provider's embedding rate, typically a cent or two a book.");
+    paintPrice();
     return refreshBuild();
   }
   if (S.busy) return;
   const model = chosenModel();
   const price = S.prices[model.id] || [0, 0];
-  $("fig").textContent = "…";
-  $("fig-of").textContent = "";
-  $("fig-detail").textContent = "Counting the book…";
+  if (S.route !== "align") {
+    $("fig").textContent = "…";
+    $("fig-of").textContent = "";
+    $("fig-detail").textContent = "Counting the book…";
+  }
   send("estimate", { model: model.id, priceIn: price[0], priceOut: price[1], gloss: $("gloss").checked });
+}
+function embedTokens() {
+  return Math.round((((S.info.orig || {}).chars || 0) + ((S.info.pub || {}).chars || 0)) / 4);
 }
 function paintPrice() {
   const e = S.estimate;
+  if (S.route === "align") {
+    // The embedding model's rate is quoted only where OpenRouter actually lists
+    // it — a made-up cent is worse than none.
+    const model = $("or-embed").value.trim();
+    const rate = (S.prices[model] || [])[0];
+    const reading = rate ? embedTokens() / 1e6 * rate : null;
+    const glosses = e && e.gloss_cost != null ? e.gloss_cost : null;
+    const known = [reading, glosses].filter((v) => v != null);
+    $("fig").textContent = known.length ? "≈ " + money(known.reduce((a, b) => a + b, 0)) : embedTokens().toLocaleString();
+    // The figure claims only what it actually covers: with no rate for the
+    // embedding model, the reading is not in it and must not look like it is.
+    $("fig-of").textContent = !known.length ? "tokens to read"
+      : reading == null ? "the glosses — the reading is on top" : "the whole book";
+    const parts = ["Both editions read once by " + (model || "an embedding model")
+      + (reading == null ? "" : " (" + money(reading) + ")")];
+    if (glosses != null) parts.push("glosses (" + money(glosses) + ")");
+    $("fig-detail").textContent = parts.join(" plus ") + ", charged to your key."
+      + (reading == null ? " The reading is priced at your provider's embedding rate — typically a cent or two a book." : "");
+    return;
+  }
   if (!e) return;
   $("fig").textContent = "≈ " + money(e.cost);
   $("fig-of").textContent = "the whole book";
@@ -770,7 +791,7 @@ $("build").addEventListener("click", async () => {
   const price = S.local ? [0, 0] : S.prices[model.id] || [0, 0];
   send(S.route === "align" ? "align" : "build", {
     title: stem(S.orig.name), model: model.id, priceIn: price[0], priceOut: price[1],
-    gloss: S.route !== "align" && $("gloss").checked,
+    gloss: $("gloss").checked,
   });
 });
 

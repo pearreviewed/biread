@@ -259,6 +259,7 @@ CI so it stops depending on anyone remembering.
 | Builder — what shape is the flow? | **A fork, then two steps.** The door asks only who does the work (your own machine, or your own key). Step one is the book and the route — translate it, or align an edition you own — and nothing else. Step two puts key, model and hover on the left and, on the right, a real sample page above the price and the button. Day and night, chosen by the reader and remembered. Replaces the single dense screen plus a separate cost-confirm screen. |
 | Builder — how does a reader know the translation is any good before paying? | **They read one page of it.** `sample.sample_translate` runs the chosen model over three real paragraphs of their own book; `sample_align` matches three against the edition they brought. It costs a fraction of a cent, renders in a miniature of the reader's own spread, and "Another page" buys the next one. The estimate stops being a promise about prose quality and becomes a price on prose already seen. |
 | Builder — does the progress screen show real work? | Yes. `translate_book(on_batch=…)` hands finished pairs up through `build_reader(on_text=…)` to the page, so the spread fills with the book actually being made, and the time left is computed from the rate observed so far. Nothing on that screen is decorative. |
+| Does the align route gloss? | **Yes.** `build_aligned(gloss=…, gloss_client=…, gloss_cfg=…)` glosses the original — exactly the body it renders, so no call is paid for on a paragraph nobody sees — while the reading column stays the translator's, word for word. Glossing is chat-model work, so the builder asks for a model on that route *only* once the hover is wanted; without a client the book builds the same, minus the hover, rather than being refused. This was the one place the two routes were not equal. |
 | Builder — what does a file card claim about a book? | Only what the file says: `meta.describe` reads an EPUB's OPF for title, author and language, a PDF for its page count, and counts paragraphs from the parsed text. Everything else stays None and is simply not shown — a filename is not an author, and a confident wrong byline is worse than a blank one. |
 
 ## Reversals
@@ -313,11 +314,6 @@ Recorded because the reasoning matters more than the outcome.
   sync needs a server and is parked (`design-reference/revise-spec.md`). On mobile
   the correction control is off (touch) — a phone reader sees corrections that
   arrived by link but makes new ones only on a desktop-width window.
-- **The align route cannot gloss.** `build_aligned` renders the brought edition as
-  the single reading column and never calls `gloss_book`, so the builder hides the
-  hover-to-translate option on that route rather than offer what it cannot do. A
-  reader who owns a published translation therefore gets no glosses — which is the
-  one place the two routes are not equal.
 - **The builder has no automated browser tests.** The reader has 54; the builder
   has none, because every path through it boots Pyodide from a CDN and the suite
   is offline by design. It is driven by hand with Playwright against
