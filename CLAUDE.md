@@ -223,6 +223,14 @@ Corollary learned the hard way: the pipeline spends real money. Never run a
 build that may call the API without checking it is fully cached, and never run
 two at once. `--dry-run` needs no API key.
 
+**The web builder ships from `web/dist`, not from the repo.** It loads a
+pre-built wheel into Pyodide, and `web/dist` is gitignored, so a fix on main is
+not a fix in the builder until `python web/build.py` rebuilds that folder and it
+is served again. Any change touching `web/` or the pipeline behind it needs that
+rebuild before it counts as delivered — say so plainly when handing work back.
+There is no host and no deploy pipeline yet; when there is one, automate this in
+CI so it stops depending on anyone remembering.
+
 ---
 
 ## Decisions taken
