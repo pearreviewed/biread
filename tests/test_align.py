@@ -17,6 +17,29 @@ def test_spelled_numbers_read_to_the_same_token_across_languages():
     assert "num80" in number_tokens("quatre-vingts")  # four twenties, not four then twenty
 
 
+def test_embedding_alignment_matches_by_meaning_not_words():
+    # A fake multilingual embedder: each concept maps to a fixed vector, so a
+    # French paragraph and its English translation embed identically though they
+    # share no characters. Alignment must pair them by that meaning.
+    concept = {"chat": [1, 0, 0], "cat": [1, 0, 0], "chien": [0, 1, 0], "dog": [0, 1, 0],
+               "oiseau": [0, 0, 1], "bird": [0, 0, 1]}
+    def vec(text):
+        for word, v in concept.items():
+            if word in text.lower():
+                return v
+        return [0, 0, 0]
+    def embed(texts):
+        return [vec(t) for t in texts]
+
+    french = [chapter("I", ["Le chat dort.", "Le chien court.", "L'oiseau vole."])]
+    english = [chapter("I", ["The cat sleeps.", "The dog runs.", "The bird flies."])]
+    aligned, report = align_published(french, english, embed=embed)
+    assert aligned[hash_text("Le chat dort.")] == "The cat sleeps."
+    assert aligned[hash_text("Le chien court.")] == "The dog runs."
+    assert aligned[hash_text("L'oiseau vole.")] == "The bird flies."
+    assert report.method == "pivot" and not report.approximate
+
+
 def test_length_fill_pairs_dialogue_and_merges_without_loss():
     # A run of terse dialogue with nothing to anchor on: the French sets each turn
     # on its own line, the English fuses two. Length alignment pairs short with

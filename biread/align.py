@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from typing import Callable
 
 from .anchor import MIN_ANCHORS, agreements, align_by_anchors, longest_run
 from .cleanup import Chapter
@@ -607,10 +608,98 @@ def _by_chapter_balanced(
     return aligned
 
 
+#: French paragraphs -> the published paragraph each is closest to, need a shared
+#: semantic space. A multilingual embedding model (BGE-M3 local, or a cloud one)
+#: gives it: a French sentence and its English translation land near each other
+#: even sharing no words. `embed(texts) -> one vector per text`.
+Embed = Callable[[list[str]], list[list[float]]]
+
+
+def _embedding_pivot(
+    french: list[str], published: list[str],
+    fr_vecs: list[list[float]], pub_vecs: list[list[float]],
+) -> list[str]:
+    """One published string per French paragraph, each published paragraph given to
+    the French it is nearest in meaning (embedding cosine), in reading order.
+
+    The two editions run in the same order, so this is a monotonic many-to-one
+    matching — the same dynamic program the generated-translation pivot uses, but
+    scored by cosine similarity across a shared multilingual space instead of by
+    shared English words. That is what lets it match "—Quand ?" to "When?", which
+    have no character in common."""
+    n, m = len(french), len(published)
+    if not n:
+        return []
+    if not m:
+        return [""] * n
+
+    def unit(v: list[float]) -> list[float]:
+        scale = sum(x * x for x in v) ** 0.5 or 1.0
+        return [x / scale for x in v]
+
+    fr = [unit(v) for v in fr_vecs]
+    pub = [unit(v) for v in pub_vecs]
+
+    NEG = float("-inf")
+    best = [[NEG] * (n + 1) for _ in range(m + 1)]
+    best[0] = [0.0] * (n + 1)
+    for i in range(1, m + 1):
+        row, previous, vec = best[i], best[i - 1], pub[i - 1]
+        for j in range(1, n + 1):
+            stay = previous[j] + sum(a * b for a, b in zip(vec, fr[j - 1]))
+            advance = row[j - 1]
+            row[j] = stay if stay > advance else advance
+
+    groups: list[list[str]] = [[] for _ in range(n)]
+    i, j = m, n
+    while i > 0 and j > 0:
+        if best[i][j] == best[i][j - 1]:
+            j -= 1
+            continue
+        groups[j - 1].append(published[i - 1])
+        i -= 1
+    return [" ".join(reversed(g)) for g in groups]
+
+
+def _by_embeddings(
+    french: list[Chapter], published: list[Chapter], embed: Embed, report: AlignmentReport
+) -> dict[str, str]:
+    """Match two editions in a shared semantic space — the trustworthy no-key path.
+
+    Chapters pair on the number they carry (else the whole book is one run); within
+    each, French and published paragraphs are embedded and matched by cosine, so the
+    columns line up by meaning rather than by the sparse words two languages share."""
+    report.method = "pivot"
+    pairs = (
+        _pair_by_number(french, published)
+        if len({chapter_number(c.number) for c in french} & {chapter_number(c.number) for c in published} - {None}) >= 2
+        else [(
+            Chapter(None, None, [p for c in french for p in c.paragraphs]),
+            Chapter(None, None, [p for c in published for p in c.paragraphs]),
+        )]
+    )
+    aligned: dict[str, str] = {}
+    for index, (fr, pub) in enumerate(pairs):
+        if pub is None or not fr.paragraphs:
+            report.unmatched += len(fr.paragraphs)
+            for paragraph in fr.paragraphs:
+                aligned[hash_text(paragraph)] = ""
+            continue
+        prose = [p for p in pub.paragraphs if not FOOTNOTE_RE.match(p)]
+        report.dropped += len(pub.paragraphs) - len(prose)
+        texts = _embedding_pivot(fr.paragraphs, prose, embed(fr.paragraphs), embed(prose)) if prose else [""] * len(fr.paragraphs)
+        report.unmatched += sum(1 for t in texts if not t)
+        report.exact += 1
+        for paragraph, text in zip(fr.paragraphs, texts):
+            aligned[hash_text(paragraph)] = text
+    return aligned
+
+
 def align_published(
     french: list[Chapter],
     published: list[Chapter],
     translations: dict[str, str] | None = None,
+    embed: Embed | None = None,
 ) -> tuple[dict[str, str], AlignmentReport]:
     """Map French paragraph hash -> published English text.
 
@@ -641,6 +730,12 @@ def align_published(
         total=sum(len(c.paragraphs) for c in fr_bodies),
     )
     aligned: dict[str, str] = {}
+
+    # Best when it is on offer: a shared multilingual embedding space (BGE-M3 run
+    # locally, or a cloud model) matches the two editions by meaning, so the columns
+    # line up even where they share no words at all.
+    if embed is not None:
+        return _by_embeddings(fr_bodies, pub_bodies, embed, report), report
 
     # With no generated translation to pivot through, the editions are matched on
     # what survives translation: the names and numbers they share.

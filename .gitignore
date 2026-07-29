@@ -25,3 +25,6 @@ dist/
 # The bundled font's licence. The OFL requires it to travel with the font, and a
 # book inlines the font, so this must be tracked — `*.txt` above would drop it.
 !biread/assets/fonts/*.txt
+
+# local-only design handoff — never publish
+design-reference/ui-rebuild-brief.md
