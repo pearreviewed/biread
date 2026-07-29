@@ -166,6 +166,7 @@
         <input class="keyinput" type="password" id="key" placeholder="OpenRouter key — sk-or-…" autocomplete="off">
         <label class="check"><input type="checkbox" id="remember"> Remember on this device</label>
         <div class="privacy">No key yet? One key covers every model — <a href="https://openrouter.ai/keys" target="_blank" rel="noopener">openrouter.ai/keys</a>.</div>
+        <div class="privacy or-embed-line">Aligning a published edition uses an embedding model: <input id="or-embed" class="anymodel" value="openai/text-embedding-3-large" spellcheck="false" autocomplete="off"> — pick a multilingual one; it costs about a cent for a whole book.</div>
       </div>
 
       <div id="local-block" hidden>
@@ -377,7 +378,7 @@ $("build").addEventListener("click", async () => {
     lang: $("lang").value, title,
     provider, baseUrl: local ? LOCAL_BASE : OR_BASE,
     key: local ? "ollama" : $("key").value.trim(),
-    embedModel: local ? $("local-embed").value.trim() : "openai/text-embedding-3-small",
+    embedModel: local ? $("local-embed").value.trim() : $("or-embed").value.trim(),
   };
 
   if (base.pub) {
