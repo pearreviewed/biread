@@ -329,6 +329,18 @@ Recorded because the reasoning matters more than the outcome.
   sync needs a server and is parked (`design-reference/revise-spec.md`). On mobile
   the correction control is off (touch) — a phone reader sees corrections that
   arrived by link but makes new ones only on a desktop-width window.
+- **The quote runs about 30% under, and the gap is retries.** Pricing the book by
+  weighing the sample page fixed the model-verbosity error — translation now
+  quotes at 0.91× of the true bill on a model it has never seen, where the old
+  fixed 5.3 constant managed 0.61× overall. What is left is the gloss rescue path:
+  a paragraph whose gloss comes back malformed is re-done alone and then sentence
+  by sentence, and no estimate has ever counted that output. Ruled out as the
+  cause: input overhead, since a sample carries *more* system prompt per character
+  than a book does (2.5× against 1.6×). Measured on Micromégas/DeepSeek: quoted
+  $0.0807, charged $0.1160. Accepted for now — the figure wears an ≈ and the sums
+  are pennies — but it is under-promising, which is the wrong direction to be
+  wrong in, and it will matter on a long book. `GlossRun.rescued` already counts
+  the retries, so the signal to fold in is there when it is worth doing.
 - **The builder has no automated browser tests.** The reader has 54; the builder
   has none, because every path through it boots Pyodide from a CDN and the suite
   is offline by design. It is driven by hand with Playwright against
