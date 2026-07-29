@@ -701,16 +701,35 @@ function takeSample(index) {
   alert_("settings-alert", "");
   const model = chosenModel();
   const price = S.local ? [0, 0] : S.prices[model.id] || [0, 0];
-  send("sample", { sampleIndex: index, model: model.id, priceIn: price[0], priceOut: price[1], gloss: false });
+  send("sample", {
+    sampleIndex: index, model: model.id, priceIn: price[0], priceOut: price[1],
+    // The page is glossed too when the book will be, so the gate is scaled from
+    // both halves of the bill rather than guessing the larger one.
+    gloss: $("gloss").checked,
+  });
   refreshBuild();
 }
 
 /* --- the price ------------------------------------------------------------ */
+// Every figure here is arrived at from token counts and a published rate, never
+// from a bill — so each one wears the ≈ that says so.
 function money(usd) {
   if (usd == null) return "cost unknown";
   if (usd === 0) return "free";
   if (usd < 0.01) return "under $0.01";
-  return "$" + usd.toFixed(2);
+  return "≈ $" + usd.toFixed(2);
+}
+// What the sample actually cost on this model, scaled to the whole book. Beats a
+// constant: how much a model writes per paragraph is the model's property, and
+// the tuned-once factor ran 1.8× light on the first model it had not seen.
+function measured() {
+  const s = S.sample;
+  if (!s || !s.chars || !s.bookChars) return null;
+  const scale = s.bookChars / s.chars;
+  return {
+    translate: s.cost == null ? null : s.cost * scale,
+    glosses: s.glossCost == null ? null : s.glossCost * scale,
+  };
 }
 function priceIt() {
   if (!S.ready || !S.orig) return;
@@ -749,9 +768,11 @@ function paintPrice() {
     const model = $("or-embed").value.trim();
     const rate = (S.prices[model] || [])[0];
     const reading = rate ? embedTokens() / 1e6 * rate : null;
-    const glosses = e && e.gloss_cost != null ? e.gloss_cost : null;
+    const weighed = measured();
+    const glosses = weighed && weighed.glosses != null ? weighed.glosses
+      : e && e.gloss_cost != null ? e.gloss_cost : null;
     const known = [reading, glosses].filter((v) => v != null);
-    $("fig").textContent = known.length ? "≈ " + money(known.reduce((a, b) => a + b, 0)) : embedTokens().toLocaleString();
+    $("fig").textContent = known.length ? money(known.reduce((a, b) => a + b, 0)) : embedTokens().toLocaleString();
     // The figure claims only what it actually covers: with no rate for the
     // embedding model, the reading is not in it and must not look like it is.
     $("fig-of").textContent = !known.length ? "tokens to read"
@@ -763,14 +784,22 @@ function paintPrice() {
       + (reading == null ? " The reading is priced at your provider's embedding rate — typically a cent or two a book." : "");
     return;
   }
-  if (!e) return;
-  $("fig").textContent = "≈ " + money(e.cost);
+  const weighed = measured();
+  if (!e && !weighed) return;
+  // The page that was read is the better instrument: it was priced on this model,
+  // where the counted estimate assumes how much any model writes.
+  const translate = weighed && weighed.translate != null ? weighed.translate : e && e.translate_cost;
+  const glosses = weighed && weighed.glosses != null ? weighed.glosses
+    : e && e.gloss_cost != null ? e.gloss_cost : null;
+  $("fig").textContent = money((translate || 0) + (glosses || 0));
   $("fig-of").textContent = "the whole book";
   // "passages", not "¶": the count includes chapter titles, so it sits a little
   // above the paragraph count on the file card and should not look like it.
-  const parts = [e.paragraphs.toLocaleString() + " passages translated (" + money(e.translate_cost) + ")"];
-  if (e.gloss_cost != null) parts.push("glosses (" + money(e.gloss_cost) + ")");
-  $("fig-detail").textContent = parts.join(" plus ") + ", charged to your key.";
+  const count = e ? e.paragraphs.toLocaleString() + " passages" : "The book";
+  const parts = [count + " translated (" + money(translate) + ")"];
+  if (glosses != null) parts.push("glosses (" + money(glosses) + ")");
+  $("fig-detail").textContent = parts.join(" plus ") + ", charged to your key."
+    + (weighed ? " Scaled from the page you read, on this very model." : "");
 }
 
 /* --- building -------------------------------------------------------------- */
@@ -892,8 +921,9 @@ worker.onmessage = (e) => {
     if (!$("s-settings").hidden) { leafTitles(); priceIt(); }
   } else if (m.type === "sample") {
     S.sample = m.data;
-    S.sampleSpend += m.data.cost || 0;
+    S.sampleSpend += (m.data.cost || 0) + (m.data.glossCost || 0);
     paintProof();
+    paintPrice();
   } else if (m.type === "estimate") {
     S.estimate = m.data;
     paintPrice();

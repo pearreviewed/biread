@@ -180,3 +180,34 @@ def test_a_sample_page_stays_blank_rather_than_guess():
     french = [chapter("I", ["Le chat dort."])]
     published = [chapter("I", [f"The horse number {i} runs." for i in range(20)])]
     assert sample_align(french, published, embed).target == [""]
+
+
+def test_a_sample_page_is_weighed_as_well_as_read(book, config, make_client):
+    """The book's gloss bill is scaled from what the page actually cost, because
+    how much a model writes per paragraph is the model's property, not the book's."""
+    from biread.gloss import FIELD
+    from biread.llm.base import Completion
+    from biread.sample import sample_gloss
+
+    reply = Completion("\n".join(
+        f"@@@{n}@@@\n" + f" {FIELD} ".join([first, "adj.", "the first"])
+        for n, first in enumerate(["Premier", "Deuxième", "Troisième"])
+    ), False)
+    client = make_client(script=[reply])
+    cost = sample_gloss(["Premier paragraphe.", "Deuxième paragraphe.", "Troisième paragraphe."],
+                        client, config(), "English")
+    assert cost > 0
+
+
+def test_weighing_a_page_bills_only_that_page(book, config, make_client):
+    # A client that has already translated must not have its running total
+    # charged to the gloss, or the second sample prices as though it were the third.
+    from biread.gloss import FIELD
+    from biread.llm.base import Completion
+    from biread.sample import sample_gloss
+
+    reply = Completion(f"@@@0@@@\n" + f" {FIELD} ".join(["Premier", "adj.", "the first"]), False)
+    client = make_client(script=[reply])
+    client.input_tokens, client.output_tokens = 500_000, 500_000  # a long run already behind it
+    cost = sample_gloss(["Premier paragraphe."], client, config(), "English")
+    assert cost < 0.01

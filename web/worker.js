@@ -89,19 +89,28 @@ const INSPECT = [
 const indent = (code) => code.split("\n").map((line) => "    " + line).join("\n");
 
 // One page, done for real, so the reader sees the prose before paying for the
-// book. Translated by the chosen model, or matched against the edition brought.
+// book — and weighed while it is here, so the book is priced by what this model
+// actually charges rather than by a constant that fits some other model.
 const SAMPLE = [
   "MODEL = model_id",
   LOAD,
   "import json",
-  "from biread.sample import sample_translate, sample_align",
+  "from biread.sample import sample_translate, sample_align, sample_gloss, body_chars",
+  "client = None",
   "if pub_path and route == 'align':",
   indent(EMBEDDER),
   "    s = sample_align(orig_chapters, pub_chapters, embedder.embed, sample_index)",
+  "    if want_gloss:",
+  indent(indent(CHAT_CLIENT)),
   "else:",
   indent(CHAT_CLIENT),
   "    s = sample_translate(orig_chapters, client, cfg, target.name, sample_index)",
-  "json.dumps({'index': s.index, 'total': s.total, 'source': s.source, 'target': s.target, 'cost': s.cost})",
+  "gloss_cost = sample_gloss(s.source, client, cfg, target.name) if (want_gloss and client) else None",
+  // The book's own size comes back with the page, measured over the same trimmed
+  // body the page was cut from — front matter counted on one side and not the
+  // other would tilt every scaling done from it.
+  "book_chars = body_chars(orig_chapters)",
+  "json.dumps({'index': s.index, 'total': s.total, 'source': s.source, 'target': s.target, 'cost': s.cost, 'glossCost': gloss_cost, 'chars': sum(len(p) for p in s.source), 'bookChars': book_chars})",
 ].join("\n");
 
 // The aligned route translates nothing, so only its glosses are priced here; its

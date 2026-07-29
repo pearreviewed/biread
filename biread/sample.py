@@ -17,6 +17,7 @@ from .build import check_usable
 from .cache import Cache
 from .cleanup import Chapter
 from .config import Config
+from .gloss import gloss_book
 from .llm import LLMClient
 from .translate import hash_text, translate_book
 
@@ -87,6 +88,33 @@ def sample_align(
         source=source,
         target=embed_nearest(source, _window(published, index, total, window), embed),
         cost=None,
+    )
+
+
+def body_chars(chapters: list[Chapter]) -> int:
+    """How much prose the book actually has, over the same trimmed body a page is
+    cut from. Front matter counted on one side and not the other would tilt every
+    price scaled from a page."""
+    return sum(len(p) for c in _body(chapters, "The book") for p in c.paragraphs)
+
+
+def sample_gloss(
+    paragraphs: list[str], client: LLMClient, cfg: Config, target: str
+) -> float | None:
+    """What glossing this page costs on this model, measured rather than guessed.
+
+    A book's gloss bill cannot be predicted from its own text: the output is the
+    model's, and models differ several-fold in how much they write per unit. So
+    the page that is bought to be read is also weighed, and the book is priced by
+    scaling what it actually cost. The scaling errs high — a page carries the
+    system prompt over three paragraphs where a book spreads it over hundreds —
+    which is the direction to err in when the reader is being quoted a price.
+    """
+    gloss_cfg = cfg.for_glossing()
+    before_in, before_out = client.input_tokens, client.output_tokens
+    gloss_book([Chapter(None, None, paragraphs)], client, Cache(None), gloss_cfg, None, target)
+    return gloss_cfg.estimate_cost(
+        client.input_tokens - before_in, client.output_tokens - before_out
     )
 
 
