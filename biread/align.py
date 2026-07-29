@@ -662,13 +662,16 @@ def _embedding_pivot(
 
 
 def _by_embeddings(
-    french: list[Chapter], published: list[Chapter], embed: Embed, report: AlignmentReport
+    french: list[Chapter], published: list[Chapter], embed: Embed, report: AlignmentReport,
+    progress: Callable[[int, int], None] | None = None,
 ) -> dict[str, str]:
     """Match two editions in a shared semantic space — the trustworthy no-key path.
 
     Chapters pair on the number they carry (else the whole book is one run); within
     each, French and published paragraphs are embedded and matched by cosine, so the
-    columns line up by meaning rather than by the sparse words two languages share."""
+    columns line up by meaning rather than by the sparse words two languages share.
+    `progress(done, total)` is called per chapter, so a long book is not silent while
+    it embeds."""
     report.method = "pivot"
     pairs = (
         _pair_by_number(french, published)
@@ -680,6 +683,8 @@ def _by_embeddings(
     )
     aligned: dict[str, str] = {}
     for index, (fr, pub) in enumerate(pairs):
+        if progress:
+            progress(index, len(pairs))
         if pub is None or not fr.paragraphs:
             report.unmatched += len(fr.paragraphs)
             for paragraph in fr.paragraphs:
@@ -692,6 +697,8 @@ def _by_embeddings(
         report.exact += 1
         for paragraph, text in zip(fr.paragraphs, texts):
             aligned[hash_text(paragraph)] = text
+    if progress:
+        progress(len(pairs), len(pairs))
     return aligned
 
 
@@ -700,6 +707,7 @@ def align_published(
     published: list[Chapter],
     translations: dict[str, str] | None = None,
     embed: Embed | None = None,
+    on_progress: Callable[[int, int], None] | None = None,
 ) -> tuple[dict[str, str], AlignmentReport]:
     """Map French paragraph hash -> published English text.
 
@@ -735,7 +743,7 @@ def align_published(
     # locally, or a cloud model) matches the two editions by meaning, so the columns
     # line up even where they share no words at all.
     if embed is not None:
-        return _by_embeddings(fr_bodies, pub_bodies, embed, report), report
+        return _by_embeddings(fr_bodies, pub_bodies, embed, report, on_progress), report
 
     # With no generated translation to pivot through, the editions are matched on
     # what survives translation: the names and numbers they share.

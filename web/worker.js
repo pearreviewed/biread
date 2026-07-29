@@ -93,7 +93,7 @@ const ALIGN = [
   "from biread.build import build_aligned",
   "from biread.llm.pyodide_embed import PyodideEmbedder",
   "embedder = PyodideEmbedder(embed_model, api_key, base_url or 'https://openrouter.ai/api/v1')",
-  "html, _ = build_aligned(title=title, chapters=orig_chapters, published_chapters=pub_chapters, embed=embedder.embed, target=target)",
+  "html, _ = build_aligned(title=title, chapters=orig_chapters, published_chapters=pub_chapters, embed=embedder.embed, target=target, on_progress=lambda s, d, t: js_progress(s, d, t))",
   "html",
 ].join("\n");
 

@@ -145,6 +145,7 @@ def build_aligned(
     published_chapters: list[Chapter],
     embed: Embed,
     target: Target = ENGLISH,
+    on_progress: ProgressFn | None = None,
 ) -> tuple[str, AlignmentReport]:
     """Set a brought published translation beside the French by *meaning*, using a
     multilingual embedding model, with no translation of our own.
@@ -156,7 +157,9 @@ def build_aligned(
     """
     check_usable(chapters, "The original")
     check_usable(published_chapters, "The published translation")
-    aligned, report = align_published(chapters, published_chapters, embed=embed)
+    aligned, report = align_published(
+        chapters, published_chapters, embed=embed, on_progress=_stage(on_progress, "align")
+    )
     body = [c for c in trim_matter(chapters) if c.paragraphs] or chapters
     html = render_html(
         title, body, aligned, published=None,
