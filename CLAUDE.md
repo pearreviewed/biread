@@ -256,6 +256,10 @@ CI so it stops depending on anyone remembering.
 | Builder — how does a reader choose the translation model, and where? | On the web builder's price screen, a clickable **three-tier** choice — **Finest / Balanced / Cheapest**, price beside each, model id in fine print — plus a field for any other model id. One OpenRouter key reaches all of them, and every rate is read live from OpenRouter's models API, so a model with no built-in `PRICING_PER_MTOK` row still prices exactly. Cheap to show because the estimate is model-independent: `translate.estimate()` counts tokens from the text alone, so every tier prices off the same counts with no extra API calls. Builder-only — does **not** touch the "never show price in the reader" rule. |
 | Builder — is there a free way to read two editions side by side? | **Yes, but a different one.** The original free path — algorithmic cross-lingual matching on shared names, numbers and sentence lengths — was built and removed: two translations of one book share meaning, not words, so a surface-token matcher has a ceiling that tuning does not raise, and it failed quietly rather than loudly. Free came back on a different footing: **Local · Ollama**, where the models (a chat model to translate, BGE-M3 to align) run on the reader's own machine — no key, nothing leaves the computer, and still meaning-based. Paid is **OpenRouter**, priced live before anything runs. The axis that matters is meaning vs. surface tokens, not free vs. paid. |
 | Alignment — does it still need a generated translation to pivot through? | Not always. The pivot is the CLI's path and the trustworthy default. `align_published(embed=…)` instead matches the two editions directly in a shared multilingual space (`_by_embeddings`), so a reader who owns both books gets them aligned by meaning with no translation of our own — free on a local model, pennies on a cloud one. That is what the web builder uses when a published edition is brought. |
+| Builder — what shape is the flow? | **A fork, then two steps.** The door asks only who does the work (your own machine, or your own key). Step one is the book and the route — translate it, or align an edition you own — and nothing else. Step two puts key, model and hover on the left and, on the right, a real sample page above the price and the button. Day and night, chosen by the reader and remembered. Replaces the single dense screen plus a separate cost-confirm screen. |
+| Builder — how does a reader know the translation is any good before paying? | **They read one page of it.** `sample.sample_translate` runs the chosen model over three real paragraphs of their own book; `sample_align` matches three against the edition they brought. It costs a fraction of a cent, renders in a miniature of the reader's own spread, and "Another page" buys the next one. The estimate stops being a promise about prose quality and becomes a price on prose already seen. |
+| Builder — does the progress screen show real work? | Yes. `translate_book(on_batch=…)` hands finished pairs up through `build_reader(on_text=…)` to the page, so the spread fills with the book actually being made, and the time left is computed from the rate observed so far. Nothing on that screen is decorative. |
+| Builder — what does a file card claim about a book? | Only what the file says: `meta.describe` reads an EPUB's OPF for title, author and language, a PDF for its page count, and counts paragraphs from the parsed text. Everything else stays None and is simply not shown — a filename is not an author, and a confident wrong byline is worse than a blank one. |
 
 ## Reversals
 
@@ -309,6 +313,18 @@ Recorded because the reasoning matters more than the outcome.
   sync needs a server and is parked (`design-reference/revise-spec.md`). On mobile
   the correction control is off (touch) — a phone reader sees corrections that
   arrived by link but makes new ones only on a desktop-width window.
+- **The align route cannot gloss.** `build_aligned` renders the brought edition as
+  the single reading column and never calls `gloss_book`, so the builder hides the
+  hover-to-translate option on that route rather than offer what it cannot do. A
+  reader who owns a published translation therefore gets no glosses — which is the
+  one place the two routes are not equal.
+- **The builder has no automated browser tests.** The reader has 54; the builder
+  has none, because every path through it boots Pyodide from a CDN and the suite
+  is offline by design. It is driven by hand with Playwright against
+  `web/dist` instead, which is not a regression net.
+- **An embedding run is priced only when OpenRouter lists the model.** The align
+  route's cost gate shows a dollar figure when the rate is known and an honest
+  token count when it is not, rather than a plausible cent.
 - **Now on GitHub.** LICENSE (MIT), CI (GitHub Actions), and CONTRIBUTING notes
   are in place; the repo has a remote (`origin`) and has been pushed, so CI now
   runs on real GitHub.

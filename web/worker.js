@@ -1,15 +1,16 @@
 // The builder's engine, off the main thread. Boots Pyodide + biread, then
-// answers two commands: "estimate" (pure Python, no API) and "build" (runs the
-// pipeline on the reader's own key, streaming progress). The page never blocks.
+// answers the page's commands — inspect a file, buy one sample page, price the
+// run, build the book — streaming progress and finished prose as they arrive.
+// The page never blocks.
 importScripts("https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js");
 
 const WHEEL_URL = new URL("biread-0.1.0-py3-none-any.whl", self.location.href).href;
 let pyodide;
 
-// Read a file into chapters once and keep it: the keyed path prices the book
-// (which reads it) and then builds it, and re-reading a PDF glyph by glyph the
-// second time is the slowest thing the builder does. Reading also reports its
-// pages, so a long PDF shows "page 12 of 147" instead of sitting silent.
+// Read a file into chapters once and keep it: a book is inspected, sampled,
+// priced and built in one sitting, and re-reading a PDF glyph by glyph each time
+// is the slowest thing the builder does. Reading also reports its pages, so a
+// long PDF shows "page 12 of 147" instead of sitting silent.
 const SETUP = [
   "from pathlib import Path",
   "from biread.extract import get_extractor",
@@ -38,18 +39,69 @@ const ready = (async () => {
   postMessage({ type: "ready", langs: JSON.parse(langs) });
 })();
 
+const READ = [
+  "orig_chapters = read_book(orig_path, 'read-orig')",
+  "pub_chapters = read_book(pub_path, 'read-pub')",
+].join("\n");
+
 // Shared setup: turn the uploaded files into chapters and a Config.
 const LOAD = [
   "from biread.config import Config, lookup_price",
   "from biread.cache import Cache",
   "from biread.targets import get_target",
-  "orig_chapters = read_book(orig_path, 'read-orig')",
-  "pub_chapters = read_book(pub_path, 'read-pub')",
+  READ,
   "target = get_target(lang_key)",
   // Price comes live from the provider (OpenRouter lists every model's rate), so
   // a model absent from the built-in table — Qwen 3 8B, say — still prices exactly.
   "price = (price_in, price_out) if price_in else lookup_price(MODEL)",
   "cfg = Config(provider=provider, model=MODEL, model_gloss=MODEL, api_key=(api_key or None), ollama_host='', base_url=(base_url or None), max_cost_usd=10**9, price_per_mtok=price)",
+].join("\n");
+
+const CHAT_CLIENT = [
+  "if provider == 'anthropic':",
+  "    from biread.llm.pyodide_client import PyodideAnthropicClient",
+  "    client = PyodideAnthropicClient(MODEL, api_key)",
+  "else:",
+  "    from biread.llm.pyodide_openai_client import PyodideOpenAIClient",
+  "    client = PyodideOpenAIClient(MODEL, api_key, base_url or 'https://api.openai.com/v1')",
+].join("\n");
+
+const EMBEDDER = [
+  "from biread.llm.pyodide_embed import PyodideEmbedder",
+  "embedder = PyodideEmbedder(embed_model, api_key, base_url or 'https://openrouter.ai/api/v1')",
+].join("\n");
+
+// What each file says about itself. Reading it here is not wasted: the sample,
+// the estimate and the build all reuse the chapters this warms.
+const INSPECT = [
+  "import json",
+  "from biread.meta import describe",
+  READ,
+  "def _info(path, chapters):",
+  "    if not path:",
+  "        return None",
+  "    i = describe(Path(path), chapters)",
+  // Characters, so the page can price an embedding run without a second read.
+  "    return {'title': i.title, 'author': i.author, 'language': i.language, 'pages': i.pages, 'paragraphs': i.paragraphs, 'chars': sum(len(p) for c in chapters for p in c.paragraphs)}",
+  "json.dumps({'orig': _info(orig_path, orig_chapters), 'pub': _info(pub_path, pub_chapters)})",
+].join("\n");
+
+const indent = (code) => code.split("\n").map((line) => "    " + line).join("\n");
+
+// One page, done for real, so the reader sees the prose before paying for the
+// book. Translated by the chosen model, or matched against the edition brought.
+const SAMPLE = [
+  "MODEL = model_id",
+  LOAD,
+  "import json",
+  "from biread.sample import sample_translate, sample_align",
+  "if pub_path and route == 'align':",
+  indent(EMBEDDER),
+  "    s = sample_align(orig_chapters, pub_chapters, embedder.embed, sample_index)",
+  "else:",
+  indent(CHAT_CLIENT),
+  "    s = sample_translate(orig_chapters, client, cfg, target.name, sample_index)",
+  "json.dumps({'index': s.index, 'total': s.total, 'source': s.source, 'target': s.target, 'cost': s.cost})",
 ].join("\n");
 
 const ESTIMATE = [
@@ -71,30 +123,29 @@ const ESTIMATE = [
 const BUILD = [
   "MODEL = model_id",
   LOAD,
+  "import json",
   "from biread.build import build_reader",
-  "if provider == 'anthropic':",
-  "    from biread.llm.pyodide_client import PyodideAnthropicClient",
-  "    client = PyodideAnthropicClient(MODEL, api_key)",
-  "else:",
-  "    from biread.llm.pyodide_openai_client import PyodideOpenAIClient",
-  "    client = PyodideOpenAIClient(MODEL, api_key, base_url or 'https://api.openai.com/v1')",
-  "res = build_reader(title=title, chapters=orig_chapters, client=client, cache=Cache(None), cfg=cfg, target=target, published_chapters=pub_chapters, gloss=bool(want_gloss), on_progress=lambda s, d, t: js_progress(s, d, t))",
-  "res.html",
+  CHAT_CLIENT,
+  "res = build_reader(title=title, chapters=orig_chapters, client=client, cache=Cache(None), cfg=cfg, target=target, published_chapters=pub_chapters, gloss=bool(want_gloss), on_progress=lambda s, d, t: js_progress(s, d, t), on_text=lambda pairs: js_text(json.dumps(pairs)))",
+  "spent = (res.translation.cost or 0.0) + ((res.gloss.cost or 0.0) if res.gloss else 0.0)",
+  "json.dumps({'html': res.html, 'spent': spent})",
 ].join("\n");
 
 // Align-only: no translation. Match a brought published edition to the French by
 // meaning, with an embedding model — BGE-M3 on a local Ollama (free) or a cloud
 // model (pennies). The published English becomes the single reading column.
 const ALIGN = [
+  "import json",
   "from biread.targets import get_target",
-  "orig_chapters = read_book(orig_path, 'read-orig')",
-  "pub_chapters = read_book(pub_path, 'read-pub')",
+  READ,
   "target = get_target(lang_key)",
   "from biread.build import build_aligned",
-  "from biread.llm.pyodide_embed import PyodideEmbedder",
-  "embedder = PyodideEmbedder(embed_model, api_key, base_url or 'https://openrouter.ai/api/v1')",
+  EMBEDDER,
+  // The left page of the progress spread turns through the real book, so what it
+  // shows at "paragraph 812 of 3,684" is the paragraph actually being matched.
+  "js_text(json.dumps([[p, ''] for c in orig_chapters for p in c.paragraphs][:400]))",
   "html, _ = build_aligned(title=title, chapters=orig_chapters, published_chapters=pub_chapters, embed=embedder.embed, target=target, on_progress=lambda s, d, t: js_progress(s, d, t))",
-  "html",
+  "json.dumps({'html': html, 'spent': None})",
 ].join("\n");
 
 self.onmessage = async (e) => {
@@ -109,11 +160,13 @@ self.onmessage = async (e) => {
     const pubPath = m.pub ? write("pub_" + m.pubName, m.pub) : null;
     pyodide.globals.set("orig_path", origPath);
     pyodide.globals.set("pub_path", pubPath);
-    pyodide.globals.set("lang_key", m.lang);
+    pyodide.globals.set("lang_key", m.lang || "en");
     pyodide.globals.set("want_gloss", !!m.gloss);
     pyodide.globals.set("api_key", m.key || "");
     pyodide.globals.set("title", m.title || "book");
     pyodide.globals.set("model_id", m.model || "claude-sonnet-5");
+    pyodide.globals.set("route", m.route || "translate");
+    pyodide.globals.set("sample_index", m.sampleIndex || 0);
     // Provider, its base URL, and the model's live price (input/output $ per Mtok)
     // all come from the page, which knows what the reader picked and what it costs.
     pyodide.globals.set("provider", m.provider || "anthropic");
@@ -124,16 +177,23 @@ self.onmessage = async (e) => {
     // Live from here on: reading a PDF reports its pages during pricing and the
     // free build alike, not only while translating.
     pyodide.globals.set("js_progress", (s, d, t) => postMessage({ type: "progress", stage: s, done: d, total: t }));
+    // Finished prose, batch by batch, so the progress spread fills with the book
+    // being made rather than a placeholder.
+    pyodide.globals.set("js_text", (pairs) => postMessage({ type: "text", pairs: JSON.parse(pairs) }));
 
-    if (m.type === "estimate") {
+    if (m.type === "inspect") {
+      postMessage({ type: "inspected", data: JSON.parse(await pyodide.runPythonAsync(INSPECT)) });
+    } else if (m.type === "sample") {
+      postMessage({ type: "sample", data: JSON.parse(await pyodide.runPythonAsync(SAMPLE)) });
+    } else if (m.type === "estimate") {
       postMessage({ type: "estimate", data: JSON.parse(await pyodide.runPythonAsync(ESTIMATE)) });
     } else if (m.type === "build") {
-      postMessage({ type: "done", html: await pyodide.runPythonAsync(BUILD) });
+      postMessage({ type: "done", ...JSON.parse(await pyodide.runPythonAsync(BUILD)) });
     } else if (m.type === "align") {
-      postMessage({ type: "done", html: await pyodide.runPythonAsync(ALIGN) });
+      postMessage({ type: "done", ...JSON.parse(await pyodide.runPythonAsync(ALIGN)) });
     }
   } catch (err) {
-    postMessage({ type: "error", error: cleanError(err) });
+    postMessage({ type: "error", error: cleanError(err), during: m.type });
   }
 };
 
@@ -146,9 +206,9 @@ function cleanError(err) {
 }
 
 function write(name, bytes) {
-  // Idempotent, so pricing then building the same upload does not rewrite the
-  // file and drop its cached reading. A genuinely new file for a name reused in
-  // the session is rewritten, and its stale reading forgotten.
+  // Idempotent, so inspecting then sampling then building the same upload does
+  // not rewrite the file and drop its cached reading. A genuinely new file for a
+  // name reused in the session is rewritten, and its stale reading forgotten.
   const path = "/in/" + name;
   try {
     const old = pyodide.FS.readFile(path);

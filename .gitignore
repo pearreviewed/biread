@@ -28,3 +28,4 @@ dist/
 
 # local-only design handoff — never publish
 design-reference/ui-rebuild-brief.md
+design-reference/current-ui-snapshot.md
