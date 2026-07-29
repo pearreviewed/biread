@@ -75,25 +75,35 @@ def fold(word: str) -> str:
     return plain.lower()[:PREFIX]
 
 
-def _positions(paragraphs: Sequence[str]) -> dict[str, list[int]]:
+#: Extra tokens a caller draws from a paragraph beyond its plain words — a spelled
+#: number read back to its value, say — so a quantity anchors like a name does.
+Augment = Callable[[str], set]
+
+
+def _positions(paragraphs: Sequence[str], augment: Augment | None = None) -> dict[str, list[int]]:
     """Folded token -> the paragraphs it appears in, in order, without repeats."""
     seen: dict[str, list[int]] = defaultdict(list)
     for index, paragraph in enumerate(paragraphs):
-        for token in {fold(t) for t in TOKEN_RE.findall(paragraph)}:
-            if len(token) >= 4:
-                seen[token].append(index)
+        tokens = {t for t in (fold(w) for w in TOKEN_RE.findall(paragraph)) if len(t) >= 4}
+        if augment is not None:
+            tokens |= augment(paragraph)
+        for token in tokens:
+            seen[token].append(index)
     return seen
 
 
-def agreements(left: Sequence[str], right: Sequence[str]) -> list[tuple[int, int]]:
+def agreements(
+    left: Sequence[str], right: Sequence[str], augment: Augment | None = None
+) -> list[tuple[int, int]]:
     """Paragraph pairs proposed by tokens rare in both editions.
 
     A token kept here is one that both books use sparingly and the same number
     of times, so its occurrences can be paired off in order. That is nearly
     always a name, a place or a number — the things a translator carries across
-    rather than translates.
+    rather than translates. `augment` contributes extra such tokens per paragraph
+    (a number read from words back to its value), matched on the same terms.
     """
-    here, there = _positions(left), _positions(right)
+    here, there = _positions(left, augment), _positions(right, augment)
     pairs: set[tuple[int, int]] = set()
     for token, mine in here.items():
         yours = there.get(token)

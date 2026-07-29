@@ -109,3 +109,77 @@ def chapter_number(token: str | None) -> int | None:
     if ROMAN_RE.match(word):
         return _roman(word)
     return None
+
+
+# Cardinal number words, French and English in one table, for reading a spelled-out
+# quantity in prose back to its value — so "seventy-one" and "soixante et onze"
+# both anchor on 71, the way the digits "1755" already do. A word meaning different
+# numbers in each language would be a hazard, but there is none in common here; and
+# a coincidental small number ("three"/"trois") is filtered by the anchoring, which
+# only trusts a value the two editions use the same, sparing number of times.
+_CARDINALS = {
+    "zero": 0, "zéro": 0,
+    "un": 1, "une": 1, "one": 1, "deux": 2, "two": 2, "trois": 3, "three": 3,
+    "quatre": 4, "four": 4, "cinq": 5, "five": 5, "six": 6, "sept": 7, "seven": 7,
+    "huit": 8, "eight": 8, "neuf": 9, "nine": 9,
+    "dix": 10, "ten": 10, "onze": 11, "eleven": 11, "douze": 12, "twelve": 12,
+    "treize": 13, "thirteen": 13, "quatorze": 14, "fourteen": 14, "quinze": 15,
+    "fifteen": 15, "seize": 16, "sixteen": 16, "seventeen": 17, "eighteen": 18,
+    "nineteen": 19,
+    "vingt": 20, "vingts": 20, "twenty": 20, "trente": 30, "thirty": 30,
+    "quarante": 40, "forty": 40, "cinquante": 50, "fifty": 50, "soixante": 60,
+    "sixty": 60, "seventy": 70, "eighty": 80, "ninety": 90,
+    "cent": 100, "cents": 100, "hundred": 100, "mille": 1000, "thousand": 1000,
+    "million": 1_000_000, "millions": 1_000_000,
+}
+#: Joins two number words without being one — "soixante *et* onze", "three hundred
+#: *and* fifty" — so a run reads through it.
+_NUMBER_CONNECTORS = {"et", "and"}
+_NUMBER_WORD_RE = re.compile(r"[a-zàâäçéèêëîïôùûœ]+")
+
+
+def _cardinal_value(words: list[str]) -> int | None:
+    """The integer a run of cardinal words spells, or None if it spells nothing.
+
+    Additive within the low hundreds, multiplicative across a scale ("trois cent"
+    = 300, "deux mille" = 2000). French "quatre-vingt(s)" — four twenties, not four
+    then twenty — is the one place the addition breaks, and is read specially."""
+    total = current = 0
+    index = 0
+    while index < len(words):
+        word = words[index]
+        if word == "quatre" and index + 1 < len(words) and words[index + 1] in ("vingt", "vingts"):
+            current += 80
+            index += 2
+            continue
+        value = _CARDINALS.get(word)
+        if value is None:
+            return None
+        if value == 100:
+            current = (current or 1) * 100
+        elif value >= 1000:
+            total += (current or 1) * value
+            current = 0
+        else:
+            current += value
+        index += 1
+    return total + current
+
+
+def number_tokens(text: str) -> set[str]:
+    """A "num<value>" token for every spelled-out number in the text, so a quantity
+    anchors across two editions like a name does: "num71" from both "seventy-one"
+    and "soixante et onze". Digits are already caught as tokens elsewhere."""
+    tokens: set[str] = set()
+    run: list[str] = []
+    for word in _NUMBER_WORD_RE.findall(text.lower().replace("-", " ")) + [""]:
+        if word in _CARDINALS:
+            run.append(word)
+        elif run and word in _NUMBER_CONNECTORS:
+            continue  # a connector holds the run open without adding to it
+        elif run:
+            value = _cardinal_value(run)
+            if value:
+                tokens.add(f"num{value}")
+            run = []
+    return tokens

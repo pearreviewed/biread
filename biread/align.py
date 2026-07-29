@@ -25,7 +25,7 @@ from dataclasses import dataclass, field
 from .anchor import MIN_ANCHORS, agreements, align_by_anchors, longest_run
 from .cleanup import Chapter
 from .errors import AlignmentError
-from .numbering import chapter_number
+from .numbering import chapter_number, number_tokens
 from .translate import hash_text
 
 # Digits included on purpose: dates, editions and quantities are among the
@@ -191,6 +191,19 @@ def _flow_spread(left: list[str], right: list[str]) -> list[str]:
     return _flow([len(x) or 1 for x in left], right)
 
 
+def _shape_spread(left: list[str], right: list[str]) -> list[str]:
+    """Fill a segment between two anchors, keeping the sentences' shape.
+
+    When the segment holds the same number of sentences on both sides — the usual
+    case between two tight anchors — they are paired one to one, which keeps a long
+    sentence beside a long one instead of slicing it by character count and letting
+    a clause slip into the neighbour. Otherwise the text is poured by length.
+    """
+    if len(left) == len(right):
+        return list(right)
+    return _flow([len(x) or 1 for x in left], right)
+
+
 def _flow_anchored(french: list[str], published: list[str]) -> list[str]:
     """One published string per French paragraph, pinned on the names and numbers
     the two editions share so neither column drifts ahead of the other.
@@ -216,7 +229,12 @@ def _flow_anchored(french: list[str], published: list[str]) -> list[str]:
     if len(fr_sentences) < MIN_ANCHORS or not en_sentences:
         return _match_by_length(french, published)
 
-    anchors = longest_run(agreements(fr_sentences, en_sentences))
+    # Names and cognates (shared folded prefixes) and every number read back to
+    # its value, plus the chapter's own ends: a chapter begins and ends together
+    # in both editions, so its first and last sentences anchor to each other too.
+    proposed = agreements(fr_sentences, en_sentences, number_tokens)
+    proposed += [(0, 0), (len(fr_sentences) - 1, len(en_sentences) - 1)]
+    anchors = longest_run(proposed)
     if len(anchors) < MIN_ANCHORS:
         return _match_by_length(french, published)
 
@@ -226,7 +244,7 @@ def _flow_anchored(french: list[str], published: list[str]) -> list[str]:
     fr_prev = en_prev = 0
     for fr_at, en_at in list(anchors) + [(len(fr_sentences), len(en_sentences))]:
         if fr_at > fr_prev:
-            assigned[fr_prev:fr_at] = _flow_spread(
+            assigned[fr_prev:fr_at] = _shape_spread(
                 fr_sentences[fr_prev:fr_at], en_sentences[en_prev:en_at]
             )
         fr_prev, en_prev = fr_at, en_at

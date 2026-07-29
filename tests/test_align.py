@@ -1,9 +1,28 @@
 import pytest
 
 from biread.align import _flow_anchored, align_published
+from biread.anchor import agreements
 from biread.cleanup import Chapter
 from biread.errors import AlignmentError
+from biread.numbering import number_tokens
 from biread.translate import hash_text
+
+
+def test_spelled_numbers_read_to_the_same_token_across_languages():
+    # A quantity survives translation like a name does, once read off the words.
+    assert "num71" in number_tokens("seventy-one quarterings")
+    assert "num71" in number_tokens("soixante et onze quartiers")
+    assert "num350" in number_tokens("three hundred and fifty pounds")
+    assert "num350" in number_tokens("trois cent cinquante livres")
+    assert "num80" in number_tokens("quatre-vingts")  # four twenties, not four then twenty
+
+
+def test_a_spelled_number_anchors_where_names_and_cognates_cannot():
+    left = ["Bonjour à tous.", "Il possédait soixante et onze moutons.", "Au revoir donc."]
+    right = ["Good morning, all.", "He owned seventy-one sheep.", "Goodbye then."]
+    # These share no name or cognate; only the number ties the middle sentences.
+    assert (1, 1) not in agreements(left, right)
+    assert (1, 1) in agreements(left, right, number_tokens)
 
 
 def test_anchored_flow_pins_names_so_the_columns_do_not_drift():
