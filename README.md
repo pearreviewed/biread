@@ -125,9 +125,12 @@ order; anything resembling nothing — front matter, footnotes — is left out, 
 a French paragraph with no counterpart is left blank rather than filled with a
 guess. The toggle in the header cross-fades between the two English columns.
 
-This needs the translation to exist first, so alignment runs after it. Without
-one, biread falls back to distributing proportionally within each chapter and
-says so.
+Alignment therefore runs after the translation and depends on it. There is no
+wordless shortcut: two translations of the same book share their *meaning*, not
+their vocabulary, so matching them without a model means matching on surface
+tokens, and that has a ceiling no amount of tuning raises. Where the two
+editions still refuse to line up, biread reports the coverage it got and warns
+that the published column is thin — it never fills the gap with a guess.
 
 ## How pages are laid out
 

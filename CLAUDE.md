@@ -110,9 +110,10 @@ fact *no* published text made it in. Traced end to end:
 3. **Alignment must degrade gracefully, never all-or-nothing.** Losing chapter
    detection should not zero the published column. The content-similarity
    **pivot** (English↔English through the generated translation) needs no chapter
-   structure and should carry any book that was translated; `anchor.py`
-   (names/numbers) is the no-key fallback. Single-blob proportional is a last
-   resort, not the silent default it became here.
+   structure and carries any book that was translated — which is every book,
+   since a key is now required to build one at all. Where the pivot comes out
+   thin, say so; a proportional fill must never be the silent default it became
+   here.
 
 4. **Front-matter / boilerplate stripping must not depend on chapter numbering.**
    `trim_matter` only fires when chapters were numbered, so a detection miss
@@ -251,7 +252,8 @@ CI so it stops depending on anyone remembering.
 | Revise — automatic cross-device sync? | Spec'd (sign-in accounts) and **parked**; the shipped rung is the edits link. Full local+server design in `design-reference/revise-spec.md`. |
 | EPUB — reflowable with tap glosses, or the reader's locked spread? | The **locked spread** (fixed-layout): French left, English right, like the reader. The reflowable version put the French and English in one interleaved column and turned every glossed phrase into an EPUB footnote, which **Apple Books paints blue** — the whole page went blue and unreadable, and it did not look like the reader. Fixed-layout is paginated at build time by the reader's own algorithm (in headless Chromium, so `--epub` now needs `[browser]`), and **drops glosses** — same reason the PDF does. Best on a tablet or a Mac; a phone shows one page at a time. |
 | Server — does it ever hold users' books? | **No — biread stays a tool, not a host.** Translation runs in the reader's browser on the reader's own key; the finished edition is the reader's own file; the server holds only the app, accounts, and edits — never the book. A DMCA takedown agent is avoidable only by not hosting the books. Accounts sync the *bookmark, not the book* (source hash + reading position + fixes + light metadata), the file re-opened locally or pulled from the reader's own cloud. Full design in [`design-reference/accounts-spec.md`](design-reference/accounts-spec.md). |
-| Builder — how does a reader choose the translation model, and where? | On the web builder's price screen, a clickable **three-tier** choice — **Finest / Balanced / Cheapest**, price beside each, model id in fine print — within the key's provider. Cheap to show because the estimate is model-independent: `translate.estimate()` counts tokens from the text alone, so every tier prices off the same counts with no extra API calls. Builder-only — does **not** touch the "never show price in the reader" rule; offers only models with a live `PRICING_PER_MTOK` row. |
+| Builder — how does a reader choose the translation model, and where? | On the web builder's price screen, a clickable **three-tier** choice — **Finest / Balanced / Cheapest**, price beside each, model id in fine print — plus a field for any other model id. One OpenRouter key reaches all of them, and every rate is read live from OpenRouter's models API, so a model with no built-in `PRICING_PER_MTOK` row still prices exactly. Cheap to show because the estimate is model-independent: `translate.estimate()` counts tokens from the text alone, so every tier prices off the same counts with no extra API calls. Builder-only — does **not** touch the "never show price in the reader" rule. |
+| Builder — is there a free, no-key way to read two editions side by side? | **No, removed.** It was built (algorithmic cross-lingual matching on shared names, numbers and sentence lengths) and taken out: two translations of one book share meaning, not words, so a surface-token matcher has a ceiling that tuning does not raise, and it failed quietly rather than loudly. A key is now required for every build. What the free path was reaching for — alignment without paying for a full translation — is the job of the embedding path (`_by_embeddings`), which matches by meaning in a shared multilingual space; it is in `align.py` and dormant until wired to a provider. |
 
 ## Reversals
 
@@ -319,10 +321,12 @@ biread/
   extract/        source file -> raw text
   cleanup.py      raw text -> chapters of clean paragraphs
   translate.py    paragraphs -> English, batched and cached
-  align.py        a published translation -> matched to the French by content
-  anchor.py       two editions pinned to each other by the names and numbers
-                  they share, for when there is no generated translation to
-                  pivot through (no model, no headings, no shared vocabulary)
+  align.py        a published translation -> matched to the French by content,
+                  pivoting through the generated translation (so it runs after
+                  translate.py and needs a key, like everything that matters)
+  anchor.py       vestigial: two editions pinned by the names and numbers they
+                  share. Reachable only from tests now that a build requires a
+                  key; kept until the surface-token path is removed outright
   build.py        the pipeline shared by the CLI and the in-browser builder
   gloss.py        per-paragraph hover units; width judged at render, not cache
   language.py     what glossing needs to know about the source language

@@ -49,8 +49,10 @@ own key. Each edition is created, and paid for, by whoever wants it.
 - **`align.py`** — pairs a published translation you own to the French *by
   content*, pivoting through the generated English (English-to-English), because
   a translator splits and merges paragraphs and a published edition carries
-  front matter the source lacks. Positional pairing was tried first and was
-  wrong; see the Reversals in `CLAUDE.md`.
+  front matter the source lacks. It runs after `translate.py` and needs its
+  output: two editions share meaning rather than words, so matching them is a
+  job for a model, not for token overlap. Positional pairing was tried first and
+  was wrong; see the Reversals in `CLAUDE.md`.
 - **`gloss.py`** — asks the model to divide a paragraph into hover units and
   explain each in context, then treats the answer as a *proposal*: every unit is
   located in the real paragraph and only its character offsets are kept, so a
