@@ -86,7 +86,16 @@ reason. Today it can fail **silently**.
 > line. **Gated to PDFs**, because a text or EPUB file that omits blank lines is
 > saying something about itself and a PDF cannot; that gate is what keeps the
 > verified Micromégas corpus untouched, which three ungated versions of the rule
-> did not.
+> did not. Ligature glyphs (`ﬁnd`, `ﬂurried` — 323 of them) are expanded too,
+> ungated, because a ligature codepoint is a shape and never a meaning.
+>
+> **Built end to end, and it reads.** `build_aligned` on the two PDFs, matched by
+> embeddings: 242 pages, coverage 72.6%, 127 French paragraphs with no counterpart
+> left honestly blank, nothing degraded, $0.012. Spot-checked across the book —
+> Pangloss's *"Il est démontré…"* faces *"It is demonstrable,"* paragraph for
+> paragraph. Candide is the second book that works, and the first that ever
+> failed. What is still missing is the rest of the corpus: an EPUB with
+> interleaved notes, and editions whose chapter counts disagree.
 
 **The failure that prompted this (Candide, Gutenberg PDF).** The built reader
 shipped with `publishedAvailable: false`, no published column at all, and a note
