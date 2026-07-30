@@ -114,9 +114,15 @@ class _Body(HTMLParser):
         if tag == "section" and not opened and self._division_words & set(kind):
             self._division += 1
         if opened:
+            # The id is the chapter's address in the work — "chapter-1-1-1"
+            # through "chapter-5-9-6" for Les Misérables. Two editions of a book
+            # in parts can only be paired reliably on addresses like these: read
+            # as a flat run, one chapter missing from either side shifts every
+            # pairing after it, and the drift is silent.
             self.chapters.append(
                 {"number": str(len(self.chapters) + 1), "title": None,
-                 "division": self._division, "paragraphs": []})
+                 "id": attributes.get("id"), "division": self._division,
+                 "paragraphs": []})
             self._depth += 1
         skips = tag in _SKIP_TAGS
         self._stack.append((skips, opened))
@@ -153,6 +159,16 @@ class _Body(HTMLParser):
             self._heading.append(data)
         elif self._para is not None:
             self._para.append(data)
+
+
+#: "chapter-5-9-6" -> (5, 9, 6). The work's own coordinates, not our count.
+_ADDRESS = re.compile(r"(\d+)")
+
+
+def address(chapter: dict) -> tuple[int, ...] | None:
+    """Where a chapter sits in a work divided into parts, as the file says."""
+    numbers = _ADDRESS.findall(chapter.get("id") or "")
+    return tuple(int(n) for n in numbers) if numbers else None
 
 
 def by_division(chapters: list[dict]) -> list[dict]:

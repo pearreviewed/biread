@@ -1,5 +1,5 @@
 """Reading a published translation out of Standard Ebooks, offline."""
-from biread.standardebooks import Book, load, parse, search, text_url
+from biread.standardebooks import Book, address, load, parse, search, text_url
 
 # The shape the site actually serves: front and back matter are sections too,
 # and are told apart from the body only by what they declare themselves to be.
@@ -38,17 +38,30 @@ PARTED = """
 <section id="halftitlepage" epub:type="frontmatter halftitlepage"><p>Les Miserables</p></section>
 <section id="volume-1" epub:type="bodymatter part">
   <h2>Fantine</h2>
-  <section id="volume-1-book-1-chapter-1" epub:type="chapter">
+  <section id="chapter-1-1-1" epub:type="chapter">
     <h3>Monsieur Myriel</h3>
     <p>In 1815, Monsieur Charles-Francois-Bienvenu Myriel was Bishop of Digne.</p>
   </section>
-  <section id="volume-1-book-1-chapter-2" epub:type="chapter">
+  <section id="chapter-1-1-2" epub:type="chapter">
     <h3>Monsieur Myriel Becomes Monseigneur Bienvenu</h3>
     <p>The episcopal palace of Digne adjoined the hospital, a narrow building.</p>
   </section>
 </section>
 </body>
 """
+
+
+def test_a_chapter_knows_where_it_sits_in_the_work():
+    """Read as two flat runs, Les Misérables' 364 French chapters against 365
+    English ones drift: one missing chapter shifts every pairing after it, and
+    the drift is silent because the opening chapters still look right. Both
+    editions state the real address, so pair on that."""
+    assert [address(c) for c in parse(PARTED)] == [(1, 1, 1), (1, 1, 2)]
+
+
+def test_a_chapter_with_no_address_says_so_rather_than_guessing():
+    assert address({"id": None}) is None
+    assert address({}) is None
 
 
 def test_a_book_divided_into_parts_still_yields_its_chapters():
