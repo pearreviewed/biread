@@ -423,8 +423,18 @@ def clean(raw: str, from_pdf: bool = False) -> tuple[list[Chapter], list[Removal
     liberty taken with any format able to mark its own paragraphs.
     """
     from .normalize import repair
+    from .notes import scan
 
     text, repaired = repair(raw, from_pdf)
     text, removed = strip_boilerplate(text)
     chapters, more = detect_chapters(text)
+
+    # Per chapter, because that is where an edition puts its notes — and because a
+    # marker restarts at 1 in each, so the whole book read at once would take one
+    # chapter's reference as corroboration for another's.
+    for chapter in chapters:
+        chapter.paragraphs, notes = scan(chapter.paragraphs)
+        for note in notes:
+            more.append(Removal("Note", f"[{note.number}] {note.text[:70]}"))
+
     return chapters, repaired + removed + more
