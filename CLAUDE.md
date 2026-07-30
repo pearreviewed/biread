@@ -183,6 +183,10 @@ the page's own header, so *Smollett · 1920* is quoted, not inferred, and 20,000
 Leagues shows a bare *1911* because its translator is unnamed. Coverage appears
 only for the two books someone has read end to end; the other three say so.
 
+A book found on the lookup screen can be **kept**, by a checkbox that is off by
+default: it is saved in this browser and stands among the cards next visit under
+*Kept by you*. Nothing of the book is kept — only its two page names.
+
 `python -m biread.shelf` lists the shelf; `--check` re-measures every entry
 against the live wiki and reports what has drifted.
 
@@ -314,6 +318,7 @@ CI so it stops depending on anyone remembering.
 | Two editions counting their chapters differently? | **Said out loud, and sized.** 47 against 46 is two editions; 4 against 22 is the same book divided quite differently and is described that way, because the aligner drops the numbering and matches by meaning. Both are normal; neither is silent. |
 | How are a book's notes found and taken out? | **By corroboration, never by shape.** `notes.py` removes a paragraph only where the prose actually refers to it (`Micromégas[1]` … `[1] De micros`), or where it belongs to the run of notes closing a chapter, numbered in order. A paragraph opening `1.` is a footnote in one book and an ordinary list in another and there is no telling them apart by looking, so an uncorroborated one is left where it is: a note left in is untidy, a deleted sentence is silent and unrecoverable. Every note taken out is reported to the terminal like any other removal. Scanned per chapter, because markers restart at 1 in each. Verified inert across the whole corpus — all six files come out with the same paragraph count and nothing removed, which is right, because none of them was leaking apparatus. |
 | Builder — what does a file card claim about a book? | Only what the file says: `meta.describe` reads an EPUB's OPF for title, author and language, a PDF for its page count, and counts paragraphs from the parsed text. Everything else stays None and is simply not shown — a filename is not an author, and a confident wrong byline is worse than a blank one. |
+| A book Wikisource cannot supply? | **A second library, English only** — `standardebooks.py`. It carries translations Wikisource does not have (Salammbô) and others Wikisource holds in a shape that will not align (Les Misérables, 411 sections against the translation's 48). Structure is read from the file's own EPUB semantics (`epub:type="chapter"`), the same principle as `ws-noexport` in another vocabulary, and the translator is in the URL so a card costs no second request. Wikisource stays preferred where both have a work, because only it can supply *both* halves. Built and tested; **nothing calls it yet**. |
 | Can a reader put a book of their own on the shelf? | **A book they *found*, yes; a book they *own*, no.** A find on the lookup screen is two Wikisource page names — the shelf's whole currency — so a checkbox, **off by default**, keeps it: saved in this browser, shown among the cards next visit under *Kept by you*, and taken off again from the card. The align route gets no such control, because an uploaded PDF has nothing shareable in it: passing it on would mean holding the text, which is the one thing biread does not do. "Shared with other readers" in the literal sense — one list everyone sees — waits on the parked server and on someone to moderate it. |
 
 ## Reversals
@@ -358,6 +363,10 @@ Recorded because the reasoning matters more than the outcome.
 
 ## Known open issues
 
+- **The second library is built but unreached.** `standardebooks.py` searches,
+  fetches and parses, with tests, and no route in the CLI or the builder asks it
+  for anything — so the books it exists for (Salammbô, Les Misérables) are still
+  not gettable from the product. It is a library waiting for a caller.
 - **Three of the five shelf books have not been read through.** Candide (98.9%)
   and Madame Bovary (87.4%) were built and read; Around the World in Eighty Days,
   Micromégas and 20,000 Leagues resolve, fetch and build, but nobody has read one
@@ -428,6 +437,8 @@ biread/
   wikisource.py   two page names -> two editions, resolved and fetched; no I/O
                   of its own, so the CLI reads through requests and the browser
                   through its own fetch
+  standardebooks.py  a second library, English only: the translations
+                  Wikisource lacks or holds in a shape that will not align
   shelf.py        the curated books, and what each one honestly claims
   translate.py    paragraphs -> English, batched and cached
   align.py        a published translation -> matched to the French by meaning:
@@ -458,10 +469,10 @@ selector must be scoped to `#stage-wrap`.
 ## Tests
 
 ```sh
-pip install -e ".[dev]" && pytest              # ~495 Python tests, no network
+pip install -e ".[dev]" && pytest              # ~438 Python tests, no network
 pip install -e ".[browser]" && playwright install chromium
-pytest tests/test_reader_js.py                 # 54 browser tests, the reader
-pytest tests/test_builder_js.py                # 44 browser tests, the builder
+pytest tests/test_reader_js.py                 # 58 browser tests, the reader
+pytest tests/test_builder_js.py                # 46 browser tests, the builder
 ```
 
 The builder's tests serve `web/builder.html` beside `tests/builder_worker_stub.js`,
