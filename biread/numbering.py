@@ -106,6 +106,13 @@ def chapter_number(token: str | None) -> int | None:
     compound = _compound_ordinal(word)
     if compound is not None:
         return compound
+    # Cardinals, not only ordinals: an edition may head its chapters "One",
+    # "Two", "Twenty-one" as readily as "First" — Eleanor Marx's Madame Bovary
+    # does — and the table that reads a spelled-out quantity in prose reads
+    # these too. Before the roman check, which would take "mi" for 1001.
+    cardinal = _cardinal_value(_NUMBER_WORD_RE.findall(word))
+    if cardinal:
+        return cardinal
     if ROMAN_RE.match(word):
         return _roman(word)
     return None

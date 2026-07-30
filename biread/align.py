@@ -502,16 +502,22 @@ def trim_matter(chapters: list[Chapter]) -> list[Chapter]:
     return _strip_trailing_matter(chapters[numbered[0] : numbered[-1] + 1])
 
 
+def _key(chapter: Chapter) -> tuple[int | None, int | None]:
+    """What names a chapter across two editions: its number, and the part it is
+    numbered within where the book has parts."""
+    return (chapter.part, chapter_number(chapter.number))
+
+
 def _pair_by_number(french: list[Chapter], published: list[Chapter]):
     """Pair chapters on the number they carry rather than the order they arrive
     in, so an extra preface on one side cannot shift the book. A French chapter
     with no counterpart pairs with None and is left blank rather than guessed."""
-    by_number: dict[int, Chapter] = {}
+    by_number: dict[tuple[int | None, int | None], Chapter] = {}
     for chapter in published:
-        number = chapter_number(chapter.number)
-        if number is not None and number not in by_number:
-            by_number[number] = chapter
-    return [(c, by_number.get(chapter_number(c.number))) for c in french]
+        key = _key(chapter)
+        if key[1] is not None and key not in by_number:
+            by_number[key] = chapter
+    return [(c, by_number.get(_key(c))) for c in french]
 
 
 def _label(chapter: Chapter, index: int) -> str:

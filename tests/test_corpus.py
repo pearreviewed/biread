@@ -155,3 +155,57 @@ def test_both_editions_open_on_the_same_first_line(candide_chapters, candide_fre
 def test_the_repair_is_reported_not_silent(candide_chapters):
     _, removed = candide_chapters
     assert any(r.kind == "Paragraph break restored" for r in removed)
+
+
+# ---- a book in parts, from an EPUB (Madame Bovary) ----
+
+BOVARY_FR = EXAMPLES / "bovary-french.epub"
+BOVARY_EN = EXAMPLES / "bovary-published.epub"
+bovary = pytest.mark.skipif(not BOVARY_FR.exists(), reason="Bovary corpus EPUBs not present")
+
+
+@pytest.fixture(scope="module")
+def bovary_editions():
+    from biread.align import trim_matter
+    from biread.extract import get_extractor
+
+    def load(path):
+        chapters, _ = clean(get_extractor(path).extract(path))
+        return [c for c in trim_matter(chapters) if c.paragraphs] or chapters
+
+    return load(BOVARY_FR), load(BOVARY_EN)
+
+
+@bovary
+def test_both_editions_find_all_thirty_five_chapters(bovary_editions):
+    """Three parts numbered I..IX, I..XV, I..XI. Read as one ascending spine the
+    novel collapsed into a single chapter, its 3,087 paragraphs under the last
+    line of the table of contents."""
+    for chapters in bovary_editions:
+        assert len(chapters) == 35
+
+
+@bovary
+def test_both_editions_agree_on_the_three_parts(bovary_editions):
+    for chapters in bovary_editions:
+        assert [c.part for c in chapters] == [1] * 9 + [2] * 15 + [3] * 11
+
+
+@bovary
+def test_the_two_editions_pair_chapter_for_chapter(bovary_editions):
+    """The French numbers its chapters in roman and the English spells them out
+    ("One", "Nine"); neither is worth anything unless the part is carried too,
+    since each edition has three chapter ones."""
+    from biread.align import _chapter_pairs
+
+    french, published = bovary_editions
+    pairs = _chapter_pairs(french, published)
+    assert len(pairs) == 35
+    assert all(pub is not None for _, pub in pairs)
+
+
+@bovary
+def test_the_novel_opens_on_its_first_line_in_both(bovary_editions):
+    french, published = bovary_editions
+    assert french[0].paragraphs[0].startswith("Nous étions à l")
+    assert published[0].paragraphs[0].startswith("We were in class")

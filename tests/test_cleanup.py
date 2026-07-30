@@ -1,3 +1,4 @@
+from biread.numbering import to_roman
 from biread.cleanup import clean, detect_chapters, rejoin_paragraphs, strip_boilerplate
 
 GUTENBERG = """The Project Gutenberg eBook of Something
@@ -305,3 +306,39 @@ def test_explicit_chapter_headings_still_win():
     text = "CHAPITRE I.\nLE DÉBUT\n\nUn paragraphe.\n\nCHAPITRE II.\nLA SUITE\n\nDeux.\n"
     chapters, _ = clean(text)
     assert [c.number for c in chapters if c.number] == ["I", "II"]
+
+
+# ---- books in parts, and the contents list that shadows them ----
+
+def _in_parts(counts):
+    """A book whose chapters are numbered afresh in each part."""
+    out = []
+    for chapters in counts:
+        for n in range(1, chapters + 1):
+            out.append(f"{to_roman(n)}\n\nUne page de prose ordinaire, assez longue.\n")
+    return "\n".join(out)
+
+
+def test_numbering_that_starts_over_reads_as_a_new_part():
+    # Madame Bovary is three parts numbered I..IX, I..XV, I..XI. Read as one
+    # ascending spine, only the longest stretch survives and the rest is lost.
+    chapters, _ = clean(_in_parts([9, 15, 11]))
+    numbered = [c for c in chapters if c.number]
+    assert len(numbered) == 35
+    assert [c.part for c in numbered] == [1] * 9 + [2] * 15 + [3] * 11
+
+
+def test_a_book_that_simply_counts_upward_is_in_no_parts():
+    chapters, _ = clean(_in_parts([6]))
+    assert {c.part for c in chapters if c.number} == {None}
+
+
+def test_a_table_of_contents_does_not_become_the_book():
+    """Its entries are headed exactly as the chapters are, and it comes first, so
+    it offers a complete false spine. Bovary's whole novel landed under the last
+    of its thirty-five contents lines."""
+    contents = "\n".join(to_roman(n) for n in range(1, 7))
+    chapters, _ = clean(contents + "\n\n" + _in_parts([6]))
+    numbered = [c for c in chapters if c.number]
+    assert len(numbered) == 6
+    assert all(c.paragraphs for c in numbered)

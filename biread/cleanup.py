@@ -82,6 +82,11 @@ class Chapter:
     number: str | None  # numbering token as found ("I", "3"); None = leading section
     title: str | None
     paragraphs: list[str] = field(default_factory=list)
+    #: Which part of the book this chapter belongs to, 1-based, where the edition
+    #: divides itself into parts and starts numbering afresh in each. None where
+    #: the chapters simply run 1..N. Madame Bovary has three, so its part II
+    #: chapter I must not be mistaken for its part I chapter I.
+    part: int | None = None
 
 
 @dataclass(frozen=True)
@@ -234,6 +239,53 @@ def _split_title(blocks: list[list[str]]) -> tuple[str | None, list[list[str]]]:
 HEADING_NUMERAL_MAX_LEN = 12
 
 
+#: Lines between a chapter and the one that starts a new part's numbering. A part
+#: boundary has a chapter behind it; adjacent numerals are a contents list.
+RESTART_GAP = 3
+
+#: A chapter has prose under it. Less than this between one heading and the next
+#: means they are a list of chapters, not the chapters themselves. Small, because
+#: a real chapter may be a paragraph long, and a contents list has essentially
+#: nothing under each entry — a blank line, or a part label.
+MIN_CHAPTER_TEXT = 10
+
+
+def _spine(headings: list, lines: list[str]) -> list:
+    """The real chapters among the candidate headings, whichever pattern found
+    them: those with prose under them, from the first that starts the counting.
+
+    Both a table of contents and the chapters it lists are headed identically —
+    that is what a table of contents is — so both patterns need this, and an
+    edition that writes "Chapter One" needs it exactly as much as one that writes
+    a bare "I".
+    """
+    kept = _with_text_under_them(headings, lines)
+    while kept and (chapter_number(kept[0][1]) or 0) > 2:
+        kept.pop(0)
+    return kept
+
+
+def _with_text_under_them(candidates: list, lines: list[str]) -> list:
+    """Candidates with a chapter's worth of prose beneath them.
+
+    A table of contents is a column of the very numerals a chapter is headed by,
+    and it comes first, so an edition that prints one offers a complete false
+    spine before the real one. What separates them is that nothing is written
+    under a table of contents: its entries sit line under line. Madame Bovary's
+    EPUB lists thirty-five chapters this way, and the whole novel — every
+    paragraph of it — was landing under the last of them.
+    """
+    kept = []
+    for pos, heading in enumerate(candidates):
+        end = candidates[pos + 1][0] if pos + 1 < len(candidates) else len(lines)
+        under = [line.strip() for line in lines[heading[0] + 1 : end] if line.strip()]
+        # Prose, not a label: what sits between two contents entries is a blank
+        # line or a part heading set in capitals ("PART II."), never a sentence.
+        if sum(map(len, under)) >= MIN_CHAPTER_TEXT and any(c.islower() for c in "".join(under)):
+            kept.append(heading)
+    return kept
+
+
 def _numeral_headings(lines: list[str]) -> list[tuple[int, str]]:
     """Headings for an edition that marks chapters with a bare numeral and no
     heading word — a lone "I", "II" … "XXX", as a Gutenberg PDF sets Candide.
@@ -258,13 +310,22 @@ def _numeral_headings(lines: list[str]) -> list[tuple[int, str]]:
     # run three long, but chapters are numbered without gaps, so the run that
     # steps by one wins and the stray V is left as prose. Each run is scored
     # (length, number of +1 steps) and the best carries.
+    # A run may also begin again at 1: a book in parts numbers its chapters
+    # afresh in each, so I..IX, I..XV, I..XI is one spine of thirty-five and not
+    # three rival spines of nine, fifteen and eleven.
     score = [(1, 0)] * len(candidates)
     came_from = [-1] * len(candidates)
     for j in range(len(candidates)):
         for k in range(j):
-            if candidates[k][2] < candidates[j][2]:
+            ascending = candidates[k][2] < candidates[j][2]
+            # A restart is a part boundary, and a part boundary has a chapter
+            # behind it. Without the distance, a chapter's own title set in
+            # capitals ("I" then "FIRST") reads as chapter one starting over,
+            # and so does every line of a table of contents.
+            restarts = candidates[j][2] == 1 and candidates[j][0] - candidates[k][0] > RESTART_GAP
+            if ascending or restarts:
                 length, steps = score[k]
-                consecutive = steps + (candidates[j][2] == candidates[k][2] + 1)
+                consecutive = steps + (candidates[j][2] == candidates[k][2] + 1 or restarts)
                 if (length + 1, consecutive) > score[j]:
                     score[j] = (length + 1, consecutive)
                     came_from[j] = k
@@ -277,9 +338,11 @@ def _numeral_headings(lines: list[str]) -> list[tuple[int, str]]:
         end = came_from[end]
     run.reverse()
 
-    # Must be a real spine, not two coincidental numerals: several of them, and
-    # numbered from the front of the book rather than starting deep inside it.
-    if len(run) < 3 or chapter_number(run[0][1]) > 2:
+    # Several of them, and a spine rather than two coincidental numerals. A stray
+    # high numeral left over from a table of contents can otherwise anchor the run
+    # ahead of the real first chapter — Madame Bovary keeps one "XI" that way.
+    run = _spine(run, lines)
+    if len(run) < 3:
         return []
     return run
 
@@ -306,6 +369,7 @@ def detect_chapters(text: str) -> tuple[list[Chapter], list[Removal]]:
         for i, line in enumerate(lines)
         if (m := CHAPTER_RE.match(line.strip()))
     ]
+    headings = _spine(headings, lines) if len(headings) >= 2 else headings
     if len(headings) < 2:
         headings = _numeral_headings(lines) or headings
 
@@ -323,12 +387,33 @@ def detect_chapters(text: str) -> tuple[list[Chapter], list[Removal]]:
     if preamble:
         chapters.append(Chapter(None, None, [" ".join(b) for b in preamble]))
 
+    parts = _parts(headings)
     for pos, (line_idx, number) in enumerate(headings):
         end = headings[pos + 1][0] if pos + 1 < len(headings) else len(lines)
         title, body = _split_title(section(line_idx + 1, end))
-        chapters.append(Chapter(number, title, [" ".join(b) for b in body]))
+        chapters.append(Chapter(number, title, [" ".join(b) for b in body], parts[pos]))
 
     return chapters, removed
+
+
+def _parts(headings: list[tuple[int, str]]) -> list[int | None]:
+    """Which part each heading belongs to, counted from where the numbering
+    starts over.
+
+    A book that simply runs 1..N is in no parts at all and every chapter gets
+    None, so nothing changes for the books that do. Only where the numbers fall
+    back on themselves is a boundary read, and then the chapter's identity is the
+    pair — part two's chapter one is not part one's.
+    """
+    numbers = [chapter_number(token) for _, token in headings]
+    part = 1
+    out: list[int | None] = []
+    for pos, number in enumerate(numbers):
+        previous = numbers[pos - 1] if pos else None
+        if previous is not None and number is not None and number <= previous:
+            part += 1
+        out.append(part)
+    return out if part > 1 else [None] * len(headings)
 
 
 def clean(raw: str, from_pdf: bool = False) -> tuple[list[Chapter], list[Removal]]:
