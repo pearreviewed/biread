@@ -286,11 +286,15 @@
     return p;
   }
 
-  function mobilePairNode(i, french, english, continued) {
+  // The French is glossed here exactly as the two-page layout glosses it, so a
+  // phone reader can tap a phrase for its meaning — the same units, the same tap
+  // that pins the tooltip. from/to (not a pre-sliced string) so `glossedNode` can
+  // place each unit by its offset into the paragraph.
+  function mobilePairNode(i, from, to, english, continued) {
     var box = document.createElement('div');
     box.className = 'mobile-pair';
     box.dataset.pair = i;
-    box.appendChild(paragraphNode(i, 'fr', french, continued));
+    box.appendChild(glossedNode(i, from, to, continued));
     box.appendChild(paragraphNode(i, 'en', english, continued));
     return box;
   }
@@ -409,7 +413,7 @@
     eachPart(spread, function (p, from, to, continued) {
       if (!first) target.appendChild(dividerNode());
       var pairBox = mobilePairNode(
-        p, textSpan(PAIRS[p].fr, from, to), textSpan(englishText(p), from, to), continued
+        p, from, to, textSpan(englishText(p), from, to), continued
       );
       // The stacked layout is correctable too — record the slice's offsets on its
       // English paragraph, exactly as the two-page layout does.
@@ -515,7 +519,7 @@
           if (column.mobile) {
             if (!first) inner.appendChild(dividerNode());
             inner.appendChild(mobilePairNode(
-              p, textSpan(PAIRS[p].fr, a, b), textSpan(column.english(p), a, b), continued
+              p, a, b, textSpan(column.english(p), a, b), continued
             ));
           } else {
             inner.appendChild(

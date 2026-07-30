@@ -872,6 +872,29 @@ def test_escape_dismisses_the_tooltip(glossed):
     assert glossed.locator(".tip").count() == 0
 
 
+# ---- gloss on a phone: tap where the desk hovers ----
+
+def test_mobile_glosses_the_french_and_a_tap_pins_the_meaning(browser, tmp_path_factory):
+    page = open_reader(browser, build_glossed_reader(tmp_path_factory), width=375, height=800)
+    page.wait_for_selector("#stage-wrap .book-mobile", timeout=10000)
+    # The same units the two-page layout wraps, now in the stacked French column —
+    # and, as on the desk, never in the English.
+    assert page.locator("#stage-wrap .mobile-pair .pair-fr .unit").count() == 3
+    assert page.locator("#stage-wrap .mobile-pair .pair-en .unit").count() == 0
+    # Units are offsets, not edits: the paragraph still reads as the original.
+    rendered = page.evaluate(
+        "document.querySelector('#stage-wrap .mobile-pair .pair-fr').textContent"
+    )
+    assert rendered == GLOSS_FR
+    # A tap pins the tooltip (and the tap that would have turned the page is swallowed).
+    page.click("#stage-wrap .mobile-pair .pair-fr .unit >> nth=1")
+    page.wait_for_selector(".tip", timeout=3000)
+    tip = page.inner_text(".tip")
+    assert "he rose" in tip and "verb" in tip
+    assert page.locator("#stage-wrap .unit.pinned").count() == 1
+    page.close()
+
+
 def test_a_book_without_glosses_has_no_hover_targets(reader):
     assert reader.locator("#stage-wrap .unit").count() == 0
 
