@@ -500,6 +500,62 @@ def test_a_found_book_joins_the_shelf_marked_for_what_it_is(page):
     assert "about" in card and "min" in card
 
 
+def find_germinal(page, keep=False):
+    """Look Germinal up and take it, keeping it or not."""
+    page.click("#go-key")
+    page.click("[data-route=shelf]")
+    page.click("[data-goto=lookup]")
+    page.fill("#look-find", "germinal")
+    page.click("#look-go")
+    page.wait_for_selector(".hit .solid")
+    if keep:
+        page.check(".hit .check input")
+    page.click(".hit .solid")
+    page.wait_for_function("!document.getElementById('to-settings').disabled")
+
+
+def back_to_the_shelf(page):
+    """The same browser, opened again."""
+    page.reload()
+    page.wait_for_selector("#go-key")
+    page.click("#go-key")
+    page.wait_for_selector("[data-route=shelf]:not([hidden])")
+    page.click("[data-route=shelf]")
+
+
+def test_a_found_book_is_kept_only_if_the_reader_asks(page):
+    page.click("#go-key")
+    page.click("[data-route=shelf]")
+    page.click("[data-goto=lookup]")
+    page.fill("#look-find", "germinal")
+    page.click("#look-go")
+    page.wait_for_selector(".hit .solid")
+    assert not page.is_checked(".hit .check input")
+    assert "Saved in this browser" in text(page, ".hit")
+    page.click(".hit .solid")
+    page.wait_for_function("!document.getElementById('to-settings').disabled")
+    back_to_the_shelf(page)
+    assert page.locator(".card[data-slug='found:Germinal']").count() == 0
+
+
+def test_a_kept_book_is_on_the_shelf_next_time_and_can_be_taken_off(page):
+    find_germinal(page, keep=True)
+    back_to_the_shelf(page)
+    card = ".card[data-slug='found:Germinal']"
+    page.wait_for_selector(card)
+    assert "Kept by you" in text(page, card)
+    # It was counted on the way in, and the figure came back with it.
+    assert "about" in text(page, card) and "min" in text(page, card)
+    # The shelf's own lede still counts only the books somebody has read.
+    page.click("[data-goto=lookup]")
+    assert "shelf is 3 books" in text(page, "#look-lede")
+    page.click("[data-goto=books]")
+    page.click(card + " .forget")
+    assert page.locator(card).count() == 0
+    back_to_the_shelf(page)
+    assert page.locator(card).count() == 0
+
+
 def test_a_book_divided_differently_says_so_rather_than_shrugging(page):
     """Le Père Goriot came back 4 chapters against 22 — real, and not the same
     thing as 47 against 46."""

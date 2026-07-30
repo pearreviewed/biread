@@ -136,6 +136,8 @@
   .mark { font: 500 9.5px/1 system-ui, sans-serif; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--rule-2); border-radius: 999px; padding: 5px 9px; }
   .card .say { font-size: 13.5px; line-height: 1.5; color: var(--muted); text-wrap: pretty; }
   .card .took { align-self: flex-start; padding: 7px 18px; border-radius: 999px; background: var(--solid); color: var(--on-solid); font-size: 13.5px; }
+  .card .forget { align-self: flex-start; padding: 0; font: 400 13px/1 'Charis SIL', Charter, Georgia, serif; background: none; border: 0; color: var(--muted); text-decoration: underline; text-underline-offset: 3px; }
+  .card .forget:hover { color: var(--ink); }
   .versions { display: flex; flex-direction: column; gap: 7px; padding-top: 11px; border-top: 1px solid var(--rule); }
   .versions .caps { font-size: 9.5px; }
   .versions .pills { gap: 6px; }
@@ -162,6 +164,7 @@
   .hit .name { font-size: 19px; font-weight: 700; line-height: 1.2; color: var(--ink); }
   .hit p { margin: 0; font-size: 14px; line-height: 1.5; color: var(--body); }
   .hit .say { font-size: 13px; color: var(--muted); }
+  .hit .check { padding: 9px 13px; font-size: 13.5px; border-radius: 12px; background: var(--surface-2); }
   .nothing { display: flex; flex-direction: column; gap: 11px; padding: 22px; border: 1px solid var(--rule-2); border-radius: 17px; background: var(--surface-2); }
   .nothing h3 { margin: 0; font-size: 20px; font-weight: 400; color: var(--ink); }
   .nothing p { margin: 0; font-size: 15px; line-height: 1.55; color: var(--body); text-wrap: pretty; }
@@ -609,6 +612,29 @@ for (const b of $("route").children) b.addEventListener("click", () => setRoute(
 /* --- the shelf ----------------------------------------------------------- */
 const PER_PAGE = 6;
 
+// A book found by looking is gone when the tab closes, unless the reader asks to
+// keep it. Kept in this browser and nowhere else — what is stored is the card:
+// two page names and what the wiki said about them, which is all a shelf entry
+// has ever been. None of it is ours to hold, and none of it goes anywhere.
+const KEPT = "biread_kept";
+function keptBooks() {
+  try { return JSON.parse(localStorage.getItem(KEPT)) || []; } catch (e) { return []; }
+}
+function writeKept(books) {
+  try { localStorage.setItem(KEPT, JSON.stringify(books)); } catch (e) {}
+}
+function keep(book) {
+  writeKept(keptBooks().filter((b) => b.slug !== book.slug).concat([book]));
+}
+function forget(slug) {
+  writeKept(keptBooks().filter((b) => b.slug !== slug));
+  S.shelf.books = S.shelf.books.filter((b) => b.slug !== slug);
+  if (S.pick && S.pick.slug === slug) S.pick = null;
+  S.page = 0;
+  paintShelf();
+  refreshNext();
+}
+
 function shelfBooks() {
   if (!S.shelf) return [];
   const q = S.query.trim().toLowerCase();
@@ -652,7 +678,7 @@ function bookCard(book) {
   const picked = S.pick && S.pick.slug === book.slug;
   card.setAttribute("aria-pressed", String(!!picked));
   const head = el("div");
-  if (book.added) head.appendChild(el("div", "caps", "Added by a reader"));
+  if (book.added) head.appendChild(el("div", "caps", book.kept ? "Kept by you" : "Added by a reader"));
   head.appendChild(el("div", "name", book.title));
   if (book.author) head.appendChild(el("div", "who", book.author));
   card.appendChild(head);
@@ -681,6 +707,11 @@ function bookCard(book) {
       + "closely the two keep pace."));
   }
   if (picked) card.appendChild(el("div", "took", S.pick.loaded ? "Chosen" : "Fetching…"));
+  if (book.kept) {
+    const drop = el("button", "forget", "Take it off my shelf");
+    drop.addEventListener("click", (e) => { e.stopPropagation(); forget(book.slug); });
+    card.appendChild(drop);
+  }
   card.addEventListener("click", () => pickBook(book.slug, picked ? S.pick.index : 0));
   return card;
 }
@@ -769,6 +800,7 @@ function measurePick() {
   book.minutes = Math.max(1, Math.round(paragraphs / (S.shelf.perMinute || 390)));
   book.tokens = Math.round(((orig.chars || 0) + (pub.chars || 0)) / 4);
   book.counts = [orig.chapters || book.counts[0], pub.chapters || book.counts[1]];
+  if (book.kept) keep(book);
 }
 
 function pickBook(slug, index) {
@@ -844,10 +876,18 @@ function hitCard(hit) {
     + (got.english ? " English by " + got.english + "." : " The English translator is not named.")));
   card.appendChild(el("p", "say", "Nobody has read this one through, so it carries no note about "
     + "how closely the two keep pace."));
+  const box = el("label", "check");
+  const tick = el("input");
+  tick.type = "checkbox";
+  box.appendChild(tick);
+  box.appendChild(el("span", null, "Keep it on my shelf"));
+  card.appendChild(box);
+  card.appendChild(el("p", "say", "Saved in this browser, so it is here next time. Nothing is "
+    + "uploaded — an entry is two Wikisource page names, and the book stays the wiki’s."));
   const go = el("button", "solid", "Add to the shelf and build");
   go.style.alignSelf = "flex-start";
   go.style.fontSize = "14px";
-  go.addEventListener("click", () => takeFound(hit));
+  go.addEventListener("click", () => takeFound(hit, tick.checked));
   card.appendChild(go);
   return card;
 }
@@ -897,11 +937,11 @@ function paintLookup() {
 // A book the reader found goes onto the shelf as what it is: buildable, and
 // vouched for by nobody. Its build time is unknown until both editions are here,
 // so until then the card simply does not claim one.
-function takeFound(hit) {
+function takeFound(hit, keepIt) {
   const got = hit.probe;
   const slug = "found:" + got.page;
   const book = {
-    slug, title: hit.title, author: got.author || "",
+    slug, title: hit.title, author: got.author || "", kept: !!keepIt,
     chapters: got.chapters, minutes: null, tokens: null,
     english: got.english || "translator not named",
     note: "",
@@ -915,6 +955,7 @@ function takeFound(hit) {
     },
   };
   S.shelf.books = S.shelf.books.filter((b) => b.slug !== slug).concat([book]);
+  if (book.kept) keep(book);
   S.filter = null; S.query = ""; $("shelf-find").value = "";
   S.page = Math.floor((S.shelf.books.length - 1) / PER_PAGE);
   setRoute("shelf");
@@ -1361,8 +1402,13 @@ worker.onmessage = (e) => {
     S.ready = true;
     if (m.shelf && m.shelf.books.length) {
       S.shelf = m.shelf;
+      const curated = m.shelf.books.length;
+      // Whatever this reader kept stands beside the curated books, marked as
+      // theirs. The lede still counts only the ones somebody has looked at.
+      const mine = keptBooks().filter((b) => !m.shelf.books.some((x) => x.slug === b.slug));
+      S.shelf.books = m.shelf.books.concat(mine);
       $("route").querySelector("[data-route=shelf]").hidden = false;
-      $("look-lede").textContent = "The shelf is " + m.shelf.books.length + " books somebody "
+      $("look-lede").textContent = "The shelf is " + curated + " books somebody "
         + "has looked at. Beyond it, anything on Wikisource can be fetched the same way — we "
         + "look for the original and a free English translation, and show you what came back.";
       if (S.route === "shelf") paintShelf();
