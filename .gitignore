@@ -29,6 +29,7 @@ dist/
 # local-only design handoff — never publish
 design-reference/ui-rebuild-brief.md
 design-reference/current-ui-snapshot.md
+design-reference/shelf-brief.md
 
 # Finder leaves these in every folder it opens; they carry local metadata and
 # nothing the repo wants. None has ever been committed — this keeps it that way.

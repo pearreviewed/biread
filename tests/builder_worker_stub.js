@@ -25,6 +25,49 @@ const TARGET = [
   "After resting awhile, they ate two mountains for their breakfast.",
 ];
 
+// Three books, enough to exercise the shelf's own shapes: one read through, one
+// with two translations, one nobody has vouched for.
+const SHELF = {
+  measured: "2026-07-30",
+  perMinute: 390,
+  filters: [
+    { key: "read", label: "Read through", slugs: ["candide"] },
+    { key: "several", label: "More than one translation", slugs: ["micromegas"] },
+  ],
+  books: [
+    {
+      slug: "candide", title: "Candide, ou l’Optimisme", author: "Voltaire",
+      page: "Candide, ou l’Optimisme", lang: "fr", other: "en",
+      chapters: 30, paragraphs: 469, minutes: 3, tokens: 95916,
+      note: "Smollett put this into English in Voltaire’s own century.",
+      readThrough: true, coverage: 0.989, added: false,
+      english: "Smollett · 1920", abridged: false, chaptered: true, counts: [30, 30],
+      translations: [{ page: "Candide", label: "Smollett · 1920", chapters: 30 }],
+    },
+    {
+      slug: "micromegas", title: "Micromégas", author: "Voltaire",
+      page: "Micromégas", lang: "fr", other: "en",
+      chapters: 7, paragraphs: 74, minutes: 1, tokens: 19812,
+      note: "Two English versions, and they are shaped differently.",
+      readThrough: false, coverage: null, added: false,
+      english: "Phalen", abridged: false, chaptered: true, counts: [7, 7],
+      translations: [
+        { page: "Micromegas (Phalen)", label: "Phalen", chapters: 7 },
+        { page: "The Works of Voltaire/Volume 3/Micromegas", label: "Fleming · 1906", chapters: 1 },
+      ],
+    },
+    {
+      slug: "80days", title: "Le Tour du monde en quatre-vingts jours", author: "Verne",
+      page: "Le Tour du monde en quatre-vingts jours", lang: "fr", other: "en",
+      chapters: 37, paragraphs: 1892, minutes: 9, tokens: 191742,
+      note: "Towle cut as he went, so some of the French will face an empty page.",
+      readThrough: false, coverage: null, added: false,
+      english: "Towle · 1873", abridged: true, chaptered: true, counts: [37, 37],
+      translations: [{ page: "Around the World in Eighty Days (Towle)", label: "Towle · 1873", chapters: 37 }],
+    },
+  ],
+};
+
 const DEFAULTS = {
   inspect: {
     orig: { title: "Micromégas", author: "Voltaire", language: "fr", pages: null, paragraphs: 34, chars: 38974 },
@@ -41,7 +84,10 @@ const DEFAULTS = {
 function scenario(bytes) {
   if (!bytes) return {};
   const text = new TextDecoder().decode(bytes.slice(0, 4000));
-  if (!text.startsWith("SCENARIO:")) return {};
+  return parse(text);
+}
+function parse(text) {
+  if (!text || !text.startsWith("SCENARIO:")) return {};
   try {
     return JSON.parse(text.slice("SCENARIO:".length).split("\n---")[0]);
   } catch (e) {
@@ -49,14 +95,61 @@ function scenario(bytes) {
   }
 }
 
-postMessage({ type: "ready", langs: LANGS });
+// The shelf takes no upload, so its scenarios ride in on the one thing a reader
+// does type there: the lookup query. Flags set that way stick for the session.
+let standing = {};
+
+postMessage({ type: "ready", langs: LANGS, shelf: SHELF });
 
 self.onmessage = (e) => {
   const m = e.data;
-  const s = { ...DEFAULTS, ...scenario(m.orig) };
+  Object.assign(standing, parse(m.query));
+  const s = { ...DEFAULTS, ...standing, ...scenario(m.orig) };
 
   if (s.failOn === m.type) {
     postMessage({ type: "error", error: s.error, during: m.type });
+    return;
+  }
+
+  if (m.type === "shelf") {
+    const book = SHELF.books.find((b) => b.slug === m.shelfSlug);
+    const version = book && book.translations[m.translationIndex || 0];
+    postMessage({
+      type: "inspected",
+      data: {
+        orig: { title: book ? book.title : m.found.title, author: book ? book.author : m.found.author,
+                language: "fr", pages: null, paragraphs: book ? book.paragraphs : 700,
+                chars: 184197, chapters: book ? book.chapters : 40 },
+        pub: { title: version ? version.page : m.found.otherPage,
+               author: version ? version.label : m.found.translator,
+               language: "en", pages: null, paragraphs: 689, chars: 199468,
+               chapters: version ? version.chapters : 40 },
+      },
+    });
+    return;
+  }
+
+  if (m.type === "lookup") {
+    const query = (m.query || "").toLowerCase();
+    // A search that finds nothing is the honest half of this screen, so it is
+    // as reachable in the stub as it is in life.
+    const hits = query.includes("camus") || query.includes("nothing") ? [] : [
+      { title: "Germinal", snippet: "Émile Zola Germinal", counterpart: "Germinal (Ellis)" },
+      { title: "Germinie Lacerteux", snippet: "Goncourt", counterpart: null },
+    ];
+    postMessage({ type: "hits", hits });
+    for (const hit of hits.filter((h) => h.counterpart)) {
+      postMessage({
+        type: "probe",
+        data: {
+          title: hit.title, page: hit.title, otherPage: hit.counterpart,
+          chapters: 40, otherChapters: 40, shape: "chapters", otherShape: "translation",
+          author: "Zola", english: "Ellis · 1894", translator: "Havelock Ellis",
+          year: "1894", buildable: true,
+        },
+      });
+    }
+    postMessage({ type: "looked", data: { hits: hits.length, probed: hits.length ? 1 : 0 } });
     return;
   }
 
@@ -72,7 +165,7 @@ self.onmessage = (e) => {
       data: {
         index, total: s.sample.total,
         source: SOURCE, target: s.sample.blankTarget ? ["", "", ""] : TARGET,
-        cost: m.route === "align" ? null : s.sample.cost,
+        cost: m.route === "translate" ? s.sample.cost : null,
         glossCost: m.gloss ? s.sample.glossCost : null,
         chars: s.sample.chars, bookChars: s.sample.bookChars,
       },
@@ -82,7 +175,7 @@ self.onmessage = (e) => {
 
   if (m.type === "estimate") {
     const e_ = s.estimate;
-    const translate = m.route === "align" ? null : e_.translate_cost;
+    const translate = m.route === "translate" ? e_.translate_cost : null;
     const gloss = m.gloss ? e_.gloss_cost : null;
     postMessage({
       type: "estimate",

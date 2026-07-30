@@ -323,7 +323,7 @@ def test_a_file_that_cannot_be_read_says_so_on_the_step_that_asked_for_it(page):
 
 # ---- shape ---------------------------------------------------------------
 
-@pytest.mark.parametrize("screen", ["fork", "books", "settings", "binding", "done"])
+@pytest.mark.parametrize("screen", ["fork", "books", "lookup", "settings", "binding", "done"])
 def test_no_screen_scrolls_sideways_on_a_phone(page, screen):
     to_settings(page)
     page.set_viewport_size({"width": 390, "height": 844})
@@ -340,3 +340,171 @@ def test_the_time_left_is_not_guessed_from_a_clock_that_never_started(page):
     page.evaluate("show('binding'); paintBinding({stage: 'translate', done: 412, total: 1842})")
     assert text(page, "#bind-eta") == "The tab can sit in the background."
     assert "412 of 1,842" in text(page, "#bind-at")
+
+
+# ---- the shelf -----------------------------------------------------------
+
+def to_shelf(page, slug="candide"):
+    """Through the fork onto the shelf, with a book picked and fetched."""
+    page.click("#go-key")
+    page.click("[data-route=shelf]")
+    page.click(f".card[data-slug={slug!r}]")
+    page.wait_for_function("!document.getElementById('to-settings').disabled")
+
+
+def test_the_shelf_appears_only_once_the_engine_has_one(page):
+    page.click("#go-key")
+    assert not hidden(page, "[data-route=shelf]")
+    page.click("[data-route=shelf]")
+    assert not hidden(page, "#shelf")
+    assert hidden(page, "#files")
+
+
+def test_a_card_shows_the_translator_the_wiki_names_and_nothing_more(page):
+    page.click("#go-key")
+    page.click("[data-route=shelf]")
+    card = ".card[data-slug=candide]"
+    assert "Voltaire" in text(page, card)
+    assert "Smollett · 1920" in text(page, card)
+    assert "30" in text(page, f"{card} .facts")
+    assert "about 3 min" in text(page, card)
+
+
+def test_a_book_nobody_has_read_says_so_instead_of_claiming_coverage(page):
+    page.click("#go-key")
+    page.click("[data-route=shelf]")
+    unread = text(page, ".card[data-slug='80days']")
+    assert "Nobody has read this one through" in unread
+    assert "Abridged" in unread
+    # And the one that has been read carries no such warning.
+    assert "Nobody has read" not in text(page, ".card[data-slug=candide]")
+
+
+def test_nothing_is_fetched_until_a_book_is_picked(page):
+    page.click("#go-key")
+    page.click("[data-route=shelf]")
+    assert page.eval_on_selector("#to-settings", "e => e.disabled")
+    assert "Nothing is fetched" in text(page, "#books-foot")
+
+
+def test_picking_a_book_fetches_both_editions_and_opens_the_way_on(page):
+    to_shelf(page)
+    assert "Both editions are here" in text(page, "#books-foot")
+    assert "Chosen" in text(page, ".card[data-slug=candide]")
+    page.click("#to-settings")
+    assert showing(page, "settings")
+    # The shelf is an aligned route: it asks for an embedding model, not a tier.
+    assert not hidden(page, "#embed-block")
+
+
+def test_the_shelf_route_prices_the_reading_not_a_translation(page):
+    to_shelf(page)
+    page.click("#to-settings")
+    page.fill("#key", "sk-or-v1-test")
+    page.wait_for_timeout(200)
+    assert "read once by" in text(page, "#fig-detail")
+
+
+def test_a_book_with_two_translations_lets_the_reader_choose(page):
+    page.click("#go-key")
+    page.click("[data-route=shelf]")
+    assert page.eval_on_selector_all(".versions", "n => n.length") == 0
+    page.click(".card[data-slug=micromegas]")
+    page.wait_for_selector(".versions")
+    labels = page.eval_on_selector_all(".versions .pills button", "n => n.map(b => b.textContent)")
+    assert labels == ["Phalen", "Fleming · 1906"]
+    page.click(".versions .pills button:nth-child(2)")
+    page.wait_for_function("!document.getElementById('to-settings').disabled")
+    assert "Fleming · 1906" in text(page, ".card[data-slug=micromegas] .facts")
+
+
+def test_searching_the_shelf_narrows_it_and_says_so_when_it_empties(page):
+    page.click("#go-key")
+    page.click("[data-route=shelf]")
+    page.fill("#shelf-find", "voltaire")
+    assert page.eval_on_selector_all(".card", "n => n.length") == 2
+    page.fill("#shelf-find", "dickens")
+    assert page.eval_on_selector_all(".card", "n => n.length") == 0
+    assert "Nothing on the shelf" in text(page, "#shelf-cards")
+
+
+def test_a_filter_narrows_the_shelf_and_lets_go(page):
+    page.click("#go-key")
+    page.click("[data-route=shelf]")
+    page.click("#shelf-filters button:nth-child(2)")
+    assert page.eval_on_selector_all(".card", "n => n.length") == 1
+    page.click("#shelf-filters button:nth-child(2)")
+    assert page.eval_on_selector_all(".card", "n => n.length") == 3
+
+
+def test_the_pager_stays_away_while_the_shelf_fits_on_one_page(page):
+    page.click("#go-key")
+    page.click("[data-route=shelf]")
+    assert hidden(page, "#shelf-pager")
+
+
+# ---- beyond the shelf ----------------------------------------------------
+
+def test_the_lookup_is_its_own_screen_and_comes_back(page):
+    page.click("#go-key")
+    page.click("[data-route=shelf]")
+    page.click("[data-goto=lookup]")
+    assert showing(page, "lookup")
+    page.click("[data-goto=books]")
+    assert showing(page, "books")
+
+
+def test_a_search_reports_the_pair_it_found_and_the_side_it_did_not(page):
+    page.click("#go-key")
+    page.click("[data-route=shelf]")
+    page.click("[data-goto=lookup]")
+    page.fill("#look-find", "germinal")
+    page.click("#look-go")
+    page.wait_for_selector(".hit .solid")
+    found = text(page, ".hit:nth-child(1)")
+    assert "Both editions found" in found and "Ellis · 1894" in found
+    assert "40 chapters each — they agree" in found
+    assert "Nobody has read this one through" in found
+    missing = text(page, ".hit:nth-child(2)")
+    assert "no free English translation" in missing
+    assert "cannot be built" in missing
+
+
+def test_a_book_still_in_copyright_is_a_plain_no_not_a_spinner(page):
+    page.click("#go-key")
+    page.click("[data-route=shelf]")
+    page.click("[data-goto=lookup]")
+    page.fill("#look-find", "l'étranger camus")
+    page.click("#look-go")
+    page.wait_for_selector(".nothing")
+    said = text(page, ".nothing")
+    assert "still in copyright" in said
+    assert "seventy years" in said
+    assert "biread holds page names, never text" in said
+
+
+def test_a_found_book_joins_the_shelf_marked_for_what_it_is(page):
+    page.click("#go-key")
+    page.click("[data-route=shelf]")
+    page.click("[data-goto=lookup]")
+    page.fill("#look-find", "germinal")
+    page.click("#look-go")
+    page.wait_for_selector(".hit .solid")
+    page.click(".hit .solid")
+    page.wait_for_function("!document.getElementById('to-settings').disabled")
+    assert showing(page, "books")
+    card = text(page, ".card[data-slug='found:Germinal']")
+    assert "Added by a reader" in card
+    assert "Nobody has read this one through" in card
+    # Its build time was unknown until both editions were counted, and now is not.
+    assert "about" in card and "min" in card
+
+
+def test_a_book_divided_differently_says_so_rather_than_shrugging(page):
+    """Le Père Goriot came back 4 chapters against 22 — real, and not the same
+    thing as 47 against 46."""
+    page.click("#go-key")
+    assert page.evaluate("agreement(40, 40)") == "40 chapters each — they agree."
+    assert page.evaluate("agreement(47, 46)").endswith("two editions counting differently.")
+    assert "divided quite differently" in page.evaluate("agreement(4, 22)")
+    assert page.evaluate("agreement(1, 22)").startswith("1 chapter against 22")

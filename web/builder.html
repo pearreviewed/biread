@@ -91,7 +91,8 @@
   /* --- step one: route and files --- */
   .step { max-width: 640px; margin: 26px auto 0; display: flex; flex-direction: column; gap: 22px; }
   .step h2 { font-size: 29px; line-height: 1.15; }
-  .seg { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; padding: 5px; border: 1px solid var(--rule); border-radius: 18px; background: var(--surface); }
+  .step.wide { max-width: 1040px; }
+  .seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; padding: 5px; border: 1px solid var(--rule); border-radius: 18px; background: var(--surface); }
   .seg button { padding: 12px 14px; border: 0; border-radius: 14px; background: none; font: 15.5px/1.3 'Charis SIL', Charter, Georgia, serif; color: var(--muted); }
   .seg button[aria-pressed="true"] { background: var(--page); box-shadow: 0 1px 3px rgba(90,70,40,.1); font-weight: 700; color: var(--ink); }
   :root[data-theme="night"] .seg { border-radius: 14px; }
@@ -108,6 +109,64 @@
   .file .act { margin-top: 2px; font-size: 13px; text-decoration: underline; text-underline-offset: 3px; color: var(--ink); }
   .step .row.foot { padding-top: 6px; align-items: center; }
   .step .row.foot > div { font-size: 13px; color: var(--muted); }
+
+  /* --- the shelf --- */
+  .shelf { display: flex; flex-direction: column; gap: 22px; }
+  .find { display: flex; align-items: center; gap: 9px; padding: 9px 16px; border: 1px solid var(--rule); border-radius: 999px; background: var(--surface-3); }
+  .find span { font-size: 14px; color: var(--muted); }
+  .find input { flex: 1; min-width: 0; padding: 0; border: 0; background: none; font: 15px/1.3 'Charis SIL', Charter, Georgia, serif; color: var(--ink); }
+  .find input::placeholder { color: var(--muted); }
+  .shelf .row.top { align-items: center; gap: 20px; }
+  .shelf .row.top .find { flex: none; width: 260px; }
+  .chips { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+  .chips button { padding: 7px 15px; border: 1px solid var(--rule); border-radius: 999px; background: none; font-size: 13.5px; color: var(--body); }
+  .chips button:hover { border-color: var(--solid); }
+  .chips button[aria-pressed="true"] { background: var(--solid); border-color: var(--solid); color: var(--on-solid); }
+  .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; }
+  .card { display: flex; flex-direction: column; gap: 12px; padding: 18px 20px; border: 1px solid var(--rule); border-radius: 17px; background: var(--surface); text-align: left; }
+  .card:hover { border-color: var(--solid); background: var(--surface-2); }
+  .card[aria-pressed="true"] { border-color: var(--solid); background: var(--surface-3); box-shadow: var(--shadow); }
+  .card.unread { border-style: dashed; }
+  .card .name { font-size: 19px; font-weight: 700; line-height: 1.2; color: var(--ink); }
+  .card .who { font-size: 14px; color: var(--muted); }
+  .facts { display: flex; flex-direction: column; gap: 6px; padding-top: 11px; border-top: 1px solid var(--rule); }
+  .facts > div { display: flex; justify-content: space-between; gap: 14px; font-size: 14px; color: var(--body); }
+  .facts b { font-weight: 400; color: var(--muted); }
+  .marks { display: flex; gap: 6px; flex-wrap: wrap; }
+  .mark { font: 500 9.5px/1 system-ui, sans-serif; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--rule-2); border-radius: 999px; padding: 5px 9px; }
+  .card .say { font-size: 13.5px; line-height: 1.5; color: var(--muted); text-wrap: pretty; }
+  .card .took { align-self: flex-start; padding: 7px 18px; border-radius: 999px; background: var(--solid); color: var(--on-solid); font-size: 13.5px; }
+  .versions { display: flex; flex-direction: column; gap: 7px; padding-top: 11px; border-top: 1px solid var(--rule); }
+  .versions .caps { font-size: 9.5px; }
+  .versions .pills { gap: 6px; }
+  .versions .pills button { font-size: 12.5px; padding: 5px 11px; }
+  .pager { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-top: 14px; border-top: 1px solid var(--rule); font-size: 13.5px; color: var(--muted); }
+  .pager .nums { display: flex; align-items: center; gap: 4px; }
+  .pager .nums button { min-width: 32px; padding: 6px 10px; border: 0; border-radius: 999px; background: none; font-size: 14px; color: var(--body); }
+  .pager .nums button:disabled { color: var(--rule-2); }
+  .pager .nums button[aria-current="true"] { background: var(--solid); color: var(--on-solid); }
+  .beyond { display: flex; align-items: center; justify-content: space-between; gap: 22px; padding: 18px 22px; border: 1px dashed var(--rule-2); border-radius: 17px; background: var(--tint); }
+  .beyond b { display: block; font-size: 17px; color: var(--ink); }
+  .beyond p { margin: 4px 0 0; font-size: 14px; color: var(--muted); max-width: 58ch; }
+  .beyond button { flex: none; }
+
+  /* --- looking beyond the shelf --- */
+  .look { max-width: 760px; margin: 26px auto 0; display: flex; flex-direction: column; gap: 26px; }
+  .look h2 { font-size: 29px; line-height: 1.15; }
+  .look .lede { margin: 8px 0 0; font-size: 16px; line-height: 1.6; color: var(--muted); text-wrap: pretty; }
+  .look .find { padding: 12px 18px; box-shadow: var(--shadow); }
+  .look .find input { font-size: 17px; }
+  .hits { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .hit { display: flex; flex-direction: column; gap: 9px; padding: 18px 20px; border: 1px solid var(--rule); border-radius: 17px; background: var(--surface); text-align: left; }
+  .hit.miss { border-style: dashed; background: none; }
+  .hit .name { font-size: 19px; font-weight: 700; line-height: 1.2; color: var(--ink); }
+  .hit p { margin: 0; font-size: 14px; line-height: 1.5; color: var(--body); }
+  .hit .say { font-size: 13px; color: var(--muted); }
+  .nothing { display: flex; flex-direction: column; gap: 11px; padding: 22px; border: 1px solid var(--rule-2); border-radius: 17px; background: var(--surface-2); }
+  .nothing h3 { margin: 0; font-size: 20px; font-weight: 400; color: var(--ink); }
+  .nothing p { margin: 0; font-size: 15px; line-height: 1.55; color: var(--body); text-wrap: pretty; }
+  .nothing p.say { font-size: 14px; color: var(--muted); }
+  .nothing .row { gap: 10px; justify-content: flex-start; flex-wrap: wrap; padding-top: 2px; }
 
   /* --- step two --- */
   .two { display: grid; grid-template-columns: 1fr 1.12fr; gap: 46px; margin-top: 26px; align-items: start; }
@@ -193,12 +252,17 @@
   @media (max-width: 860px) {
     body { padding: 16px 16px 36px; }
     .hero h1 { font-size: 31px; }
-    .fork, .files, .two, .tiers { grid-template-columns: 1fr; }
+    .fork, .files, .two, .tiers, .hits { grid-template-columns: 1fr; }
+    .cards { grid-template-columns: repeat(2, 1fr); }
+    .seg { grid-template-columns: 1fr; }
+    .shelf .row.top, .beyond { flex-direction: column; align-items: stretch; }
+    .shelf .row.top .find { width: auto; }
     .two { gap: 30px; }
     .done { gap: 26px; }
     .centre .spread { width: 100%; }
   }
   @media (max-width: 560px) {
+    .cards { grid-template-columns: 1fr; }
     .spread { grid-template-columns: 1fr; }
     .leaf { min-height: 0; }
     .leaf.r { box-shadow: none; }
@@ -248,10 +312,32 @@
       <h2>Which book, and where does the translation come from?</h2>
     </div>
     <div class="seg" id="route">
-      <button data-route="translate" aria-pressed="true">Have a model translate it</button>
       <button data-route="align" aria-pressed="false">Align an edition I own</button>
+      <button data-route="translate" aria-pressed="true">Have a model translate it</button>
+      <button data-route="shelf" aria-pressed="false" hidden>Pick from the shelf</button>
     </div>
     <div class="seg-note" id="route-note"></div>
+
+    <div class="shelf" id="shelf" hidden>
+      <div class="row top">
+        <div class="chips" id="shelf-filters"></div>
+        <label class="find"><span>⌕</span><input id="shelf-find" placeholder="Search the shelf" autocomplete="off" spellcheck="false"></label>
+      </div>
+      <div class="cards" id="shelf-cards"></div>
+      <div class="pager" id="shelf-pager" hidden>
+        <span id="shelf-count"></span>
+        <span class="nums" id="shelf-nums"></span>
+        <span id="shelf-per"></span>
+      </div>
+      <div class="beyond">
+        <div>
+          <b id="beyond-title">Not one of these?</b>
+          <p>Any book out of copyright can be fetched the same way. Looking one up happens on its own screen.</p>
+        </div>
+        <button class="ghost" data-goto="lookup">Look on Wikisource →</button>
+      </div>
+    </div>
+
     <div class="files" id="files">
       <button class="file" id="pick-orig">
         <div class="caps">The original</div>
@@ -274,6 +360,32 @@
   </div>
   <input type="file" id="f-orig" accept=".txt,.epub,.pdf,.html,.htm,.docx" hidden>
   <input type="file" id="f-pub" accept=".txt,.epub,.pdf,.html,.htm,.docx" hidden>
+</section>
+
+<!-- 2b · beyond the shelf -->
+<section id="s-lookup" hidden>
+  <div class="topbar">
+    <button class="quiet" data-goto="books">← The shelf</button>
+    <div class="caps">Step one of two</div>
+    <div class="theme"></div>
+  </div>
+  <div class="look">
+    <div>
+      <div class="caps">Beyond the shelf</div>
+      <h2>Look for a book on Wikisource.</h2>
+      <p class="lede" id="look-lede"></p>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:9px">
+      <label class="find">
+        <span>⌕</span>
+        <input id="look-find" placeholder="A title, or a title and an author" autocomplete="off" spellcheck="false">
+        <button class="solid" id="look-go" style="padding:9px 22px;font-size:14px">Search</button>
+      </label>
+      <div class="note">Wikisource only — everything there is public domain or freely licensed, so nothing under copyright can be brought in. Arbitrary links are not accepted, deliberately.</div>
+    </div>
+    <div id="look-out"></div>
+    <div class="alert" id="look-alert" hidden></div>
+  </div>
 </section>
 
 <!-- 3 · key, model, and the proof -->
@@ -413,7 +525,20 @@ const S = {
   sample: null, sampleIndex: 0, sampleSpend: 0,
   estimate: null, ready: false, busy: null,
   html: null, spent: null, started: 0,
+  // the shelf: a catalogue, whichever book is picked, and how it is narrowed
+  shelf: null, pick: null, filter: null, page: 0, query: "",
+  hits: null, looked: "",
 };
+
+// Two routes match two editions rather than translating one, and they meet at
+// the same embedding run — a book off the shelf differs only in arriving over
+// the network instead of off the reader's disk.
+function aligning() { return S.route !== "translate"; }
+function haveBook() { return S.route === "shelf" ? !!(S.pick && S.pick.loaded) : !!S.orig; }
+function bookName() {
+  if (S.route === "shelf") return S.pick ? S.pick.title : "book";
+  return S.orig ? stem(S.orig.name) : "book";
+}
 
 const worker = new Worker("worker.js");
 
@@ -442,7 +567,7 @@ try {
 } catch (e) { setTheme("day"); }
 
 /* --- screens ----------------------------------------------------------- */
-const SCREENS = ["fork", "books", "settings", "binding", "done"];
+const SCREENS = ["fork", "books", "lookup", "settings", "binding", "done"];
 function show(name) {
   for (const s of SCREENS) $("s-" + s).hidden = s !== name;
   paintTheme();
@@ -465,16 +590,337 @@ function alert_(id, message) {
 const ROUTE_NOTE = {
   translate: "A model of your choosing turns the book into your language, paragraph by paragraph. You read one page of it before paying for the rest.",
   align: "We match the published edition you already own to the original by meaning. Every word stays its translator's.",
+  shelf: "Books out of copyright, both editions fetched for you from Wikisource. The English is a free translation, so it often reads of its own century — much of the pleasure of the facing page.",
 };
 function setRoute(route) {
   S.route = route;
   for (const b of $("route").children) b.setAttribute("aria-pressed", String(b.dataset.route === route));
   $("route-note").textContent = ROUTE_NOTE[route];
+  $("shelf").hidden = route !== "shelf";
+  $("files").hidden = route === "shelf";
   $("pick-pub").hidden = route !== "align";
   $("files").classList.toggle("one", route !== "align");
+  document.querySelector("#s-books .step").classList.toggle("wide", route === "shelf");
+  if (route === "shelf") paintShelf();
   refreshNext();
 }
 for (const b of $("route").children) b.addEventListener("click", () => setRoute(b.dataset.route));
+
+/* --- the shelf ----------------------------------------------------------- */
+const PER_PAGE = 6;
+
+function shelfBooks() {
+  if (!S.shelf) return [];
+  const q = S.query.trim().toLowerCase();
+  const chosen = S.filter && S.shelf.filters.find((f) => f.key === S.filter);
+  return S.shelf.books.filter((b) => {
+    if (chosen && !chosen.slugs.includes(b.slug)) return false;
+    if (!q) return true;
+    return (b.title + " " + b.author + " " + b.english).toLowerCase().includes(q);
+  });
+}
+// The reading is the whole bill on this route: both editions read once by an
+// embedding model. Quoted only where the rate is actually known — the shelf says
+// nothing about cost rather than a plausible cent.
+function shelfCost(book) {
+  if (!book.tokens) return null;
+  if (S.local) return "free";
+  const rate = (S.prices[$("or-embed").value.trim()] || [])[0];
+  return rate ? money(book.tokens / 1e6 * rate) : null;
+}
+// Two editions rarely count their chapters alike, and that is not a fault — but
+// a book divided into four parts facing one divided into twenty-two is a
+// different thing from 47 against 46, and the reader is told which they have.
+function agreement(a, b) {
+  const chapters = (n) => n + (n === 1 ? " chapter" : " chapters");
+  if (a === b) return chapters(a) + " each — they agree.";
+  if (Math.max(a, b) > Math.min(a, b) * 1.5) {
+    return chapters(a) + " against " + b + ": the same book divided quite differently, "
+      + "so the two are matched by meaning rather than chapter by chapter.";
+  }
+  return chapters(a) + " against " + b + ", which is two editions counting differently.";
+}
+function fact(label, value) {
+  const row = el("div");
+  row.appendChild(el("b", null, label));
+  row.appendChild(el("span", null, value));
+  return row;
+}
+function bookCard(book) {
+  const card = el("button", "card" + (book.readThrough ? "" : " unread"));
+  card.dataset.slug = book.slug;
+  const picked = S.pick && S.pick.slug === book.slug;
+  card.setAttribute("aria-pressed", String(!!picked));
+  const head = el("div");
+  if (book.added) head.appendChild(el("div", "caps", "Added by a reader"));
+  head.appendChild(el("div", "name", book.title));
+  if (book.author) head.appendChild(el("div", "who", book.author));
+  card.appendChild(head);
+
+  const facts = el("div", "facts");
+  const index = picked ? S.pick.index : 0;
+  const version = book.translations[index] || book.translations[0];
+  facts.appendChild(fact("English", version.label));
+  facts.appendChild(fact("Chapters", String(book.chapters)));
+  if (book.minutes) facts.appendChild(fact("Build", "about " + book.minutes + " min"));
+  const cost = shelfCost(book);
+  if (cost) facts.appendChild(fact("Reading both", cost));
+  card.appendChild(facts);
+
+  const marks = el("div", "marks");
+  if (book.abridged) marks.appendChild(el("span", "mark", "Abridged"));
+  if (!book.chaptered) marks.appendChild(el("span", "mark", "Not chaptered"));
+  if (book.counts[0] !== book.counts[1] && book.chaptered) {
+    marks.appendChild(el("span", "mark", book.counts.join(" against ") + " chapters"));
+  }
+  if (marks.children.length) card.appendChild(marks);
+
+  if (book.note) card.appendChild(el("div", "say", book.note));
+  if (!book.readThrough) {
+    card.appendChild(el("div", "say", "Nobody has read this one through, so we cannot say how "
+      + "closely the two keep pace."));
+  }
+  if (picked) card.appendChild(el("div", "took", S.pick.loaded ? "Chosen" : "Fetching…"));
+  card.addEventListener("click", () => pickBook(book.slug, picked ? S.pick.index : 0));
+  return card;
+}
+function versionPicker(book) {
+  const box = el("div", "versions");
+  box.appendChild(el("div", "caps", "Which English"));
+  const pills = el("div", "pills");
+  book.translations.forEach((version, i) => {
+    const b = el("button", null, version.label);
+    b.setAttribute("aria-pressed", String(S.pick.index === i));
+    b.addEventListener("click", (e) => { e.stopPropagation(); pickBook(book.slug, i); });
+    pills.appendChild(b);
+  });
+  box.appendChild(pills);
+  box.appendChild(el("div", "say", "Two editions of the same book, translated at different "
+    + "times. Either reads beside the French; they are shaped differently."));
+  return box;
+}
+function paintShelf() {
+  if (!S.shelf) return;
+  const chips = $("shelf-filters");
+  chips.innerHTML = "";
+  const all = el("button", null, "All " + S.shelf.books.length);
+  all.setAttribute("aria-pressed", String(!S.filter));
+  all.addEventListener("click", () => { S.filter = null; S.page = 0; paintShelf(); });
+  chips.appendChild(all);
+  for (const f of S.shelf.filters) {
+    const b = el("button", null, f.label);
+    b.setAttribute("aria-pressed", String(S.filter === f.key));
+    b.addEventListener("click", () => { S.filter = S.filter === f.key ? null : f.key; S.page = 0; paintShelf(); });
+    chips.appendChild(b);
+  }
+
+  const books = shelfBooks();
+  const pages = Math.max(1, Math.ceil(books.length / PER_PAGE));
+  S.page = Math.min(S.page, pages - 1);
+  const from = S.page * PER_PAGE;
+  const shown = books.slice(from, from + PER_PAGE);
+
+  const cards = $("shelf-cards");
+  cards.innerHTML = "";
+  for (const book of shown) {
+    cards.appendChild(bookCard(book));
+    if (S.pick && S.pick.slug === book.slug && book.translations.length > 1) {
+      cards.lastChild.appendChild(versionPicker(book));
+    }
+  }
+  if (!shown.length) {
+    const empty = el("div", "say", "Nothing on the shelf answers to that. "
+      + "Any book out of copyright can still be looked up on Wikisource.");
+    empty.style.gridColumn = "1 / -1";
+    cards.appendChild(empty);
+  }
+
+  $("shelf-pager").hidden = pages < 2;
+  if (pages > 1) {
+    $("shelf-count").textContent = (from + 1) + "–" + Math.min(from + PER_PAGE, books.length)
+      + " of " + books.length + " · alphabetical";
+    $("shelf-per").textContent = PER_PAGE + " to a page";
+    const nums = $("shelf-nums");
+    nums.innerHTML = "";
+    const step = (label, to, off) => {
+      const b = el("button", null, label);
+      b.disabled = off;
+      if (!off) b.addEventListener("click", () => { S.page = to; paintShelf(); });
+      return b;
+    };
+    nums.appendChild(step("‹", S.page - 1, S.page === 0));
+    for (let i = 0; i < pages; i++) {
+      const b = step(String(i + 1), i, false);
+      b.setAttribute("aria-current", String(i === S.page));
+      nums.appendChild(b);
+    }
+    nums.appendChild(step("›", S.page + 1, S.page === pages - 1));
+  }
+  $("beyond-title").textContent = "Not one of these " + S.shelf.books.length + "?";
+}
+
+// A book found by looking arrives without figures. Once both editions are here
+// they are counted like any other, and the card fills in what it could not claim.
+function measurePick() {
+  const book = S.pick && S.pick.book;
+  if (!book || !book.added) return;
+  const orig = S.info.orig || {}, pub = S.info.pub || {};
+  const paragraphs = (orig.paragraphs || 0) + (pub.paragraphs || 0);
+  book.minutes = Math.max(1, Math.round(paragraphs / (S.shelf.perMinute || 390)));
+  book.tokens = Math.round(((orig.chars || 0) + (pub.chars || 0)) / 4);
+  book.counts = [orig.chapters || book.counts[0], pub.chapters || book.counts[1]];
+}
+
+function pickBook(slug, index) {
+  const book = S.shelf.books.find((b) => b.slug === slug);
+  if (!book || S.busy) return;
+  const key = slug + "#" + index;
+  const already = S.pick && S.pick.key === key;
+  S.pick = { slug, index, key, title: book.title, book, loaded: already && S.pick.loaded };
+  S.sample = null; S.estimate = null;
+  paintShelf();
+  refreshNext();
+  if (S.pick.loaded) return;
+  S.info = { orig: null, pub: null };
+  send("shelf", book.found
+    ? { shelfKey: key, found: book.found }
+    : { shelfKey: key, shelfSlug: slug, translationIndex: index });
+  $("books-foot").textContent = "Fetching both editions from Wikisource…";
+}
+$("shelf-find").addEventListener("input", (e) => { S.query = e.target.value; S.page = 0; paintShelf(); });
+
+/* --- beyond the shelf ----------------------------------------------------- */
+const FETCHING = { "fetch-orig": "Fetching the original", "fetch-pub": "Fetching the English edition" };
+function paintFetching(m) {
+  if (S.busy !== "shelf") return paintBinding(m);
+  $("books-foot").textContent = (FETCHING[m.stage] || "Fetching")
+    + " · chapter " + m.done + " of " + m.total;
+}
+
+function doLookup() {
+  const q = $("look-find").value.trim();
+  if (!q || S.busy) return;
+  S.hits = null; S.looked = q;
+  alert_("look-alert", "");
+  paintLookup();
+  send("lookup", { query: q });
+}
+$("look-go").addEventListener("click", doLookup);
+$("look-find").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); doLookup(); } });
+
+function tookHits(hits) {
+  S.hits = hits.map((h) => ({ ...h, probe: null }));
+  paintLookup();
+}
+function tookProbe(got) {
+  const hit = (S.hits || []).find((h) => h.title === got.title);
+  if (hit) hit.probe = got;
+  paintLookup();
+}
+
+function hitCard(hit) {
+  const got = hit.probe;
+  const buildable = got && got.buildable;
+  const card = el("div", "hit" + (buildable ? "" : " miss"));
+  card.appendChild(el("div", "name", hit.title));
+  if (!hit.counterpart) {
+    card.appendChild(el("p", null, "The original is here. Wikisource carries no free "
+      + "English translation of it."));
+    card.appendChild(el("p", "say", "One side only — there is nothing to face it, so it "
+      + "cannot be built."));
+    return card;
+  }
+  if (!got) {
+    card.appendChild(el("p", "say", "Looking for both editions…"));
+    return card;
+  }
+  if (!buildable) {
+    card.appendChild(el("p", null, "An English translation is listed — " + got.otherPage
+      + " — but the chapters of one side could not be found."));
+    card.appendChild(el("p", "say", got.why || "Nothing here reads as a book we can take apart."));
+    return card;
+  }
+  card.appendChild(el("p", null, "Both editions found. " + agreement(got.chapters, got.otherChapters)
+    + (got.english ? " English by " + got.english + "." : " The English translator is not named.")));
+  card.appendChild(el("p", "say", "Nobody has read this one through, so it carries no note about "
+    + "how closely the two keep pace."));
+  const go = el("button", "solid", "Add to the shelf and build");
+  go.style.alignSelf = "flex-start";
+  go.style.fontSize = "14px";
+  go.addEventListener("click", () => takeFound(hit));
+  card.appendChild(go);
+  return card;
+}
+
+function paintLookup() {
+  const out = $("look-out");
+  out.innerHTML = "";
+  if (S.hits === null) {
+    if (S.busy === "lookup") out.appendChild(el("div", "note", "Looking on Wikisource…"));
+    return;
+  }
+  if (!S.hits.length) {
+    const box = el("div", "nothing");
+    box.appendChild(el("h3", null, "Nothing on Wikisource for “" + S.looked + "”."));
+    box.appendChild(el("p", null, "Either it is spelled differently there, or the book is "
+      + "still in copyright — Wikisource carries neither, and neither do we. biread holds page "
+      + "names, never text, and can only point at what is free to read."));
+    box.appendChild(el("p", "say", "A rule of thumb: authors who died more than seventy years "
+      + "ago. Nineteenth-century French novels are nearly all there, and their English "
+      + "translations with them — Zola, Flaubert, Stendhal, Verne, Balzac, Maupassant."));
+    const row = el("div", "row");
+    const back = el("button", "solid", "Back to the shelf");
+    back.addEventListener("click", () => show("books"));
+    const own = el("button", "ghost", "I own both files — align them");
+    own.addEventListener("click", () => { setRoute("align"); show("books"); });
+    row.appendChild(back); row.appendChild(own);
+    box.appendChild(row);
+    box.appendChild(el("div", "say", "If you hold an edition of your own, the other two routes "
+      + "will still build it."));
+    out.appendChild(box);
+    return;
+  }
+  const wrap = el("div");
+  wrap.style.display = "flex";
+  wrap.style.flexDirection = "column";
+  wrap.style.gap = "12px";
+  wrap.appendChild(el("div", "caps", S.hits.length + (S.hits.length === 1 ? " result" : " results")
+    + " · public domain, uncurated"));
+  const grid = el("div", "hits");
+  for (const hit of S.hits) grid.appendChild(hitCard(hit));
+  wrap.appendChild(grid);
+  wrap.appendChild(el("div", "note", "Roughly one search in two comes back with a pair. The rest "
+    + "are honest misses, and say which side is missing."));
+  out.appendChild(wrap);
+}
+
+// A book the reader found goes onto the shelf as what it is: buildable, and
+// vouched for by nobody. Its build time is unknown until both editions are here,
+// so until then the card simply does not claim one.
+function takeFound(hit) {
+  const got = hit.probe;
+  const slug = "found:" + got.page;
+  const book = {
+    slug, title: hit.title, author: got.author || "",
+    chapters: got.chapters, minutes: null, tokens: null,
+    english: got.english || "translator not named",
+    note: "",
+    readThrough: false, added: true, abridged: false, chaptered: true,
+    counts: [got.chapters, got.otherChapters],
+    translations: [{ page: got.otherPage, label: got.english || got.otherPage, chapters: got.otherChapters }],
+    found: {
+      lang: S.shelf.books[0] ? S.shelf.books[0].lang : "fr", page: got.page,
+      other: S.shelf.books[0] ? S.shelf.books[0].other : "en", otherPage: got.otherPage,
+      title: hit.title, author: got.author, translator: got.translator,
+    },
+  };
+  S.shelf.books = S.shelf.books.filter((b) => b.slug !== slug).concat([book]);
+  S.filter = null; S.query = ""; $("shelf-find").value = "";
+  S.page = Math.floor((S.shelf.books.length - 1) / PER_PAGE);
+  setRoute("shelf");
+  show("books");
+  pickBook(slug, 0);
+}
 
 function describeFile(which) {
   const info = S.info[which];
@@ -494,11 +940,15 @@ function paintFiles() {
   refreshNext();
 }
 function refreshNext() {
-  const enough = S.orig && (S.route !== "align" || S.pub);
-  $("to-settings").disabled = !(enough && S.ready);
-  $("books-foot").textContent = S.ready
-    ? (S.route === "align" ? "Matching costs about a cent; you see the figure next." : "Cost comes next, before anything is sent.")
-    : "Warming up the workshop…";
+  const enough = S.route === "shelf" ? haveBook() : S.orig && (S.route !== "align" || S.pub);
+  $("to-settings").disabled = !(enough && S.ready && !S.busy);
+  if (S.busy === "shelf") return;
+  $("books-foot").textContent = !S.ready ? "Warming up the workshop…"
+    : S.route === "shelf" ? (haveBook()
+        ? "Both editions are here. Cost comes next, before anything is sent."
+        : "Nothing is fetched until you choose a book.")
+    : S.route === "align" ? "Matching costs about a cent; you see the figure next."
+    : "Cost comes next, before anything is sent.";
 }
 function wireFile(which) {
   const button = $("pick-" + which), input = $("f-" + which);
@@ -529,6 +979,7 @@ async function payload(extra) {
     pub: S.route === "align" && S.pub ? await bytes(S.pub) : null,
     pubName: S.route === "align" && S.pub ? S.pub.name : null,
     lang: $("lang").value, route: S.route,
+    shelfKey: S.pick && S.route === "shelf" ? S.pick.key : null,
     provider: S.local ? "openrouter" : S.provider,
     baseUrl: BASES[S.local ? "local" : S.provider],
     key: S.local ? "ollama" : $("key").value.trim(),
@@ -588,7 +1039,7 @@ function setProvider(prov) {
   S.local = prov === "local";
   for (const b of $("providers").children) {
     // Only OpenRouter and OpenAI serve embeddings, and matching two editions needs them.
-    const barred = S.route === "align" && b.dataset.prov === "anthropic";
+    const barred = aligning() && b.dataset.prov === "anthropic";
     b.disabled = barred;
     b.setAttribute("aria-pressed", String(b.dataset.prov === prov));
   }
@@ -597,12 +1048,12 @@ function setProvider(prov) {
   $("local-block").hidden = !S.local;
   // On the aligned route the chat model does nothing but the hover translations,
   // so it is asked for only once those are wanted.
-  $("model-block").hidden = S.local || (S.route === "align" && !$("gloss").checked);
-  $("model-why").hidden = S.route !== "align";
-  $("embed-block").hidden = S.local || S.route !== "align";
+  $("model-block").hidden = S.local || (aligning() && !$("gloss").checked);
+  $("model-why").hidden = !aligning();
+  $("embed-block").hidden = S.local || !aligning();
   $("setup").textContent =
     'OLLAMA_ORIGINS="' + location.origin + '" ollama serve\nollama pull ' + $("local-chat").value.trim() +
-    (S.route === "align" ? "\nollama pull " + $("local-embed").value.trim() : "");
+    (aligning() ? "\nollama pull " + $("local-embed").value.trim() : "");
   refreshBuild();
 }
 for (const b of $("providers").children) b.addEventListener("click", () => { if (!b.disabled) { setProvider(b.dataset.prov); priceIt(); } });
@@ -622,7 +1073,7 @@ try {
 
 function hasKey() { return S.local || !!$("key").value.trim(); }
 function refreshBuild() {
-  $("build").disabled = !(S.ready && S.orig && hasKey() && !S.busy);
+  $("build").disabled = !(S.ready && haveBook() && hasKey() && !S.busy);
   paintProofEmpty();
 }
 function enterSettings() {
@@ -639,7 +1090,7 @@ function leafTitles() {
   const orig = S.info.orig || {};
   const pub = S.info.pub || {};
   $("proof-l-title").textContent = [orig.title, orig.language].filter(Boolean).join(" · ") || "the original";
-  $("proof-r-title").textContent = S.route === "align"
+  $("proof-r-title").textContent = aligning()
     ? [pub.title, pub.author && "tr. " + pub.author].filter(Boolean).join(" · ") || "the edition you brought"
     : langName();
 }
@@ -656,13 +1107,12 @@ function paintProofEmpty() {
   $("proof-l").innerHTML = ""; $("proof-r").innerHTML = "";
   $("proof-l-folio").textContent = ""; $("proof-r-folio").textContent = "";
   const box = el("div", "empty");
-  const line = el("p", null, S.orig
-    ? (S.route === "align"
-      ? "See one page of your edition set beside the original before you commit to the whole book."
-      : "See one page in " + langName() + ", in the model's own prose, before you commit to the whole book.")
-    : "Choose a book first.");
-  const go = el("button", "ghost", S.route === "align" ? "Match one page" : "Translate one page");
-  go.disabled = !(S.ready && S.orig && hasKey() && !S.busy);
+  const line = el("p", null, !haveBook() ? "Choose a book first."
+    : S.route === "shelf" ? "See one page of the two editions set side by side before you commit to the whole book."
+    : aligning() ? "See one page of your edition set beside the original before you commit to the whole book."
+    : "See one page in " + langName() + ", in the model's own prose, before you commit to the whole book.");
+  const go = el("button", "ghost", aligning() ? "Match one page" : "Translate one page");
+  go.disabled = !(S.ready && haveBook() && hasKey() && !S.busy);
   go.addEventListener("click", () => takeSample(0));
   box.appendChild(line); box.appendChild(go);
   if (!S.local) box.appendChild(el("p", null, "A fraction of a cent, on your key."));
@@ -688,16 +1138,16 @@ function paintProof() {
   const again = el("button", "link", "Another page");
   again.addEventListener("click", () => takeSample(S.sample.index + 1));
   $("proof-note").textContent = "Page " + (s.index + 1) + " of " + s.total.toLocaleString()
-    + (S.route === "align" ? ", matched paragraph to paragraph. " : ", in the model you picked. ")
+    + (aligning() ? ", matched paragraph to paragraph. " : ", in the model you picked. ")
     + (S.local ? "" : "Samples so far: " + money(S.sampleSpend) + ". ");
   $("proof-note").appendChild(again);
 }
 function takeSample(index) {
-  if (S.busy || !S.orig || !hasKey()) return;
+  if (S.busy || !haveBook() || !hasKey()) return;
   S.sampleIndex = index;
   clearEmpty();
   $("proof-l").innerHTML = ""; $("proof-r").innerHTML = "";
-  $("proof-spread").appendChild(el("div", "empty", S.route === "align" ? "Reading both editions…" : "Translating a page…"));
+  $("proof-spread").appendChild(el("div", "empty", aligning() ? "Reading both editions…" : "Translating a page…"));
   alert_("settings-alert", "");
   const model = chosenModel();
   const price = S.local ? [0, 0] : S.prices[model.id] || [0, 0];
@@ -732,7 +1182,7 @@ function measured() {
   };
 }
 function priceIt() {
-  if (!S.ready || !S.orig) return;
+  if (!S.ready || !haveBook()) return;
   if (S.local) {
     S.estimate = null;
     $("fig").textContent = "Free";
@@ -742,7 +1192,7 @@ function priceIt() {
   }
   // The aligned route translates nothing, so with no glosses to price there is
   // nothing to ask the worker: the embedding run is counted on the page.
-  if (S.route === "align" && !$("gloss").checked) {
+  if (aligning() && !$("gloss").checked) {
     S.estimate = null;
     paintPrice();
     return refreshBuild();
@@ -750,7 +1200,7 @@ function priceIt() {
   if (S.busy) return;
   const model = chosenModel();
   const price = S.prices[model.id] || [0, 0];
-  if (S.route !== "align") {
+  if (!aligning()) {
     $("fig").textContent = "…";
     $("fig-of").textContent = "";
     $("fig-detail").textContent = "Counting the book…";
@@ -762,7 +1212,7 @@ function embedTokens() {
 }
 function paintPrice() {
   const e = S.estimate;
-  if (S.route === "align") {
+  if (aligning()) {
     // The embedding model's rate is quoted only where OpenRouter actually lists
     // it — a made-up cent is worse than none.
     const model = $("or-embed").value.trim();
@@ -818,8 +1268,8 @@ $("build").addEventListener("click", async () => {
   show("binding");
   const model = chosenModel();
   const price = S.local ? [0, 0] : S.prices[model.id] || [0, 0];
-  send(S.route === "align" ? "align" : "build", {
-    title: stem(S.orig.name), model: model.id, priceIn: price[0], priceOut: price[1],
+  send(aligning() ? "align" : "build", {
+    title: bookName(), model: model.id, priceIn: price[0], priceOut: price[1],
     gloss: $("gloss").checked,
   });
 });
@@ -874,7 +1324,7 @@ function stem(name) { return name.replace(/\.[^.]+$/, "").replace(/[-_]+/g, " ")
 function paintDone() {
   const info = S.info.orig || {};
   $("cover-by").textContent = info.author || "";
-  $("cover-title").textContent = info.title || stem(S.orig.name);
+  $("cover-title").textContent = info.title || bookName();
   $("cover-pair").textContent = [info.language || "the original", langName().toLowerCase()].join(" · ");
   const mb = new Blob([S.html]).size / 1e6;
   $("download").textContent = "Download · " + (mb < 1 ? Math.round(mb * 1000) + " KB" : mb.toFixed(1) + " MB");
@@ -886,11 +1336,12 @@ function paintDone() {
 $("download").addEventListener("click", () => {
   const url = URL.createObjectURL(new Blob([S.html], { type: "text/html" }));
   const a = document.createElement("a");
-  a.href = url; a.download = stem(S.orig.name) + " - bilingual reader.html"; a.click();
+  a.href = url; a.download = bookName() + " - bilingual reader.html"; a.click();
   URL.revokeObjectURL(url);
 });
 $("again").addEventListener("click", () => {
   S.sample = null; S.estimate = null; S.html = null; S.spent = null; S.sampleSpend = 0;
+  S.pick = null; paintShelf();
   show("books");
 });
 
@@ -908,17 +1359,30 @@ worker.onmessage = (e) => {
     }
     sel.addEventListener("change", () => { S.sample = null; paintProof(); priceIt(); });
     S.ready = true;
+    if (m.shelf && m.shelf.books.length) {
+      S.shelf = m.shelf;
+      $("route").querySelector("[data-route=shelf]").hidden = false;
+      $("look-lede").textContent = "The shelf is " + m.shelf.books.length + " books somebody "
+        + "has looked at. Beyond it, anything on Wikisource can be fetched the same way — we "
+        + "look for the original and a free English translation, and show you what came back.";
+      if (S.route === "shelf") paintShelf();
+    }
     refreshNext(); refreshBuild();
     return;
   }
-  if (m.type === "progress") return paintBinding(m);
+  if (m.type === "progress") return paintFetching(m);
   if (m.type === "text") return tookText(m.pairs);
+  if (m.type === "hits") return tookHits(m.hits);
+  if (m.type === "probe") return tookProbe(m.data);
 
   S.busy = null;
   if (m.type === "inspected") {
     S.info = m.data;
+    if (S.pick) { S.pick.loaded = true; measurePick(); paintShelf(); }
     paintFiles();
     if (!$("s-settings").hidden) { leafTitles(); priceIt(); }
+  } else if (m.type === "looked") {
+    paintLookup();
   } else if (m.type === "sample") {
     S.sample = m.data;
     S.sampleSpend += (m.data.cost || 0) + (m.data.glossCost || 0);
@@ -934,7 +1398,15 @@ worker.onmessage = (e) => {
     setTimeout(() => { paintDone(); show("done"); }, 350);
   } else if (m.type === "error") {
     const message = "<b>Couldn't finish.</b> " + m.error;
-    if (m.during === "inspect") { alert_("books-alert", message); S.info = { orig: null, pub: null }; paintFiles(); }
+    if (m.during === "lookup") { S.hits = []; paintLookup(); alert_("look-alert", message); }
+    else if (m.during === "shelf") {
+      // A book that will not come down off the shelf is unpicked, so nothing
+      // downstream is left holding a half-fetched edition.
+      S.pick = null; paintShelf();
+      alert_("books-alert", "<b>Couldn't fetch that book.</b> " + m.error
+        + " Wikisource may be busy; try it again, or pick another.");
+    }
+    else if (m.during === "inspect") { alert_("books-alert", message); S.info = { orig: null, pub: null }; paintFiles(); }
     else if (m.during === "build" || m.during === "align") { show("settings"); alert_("settings-alert", message); }
     else { alert_("settings-alert", message); paintProof(); }
   }

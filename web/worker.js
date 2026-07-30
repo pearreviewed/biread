@@ -22,6 +22,13 @@ const SETUP = [
   "        raw = ext.extract(Path(path), on_page=lambda d, t: js_progress(stage, d, t))",
   "        _BOOKS[path] = clean(raw, from_pdf=Path(path).suffix.lower() == '.pdf')[0]",
   "    return _BOOKS.get(path)",
+  // A book off the shelf arrives over the network instead of off the disk. The
+  // reader's own browser fetches it — nothing here is ours to hold — and the two
+  // editions are kept for the same sitting the uploads are.
+  "from pyodide.http import open_url",
+  "_SHELF = {}",
+  "def ws_fetch(url):",
+  "    return open_url(url).read()",
 ].join("\n");
 
 const ready = (async () => {
@@ -34,14 +41,23 @@ const ready = (async () => {
     "from biread.targets import TARGETS, DEFAULT_LANG",
     "json.dumps({'default': DEFAULT_LANG, 'items': sorted([[k, t.name] for k, t in TARGETS.items()], key=lambda x: x[1])})",
   ].join("\n"));
+  const shelf = pyodide.runPython([
+    "import json",
+    "from biread.shelf import catalogue",
+    "json.dumps(catalogue())",
+  ].join("\n"));
   pyodide.globals.set("js_progress", () => {});
+  pyodide.globals.set("shelf_key", null);
   pyodide.runPython(SETUP);
-  postMessage({ type: "ready", langs: JSON.parse(langs) });
+  postMessage({ type: "ready", langs: JSON.parse(langs), shelf: JSON.parse(shelf) });
 })();
 
 const READ = [
-  "orig_chapters = read_book(orig_path, 'read-orig')",
-  "pub_chapters = read_book(pub_path, 'read-pub')",
+  "if shelf_key:",
+  "    orig_chapters, pub_chapters = _SHELF[shelf_key]",
+  "else:",
+  "    orig_chapters = read_book(orig_path, 'read-orig')",
+  "    pub_chapters = read_book(pub_path, 'read-pub')",
 ].join("\n");
 
 // Shared setup: turn the uploaded files into chapters and a Config.
@@ -88,6 +104,47 @@ const INSPECT = [
 
 const indent = (code) => code.split("\n").map((line) => "    " + line).join("\n");
 
+// A book off the shelf: two page names in, two editions out. The fetch is the
+// reader's browser talking to Wikisource — biread holds the page names and never
+// the text, which is the whole reason the shelf can exist at all.
+const SHELF = [
+  "import json",
+  "from biread import shelf as shelf_mod",
+  "book = shelf_mod.by_slug(shelf_slug) if shelf_slug else None",
+  "if book:",
+  "    orig_chapters, pub_chapters, info = shelf_mod.load_pair(book, translation_index, ws_fetch, js_progress)",
+  "else:",
+  "    f = json.loads(found_json)",
+  "    orig_chapters, pub_chapters, info = shelf_mod.load_pages(",
+  "        f['lang'], f['page'], f['other'], f['otherPage'], ws_fetch, js_progress,",
+  "        (f.get('title'), f.get('author'), f.get('translator')))",
+  "_SHELF[shelf_key] = (orig_chapters, pub_chapters)",
+  "json.dumps(info)",
+].join("\n");
+
+// Looking beyond the shelf. The search and the two editions' whereabouts are
+// separate questions, and the second is answered book by book so the page can
+// fill each card in as its answer arrives rather than sitting on all of them.
+const LOOKUP = [
+  "import json",
+  "from biread import wikisource as ws, shelf as shelf_mod",
+  "hits = ws.search(query, look_lang, 4, ws_fetch)",
+  "pairs = ws.counterparts([h.title for h in hits], look_lang, look_other, ws_fetch)",
+  "js_hits(json.dumps([{'title': h.title, 'snippet': h.snippet, 'counterpart': pairs.get(h.title)} for h in hits]))",
+  "probed = 0",
+  "for h in hits:",
+  "    if not pairs.get(h.title) or probed >= 3:",
+  "        continue",
+  "    probed += 1",
+  "    try:",
+  "        got = shelf_mod.probe(look_lang, h.title, look_other, pairs[h.title], ws_fetch)",
+  "    except Exception as err:",
+  "        got = {'page': h.title, 'otherPage': pairs[h.title], 'buildable': False, 'why': str(err)}",
+  "    got['title'] = h.title",
+  "    js_probe(json.dumps(got))",
+  "json.dumps({'hits': len(hits), 'probed': probed})",
+].join("\n");
+
 // One page, done for real, so the reader sees the prose before paying for the
 // book — and weighed while it is here, so the book is priced by what this model
 // actually charges rather than by a constant that fits some other model.
@@ -97,7 +154,7 @@ const SAMPLE = [
   "import json",
   "from biread.sample import sample_translate, sample_align, sample_gloss, body_chars",
   "client = None",
-  "if pub_path and route == 'align':",
+  "if pub_chapters and route != 'translate':",
   indent(EMBEDDER),
   "    s = sample_align(orig_chapters, pub_chapters, embedder.embed, sample_index)",
   "    if want_gloss:",
@@ -122,7 +179,7 @@ const ESTIMATE = [
   "from biread.gloss import estimate as est_gl",
   "import json",
   "out = {'model': MODEL, 'translate_cost': None, 'gloss_cost': None}",
-  "if route == 'align':",
+  "if route != 'translate':",
   "    out['paragraphs'] = sum(len(c.paragraphs) for c in orig_chapters)",
   "else:",
   "    e = est_tr(orig_chapters, Cache(None), cfg, target.name)",
@@ -193,6 +250,17 @@ self.onmessage = async (e) => {
     pyodide.globals.set("price_in", m.priceIn || 0);
     pyodide.globals.set("price_out", m.priceOut || 0);
     pyodide.globals.set("embed_model", m.embedModel || "bge-m3");
+    // A shelf book stands in for the two uploads: once fetched it is kept under
+    // this key, and every later stage reads it exactly where it reads a file.
+    pyodide.globals.set("shelf_key", m.shelfKey || null);
+    pyodide.globals.set("shelf_slug", m.shelfSlug || null);
+    pyodide.globals.set("translation_index", m.translationIndex || 0);
+    pyodide.globals.set("found_json", m.found ? JSON.stringify(m.found) : "null");
+    pyodide.globals.set("query", m.query || "");
+    pyodide.globals.set("look_lang", m.lookLang || "fr");
+    pyodide.globals.set("look_other", m.lookOther || "en");
+    pyodide.globals.set("js_hits", (hits) => postMessage({ type: "hits", hits: JSON.parse(hits) }));
+    pyodide.globals.set("js_probe", (got) => postMessage({ type: "probe", data: JSON.parse(got) }));
     // Live from here on: reading a PDF reports its pages during pricing and the
     // free build alike, not only while translating.
     pyodide.globals.set("js_progress", (s, d, t) => postMessage({ type: "progress", stage: s, done: d, total: t }));
@@ -200,7 +268,11 @@ self.onmessage = async (e) => {
     // being made rather than a placeholder.
     pyodide.globals.set("js_text", (pairs) => postMessage({ type: "text", pairs: JSON.parse(pairs) }));
 
-    if (m.type === "inspect") {
+    if (m.type === "shelf") {
+      postMessage({ type: "inspected", data: JSON.parse(await pyodide.runPythonAsync(SHELF)) });
+    } else if (m.type === "lookup") {
+      postMessage({ type: "looked", data: JSON.parse(await pyodide.runPythonAsync(LOOKUP)) });
+    } else if (m.type === "inspect") {
       postMessage({ type: "inspected", data: JSON.parse(await pyodide.runPythonAsync(INSPECT)) });
     } else if (m.type === "sample") {
       postMessage({ type: "sample", data: JSON.parse(await pyodide.runPythonAsync(SAMPLE)) });

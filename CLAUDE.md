@@ -164,6 +164,28 @@ Sample inputs for the corpus live in the user's Downloads
 `The Project Gutenberg eBook of Candide, by Voltaire..pdf` = the published PDF
 that failed). Copy them into `examples/` before relying on them.
 
+### The shelf (built)
+
+A reader who arrives holding nothing can still leave with a book. **Pick from the
+shelf** is a third route on the builder's front door: five books out of
+copyright, both editions fetched from Wikisource by the reader's own browser and
+matched by meaning. biread stores two page names per book and never a word of
+text — that is what keeps it a tool rather than a host.
+
+Two screens. The shelf itself (`#shelf`, inside step one) is browsed and
+searched, six to a page, with filters that are computed from the books rather
+than declared — a filter matching all five, or none, is not shown at all. Beyond
+it, `#s-lookup` searches Wikisource for anything else out of copyright.
+
+What each card may say is governed by the same rule as the file cards: only what
+the source itself says. `wikisource.credits` reads the translator and year off
+the page's own header, so *Smollett · 1920* is quoted, not inferred, and 20,000
+Leagues shows a bare *1911* because its translator is unnamed. Coverage appears
+only for the two books someone has read end to end; the other three say so.
+
+`python -m biread.shelf` lists the shelf; `--check` re-measures every entry
+against the live wiki and reports what has drifted.
+
 ### Glossing (not yet built)
 
 > gloss is needed. any word on the right side (og language) shoudl be hoverable translated in context, but no articles prepositions and pronouns separately, they should be selected tpgetehr with the connected word and trasnlated in thier context. if the hoverable word is in french passe simple it should also show passe compose version and if the hoverable word is a verb in a form other tahn infinitif, then it should also show inifinitif form
@@ -285,6 +307,11 @@ CI so it stops depending on anyone remembering.
 | Builder — how does a reader know the translation is any good before paying? | **They read one page of it.** `sample.sample_translate` runs the chosen model over three real paragraphs of their own book; `sample_align` matches three against the edition they brought. It costs a fraction of a cent, renders in a miniature of the reader's own spread, and "Another page" buys the next one. The estimate stops being a promise about prose quality and becomes a price on prose already seen. |
 | Builder — does the progress screen show real work? | Yes. `translate_book(on_batch=…)` hands finished pairs up through `build_reader(on_text=…)` to the page, so the spread fills with the book actually being made, and the time left is computed from the rate observed so far. Nothing on that screen is decorative. |
 | Does the align route gloss? | **Yes.** `build_aligned(gloss=…, gloss_client=…, gloss_cfg=…)` glosses the original — exactly the body it renders, so no call is paid for on a paragraph nobody sees — while the reading column stays the translator's, word for word. Glossing is chat-model work, so the builder asks for a model on that route *only* once the hover is wanted; without a client the book builds the same, minus the hover, rather than being refused. This was the one place the two routes were not equal. |
+| Where does a book come from when the reader has no files? | **The shelf** — a third route on the builder's front door, beside translate and align. Two page names on Wikisource are all biread stores; the reader's own browser fetches both editions and the book is built by `build_aligned`, exactly as if they had brought the files. Gutenberg was ruled out: its files refuse browser downloads, so using it would need a server that stores books, which copyright rules out. |
+| How many books, and what may a shelf card claim? | **Five, and only what someone has checked.** A shelf that is *read*, not searched. A card shows title, author, the translator and year **the wiki itself names** (`wikisource.credits`), chapter count, and a build time computed from both editions' size; where the wiki names no translator the card names none. Two of the five have been read through and carry a measured coverage; the other three say plainly that nobody has, rather than borrowing the tone of the two that have. |
+| A book with more than one English translation? | **Offered on the card, with a default, never a demanded choice.** Wikisource lists them and `resolve` reads that list; the shelf carries each one measured. Micromégas has two — Phalen follows the French chapter for chapter, Fleming's 1906 runs as one piece — which is how the default was picked, by looking. |
+| A book that is not on the shelf? | **Its own screen** (`s-lookup`), not a dead end on the shelf. It searches Wikisource for whole works, asks the wiki itself which have an English counterpart (`langlinks`, never a guessed title), and resolves the pairs it finds. A hit with one side only says which side is missing; a search with nothing behind it says the book is probably still in copyright and why we cannot hold it either. A book taken from there joins the shelf marked *Added by a reader*, with no figures it has not earned. |
+| Two editions counting their chapters differently? | **Said out loud, and sized.** 47 against 46 is two editions; 4 against 22 is the same book divided quite differently and is described that way, because the aligner drops the numbering and matches by meaning. Both are normal; neither is silent. |
 | How are a book's notes found and taken out? | **By corroboration, never by shape.** `notes.py` removes a paragraph only where the prose actually refers to it (`Micromégas[1]` … `[1] De micros`), or where it belongs to the run of notes closing a chapter, numbered in order. A paragraph opening `1.` is a footnote in one book and an ordinary list in another and there is no telling them apart by looking, so an uncorroborated one is left where it is: a note left in is untidy, a deleted sentence is silent and unrecoverable. Every note taken out is reported to the terminal like any other removal. Scanned per chapter, because markers restart at 1 in each. Verified inert across the whole corpus — all six files come out with the same paragraph count and nothing removed, which is right, because none of them was leaking apparatus. |
 | Builder — what does a file card claim about a book? | Only what the file says: `meta.describe` reads an EPUB's OPF for title, author and language, a PDF for its page count, and counts paragraphs from the parsed text. Everything else stays None and is simply not shown — a filename is not an author, and a confident wrong byline is worse than a blank one. |
 
@@ -330,6 +357,20 @@ Recorded because the reasoning matters more than the outcome.
 
 ## Known open issues
 
+- **Three of the five shelf books have not been read through.** Candide (98.9%)
+  and Madame Bovary (87.4%) were built and read; Around the World in Eighty Days,
+  Micromégas and 20,000 Leagues resolve, fetch and build, but nobody has read one
+  end to end. The cards say so. Reading them is what promotes them, and the four
+  extraction faults that made the shelf curated were each found by reading a
+  rendered page rather than by a test.
+- **A shelf card's build time is one measurement extrapolated.** Madame Bovary's
+  5,449 paragraphs took about fourteen minutes in the spike, and every other
+  figure is that rate scaled. It is the network's pace, not the model's, so a slow
+  connection will beat the estimate in the wrong direction.
+- **The lookup resolves only the first three hits that have a counterpart.** Any
+  further result shows its title and nothing about whether it would build. The cap
+  is silent, which is exactly the kind of quiet truncation the rest of the project
+  refuses.
 - **A find-failure still discards the whole paragraph.** `anchor()` returns None
   if any one unit will not match in order, so one bad unit loses the other
   eighty. The rescue pass hides this in practice — it retries such a paragraph
@@ -383,6 +424,10 @@ biread/
   cli.py          argument parsing and everything the user sees printed
   extract/        source file -> raw text
   cleanup.py      raw text -> chapters of clean paragraphs
+  wikisource.py   two page names -> two editions, resolved and fetched; no I/O
+                  of its own, so the CLI reads through requests and the browser
+                  through its own fetch
+  shelf.py        the curated books, and what each one honestly claims
   translate.py    paragraphs -> English, batched and cached
   align.py        a published translation -> matched to the French by meaning:
                   through the generated translation as a pivot (the CLI), or
@@ -412,10 +457,10 @@ selector must be scoped to `#stage-wrap`.
 ## Tests
 
 ```sh
-pip install -e ".[dev]" && pytest              # ~355 Python tests, no network
+pip install -e ".[dev]" && pytest              # ~495 Python tests, no network
 pip install -e ".[browser]" && playwright install chromium
 pytest tests/test_reader_js.py                 # 54 browser tests, the reader
-pytest tests/test_builder_js.py                # 28 browser tests, the builder
+pytest tests/test_builder_js.py                # 44 browser tests, the builder
 ```
 
 The builder's tests serve `web/builder.html` beside `tests/builder_worker_stub.js`,
