@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from biread import shelf
-from tests.test_wikisource import fetcher, links, page
+from test_wikisource import fetcher, links, page
 
 
 def test_every_book_names_two_pages_and_an_author():
