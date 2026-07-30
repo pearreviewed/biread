@@ -83,3 +83,20 @@ def test_nothing_is_split_where_the_next_line_continues_the_sentence():
         "n'était remplie que de tracasseries et de petites intrigues.",
     ])
     assert repair(wrapped, from_pdf=True)[0] == wrapped
+
+
+# ---- ligatures ----
+
+def test_a_ligature_glyph_becomes_the_letters_it_stands_for():
+    # "ﬁnd" reads almost normally and is almost nothing else: no keyboard makes
+    # that character, so search and copy-and-paste both miss the word.
+    text, removed = repair("He could not ﬁnd the ﬂowers.")
+    assert text == "He could not find the flowers."
+    assert any(r.kind == "Ligature expanded" for r in removed)
+
+
+def test_text_without_ligatures_is_left_exactly_as_it_was():
+    plain = "He could not find the flowers."
+    text, removed = repair(plain)
+    assert text == plain
+    assert not any(r.kind == "Ligature expanded" for r in removed)

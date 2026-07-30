@@ -24,6 +24,15 @@ from .numbering import chapter_number
 # wherever it sits rather than as a whole line.
 PAGE_MARKER_RE = re.compile(r"\[\s*(?:pg|page)\.?\s*[ivxlcdm\d]+\s*\]", re.IGNORECASE)
 
+# Typographic ligatures, which a PDF's font carries as single glyphs and pypdf
+# hands back verbatim: "ﬁnd", "ﬂurried". They read almost normally and are almost
+# nothing else — search, copy-and-paste and every word-level stage see a
+# character no keyboard makes. Always safe to expand: the codepoint is a shape,
+# never a meaning, so this needs no format gate.
+LIGATURES = str.maketrans({
+    "ﬀ": "ff", "ﬁ": "fi", "ﬂ": "fl", "ﬃ": "ffi", "ﬄ": "ffl", "ﬅ": "st", "ﬆ": "st",
+})
+
 # A word broken across a line break: a letter, a hyphen, end of line. Joined
 # only when the next line resumes in lower case — an upper-case continuation is
 # more likely a real compound (a proper noun) split at its own hyphen.
@@ -134,6 +143,11 @@ def repair(raw: str, from_pdf: bool = False) -> tuple[str, list[Removal]]:
     lost the information — see `_unfuse_paragraphs`.
     """
     removed: list[Removal] = []
+
+    expanded = sum(raw.count(glyph) for glyph in "ﬀﬁﬂﬃﬄﬅﬆ")
+    if expanded:
+        raw = raw.translate(LIGATURES)
+        removed.append(Removal("Ligature expanded", f"{expanded} glyph(s), e.g. “ﬁ” to “fi”"))
 
     first = PAGE_MARKER_RE.search(raw)
     text, marks = PAGE_MARKER_RE.subn(" ", raw)
