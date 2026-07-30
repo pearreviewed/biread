@@ -722,6 +722,35 @@ def embed_nearest(
     return out
 
 
+#: How much of the French must find a numbered counterpart before the two
+#: editions are taken to be divided the same way.
+NUMBERING_AGREES = 0.8
+
+
+def _chapter_pairs(
+    french: list[Chapter], published: list[Chapter]
+) -> list[tuple[Chapter, Chapter | None]]:
+    """Chapter against chapter where the two editions divide the book alike, and
+    the whole book against the whole book where they do not.
+
+    Chapter numbers are only worth pairing on when they actually correspond. An
+    edition that merges thirty chapters into twenty-five carries numbers that look
+    pairable and are not: the tail of the French finds no counterpart and is left
+    blank, though every word of it is present in the other book under a different
+    number. Six French chapters against three merged English ones cover 50% paired
+    this way, and 100% run whole — so where the numbering does not agree, the
+    numbering is the thing to discard.
+    """
+    pairs = _pair_by_number(french, published)
+    matched = sum(1 for _, pub in pairs if pub is not None)
+    if matched >= 2 and matched >= len(pairs) * NUMBERING_AGREES:
+        return pairs
+    return [(
+        Chapter(None, None, [p for c in french for p in c.paragraphs]),
+        Chapter(None, None, [p for c in published for p in c.paragraphs]),
+    )]
+
+
 def _by_embeddings(
     french: list[Chapter], published: list[Chapter], embed: Embed, report: AlignmentReport,
     progress: Callable[[int, int], None] | None = None,
@@ -734,14 +763,7 @@ def _by_embeddings(
     `progress(done, total)` is called per chapter, so a long book is not silent while
     it embeds."""
     report.method = "pivot"
-    pairs = (
-        _pair_by_number(french, published)
-        if len({chapter_number(c.number) for c in french} & {chapter_number(c.number) for c in published} - {None}) >= 2
-        else [(
-            Chapter(None, None, [p for c in french for p in c.paragraphs]),
-            Chapter(None, None, [p for c in published for p in c.paragraphs]),
-        )]
-    )
+    pairs = _chapter_pairs(french, published)
     aligned: dict[str, str] = {}
     for index, (fr, pub) in enumerate(pairs):
         if progress:

@@ -247,3 +247,58 @@ def test_pivot_keeps_reading_order():
     aligned, _ = align_published(french, published, translations)
     for subject, animal in zip(subjects, animals):
         assert animal in aligned[hash_text(f"Le {subject} traverse la cour tranquillement.")]
+
+
+# ---- editions that divide the book differently ----
+
+def _concepts():
+    words = [("chat", "cat"), ("chien", "dog"), ("oiseau", "bird"),
+             ("cheval", "horse"), ("arbre", "tree"), ("fleur", "flower")]
+    vectors = {}
+    for i, (fr, en) in enumerate(words):
+        vector = [0.0] * len(words)
+        vector[i] = 1.0
+        vectors[fr] = vectors[en] = vector
+    def embed(texts):
+        out = []
+        for text in texts:
+            found = [0.0] * len(words)
+            for word, vector in vectors.items():
+                if word in text.lower():
+                    found = vector
+                    break
+            out.append(found)
+        return out
+    return words, embed
+
+
+ROMAN = ["I", "II", "III", "IV", "V", "VI"]
+
+
+def test_a_published_edition_that_merges_chapters_still_aligns_whole():
+    """Numbers that look pairable and are not: an edition merging six chapters
+    into three leaves the French tail facing nothing, though every word of it is
+    in the other book under a different number. Paired that way it covered 50%."""
+    words, embed = _concepts()
+    french = [Chapter(ROMAN[i], f"T{i}", [f"Le {fr} dort ici."]) for i, (fr, _) in enumerate(words)]
+    merged = [
+        Chapter("I", "T1", [f"The {words[0][1]} sleeps here.", f"The {words[1][1]} sleeps here."]),
+        Chapter("II", "T2", [f"The {words[2][1]} sleeps here.", f"The {words[3][1]} sleeps here."]),
+        Chapter("III", "T3", [f"The {words[4][1]} sleeps here.", f"The {words[5][1]} sleeps here."]),
+    ]
+    aligned, report = align_published(french, merged, embed=embed)
+    assert report.coverage == 1.0
+    assert not report.degraded
+    assert aligned[hash_text("Le chat dort ici.")] == "The cat sleeps here."
+    assert aligned[hash_text("Le fleur dort ici.")] == "The flower sleeps here."
+
+
+def test_editions_that_divide_alike_are_still_paired_chapter_by_chapter():
+    # The fallback must not swallow the common case: pairing by number keeps a
+    # chapter's paragraphs from being matched against the whole book.
+    from biread.align import _chapter_pairs
+
+    words, _ = _concepts()
+    french = [Chapter(ROMAN[i], f"T{i}", [f"Le {fr} dort ici."]) for i, (fr, _) in enumerate(words)]
+    english = [Chapter(ROMAN[i], f"T{i}", [f"The {en} sleeps here."]) for i, (_, en) in enumerate(words)]
+    assert len(_chapter_pairs(french, english)) == len(french)
