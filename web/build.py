@@ -9,6 +9,7 @@ output is a handful of files you can drop on any static host.
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -17,8 +18,91 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 WEB = ROOT / "web"
 DIST = WEB / "dist"
+BOOKS = WEB / "books"
 FONTS = ROOT / "biread" / "assets" / "fonts"
 FONT_FILES = ("charis-sil-400.woff2", "charis-sil-400-italic.woff2")
+
+# --- books already made ------------------------------------------------------
+#
+# A shelf card hands over a finished book only where one was built, read, and
+# approved here. Every other card stays what it was — tap it and build the book
+# yourself — because a book going out under biread's name is a thing somebody
+# decided, not a thing that happened to align.
+#
+# What a card *claims* is measured off the file in `measure`, never declared, so
+# replacing a build updates the card and cannot drift from it. Two things are
+# stated here because no file can say them about itself: which English edition
+# is inside, and that a person approved it.
+#
+# `BOOKS_AT` is where the finished books are served from. Empty means beside the
+# builder, which is what a static host gives you and what localhost gives you
+# now. The day there is a server, this line is the only one that changes.
+BOOKS_AT = ""
+PUBLISHED = [
+    {
+        "slug": "micromegas",
+        "file": "micromegas.html",
+        "english": "Phalen",
+        "approved": "2026-08-01",
+    },
+]
+
+BOOK_DATA = re.compile(
+    r'<script type="application/json" id="book-data">(.*?)</script>', re.S)
+
+
+def measure(path: Path) -> dict:
+    """What a finished book says about itself.
+
+    A card may claim only what its source says, and the source here is the book:
+    how much of it carries a translation, whether the published edition rides
+    beside ours or stands as the one column, how much of it is glossed, and what
+    it holds for offline reading. None of it is typed by hand, so a card cannot
+    outlive the file it describes.
+    """
+    found = BOOK_DATA.search(path.read_text(encoding="utf-8"))
+    if not found:
+        raise SystemExit(f"{path.name} carries no book data — is it a built reader?")
+    data = json.loads(found.group(1))
+    pairs = data["pairs"]
+    return {
+        "bytes": path.stat().st_size,
+        "paragraphs": len(pairs),
+        "translated": sum(1 for p in pairs if p.get("en", "").strip()),
+        "glossed": sum(1 for p in pairs if p.get("units")),
+        "published": bool(data.get("publishedAvailable")),
+        "solo": bool(data.get("solo")),
+        "formats": [d["format"] for d in data.get("downloads", [])],
+    }
+
+
+def gather_published(catalogue: dict) -> None:
+    """Attach each finished book to its shelf card, and copy it into the bundle.
+
+    Loud on every mismatch: a slug that names no shelf book, or a file that is
+    not there, is a card promising a download that would 404 in front of a
+    reader. Better to stop the build than to ship the promise.
+    """
+    from biread.render import download_name
+
+    by_slug = {book["slug"]: book for book in catalogue["books"]}
+    if PUBLISHED:
+        (DIST / "books").mkdir(exist_ok=True)
+    for entry in PUBLISHED:
+        book = by_slug.get(entry["slug"])
+        if book is None:
+            raise SystemExit(f"published book {entry['slug']!r} is not on the shelf")
+        source = BOOKS / entry["file"]
+        if not source.is_file():
+            raise SystemExit(f"published book {entry['slug']!r} has no file at {source}")
+        shutil.copy2(source, DIST / "books" / entry["file"])
+        book["prebuilt"] = {
+            "href": f"{BOOKS_AT}books/{entry['file']}",
+            "filename": download_name(book["title"]) + ".html",
+            "english": entry.get("english"),
+            "approved": entry["approved"],
+            **measure(source),
+        }
 
 
 def main() -> None:
@@ -52,11 +136,18 @@ def main() -> None:
     # here instead, so the page has it before the engine exists.
     from biread.shelf import catalogue
 
+    shelf = catalogue()
+    gather_published(shelf)
     (DIST / "shelf.json").write_text(
-        json.dumps(catalogue(), ensure_ascii=False), encoding="utf-8")
+        json.dumps(shelf, ensure_ascii=False), encoding="utf-8")
 
-    files = sorted(p.name for p in DIST.iterdir())
+    files = sorted(p.name for p in DIST.iterdir() if p.is_file())
     print(f"Built {DIST.relative_to(ROOT)}/ — {len(files)} files: {', '.join(files)}")
+    for entry in PUBLISHED:
+        book = next(b for b in shelf["books"] if b["slug"] == entry["slug"])
+        made = book["prebuilt"]
+        print(f"  ready to read: {book['title']} — {made['paragraphs']} paragraphs, "
+              f"{made['glossed']} glossed, {made['bytes'] / 1e6:.1f} MB")
     print("Try it locally:  python -m http.server -d web/dist   (then open /builder.html)")
 
 

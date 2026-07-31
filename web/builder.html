@@ -132,6 +132,10 @@
   .card .took { align-self: flex-start; padding: 7px 18px; border-radius: 999px; background: var(--solid); color: var(--on-solid); font-size: 13.5px; }
   .card .forget { align-self: flex-start; padding: 0; font: 400 13px/1 'Charis SIL', Charter, Georgia, serif; background: none; border: 0; color: var(--muted); text-decoration: underline; text-underline-offset: 3px; }
   .card .forget:hover { color: var(--ink); }
+  .card .ready { display: flex; flex-direction: column; gap: 9px; padding-top: 13px; border-top: 1px solid var(--rule); }
+  .card .ready:not(:last-child) { padding-bottom: 15px; border-bottom: 1px solid var(--rule); }
+  .card .get { align-self: flex-start; padding: 9px 20px; border-radius: 999px; border: 0; background: var(--solid); color: var(--on-solid); font: 400 14px/1 'Charis SIL', Charter, Georgia, serif; cursor: pointer; }
+  .card .get:hover { filter: brightness(1.1); }
   .versions { display: flex; flex-direction: column; gap: 7px; padding-top: 11px; border-top: 1px solid var(--rule); }
   .versions .caps { font-size: 9.5px; }
   .versions .pills { gap: 6px; }
@@ -717,6 +721,49 @@ function fact(label, value) {
   row.appendChild(el("span", null, value));
   return row;
 }
+// A book that was built, read and approved is already made, and the card hands
+// it over rather than asking for a key. Every figure in this block was measured
+// off that file when the builder was assembled, so the description cannot drift
+// from the book — and the card stays live underneath, because a reader may want
+// a different English, another language, or glosses this one was built without.
+function weight(bytes) {
+  return bytes >= 1e6 ? (bytes / 1e6).toFixed(1) + " MB" : Math.round(bytes / 1e3) + " KB";
+}
+function madeOf(book) {
+  const made = book.prebuilt;
+  // Name the edition only where there is more than one to confuse it with.
+  const named = made.english && book.translations.length > 1 ? " (" + made.english + ")" : "";
+  const parts = [made.solo
+    ? "the French beside the published translation" + named
+    : made.published
+      ? "the French, a translation, and the published one" + named
+      : "the French and a translation"];
+  if (made.glossed) {
+    parts.push(made.glossed >= made.paragraphs
+      ? "hover glosses throughout"
+      : "hover glosses on " + made.glossed + " paragraphs");
+  }
+  if (made.formats.length) {
+    parts.push(made.formats.map((f) => f.toUpperCase()).join(" and ") + " inside");
+  }
+  return "Made already: " + parts.join(", ") + ".";
+}
+function readyBlock(book) {
+  const box = el("div", "ready");
+  const get = el("button", "get", "Ready to read · " + weight(book.prebuilt.bytes));
+  get.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const link = el("a");
+    link.href = book.prebuilt.href;
+    link.download = book.prebuilt.filename;
+    link.click();
+  });
+  box.appendChild(get);
+  box.appendChild(el("div", "say", madeOf(book)));
+  box.appendChild(el("div", "say", "Or build your own — tap the card."));
+  return box;
+}
+
 function bookCard(book) {
   const card = el("button", "card" + (book.readThrough ? "" : " unread"));
   card.dataset.slug = book.slug;
@@ -736,6 +783,11 @@ function bookCard(book) {
   if (book.minutes) facts.appendChild(fact("Build", "about " + book.minutes + " min"));
   card.appendChild(facts);
 
+  // The book in hand comes before anything about the book you could make: what
+  // follows — which English, how the two are shaped, what nobody has checked —
+  // is all about building your own, and reads as that once this sits above it.
+  if (book.prebuilt) card.appendChild(readyBlock(book));
+
   const marks = el("div", "marks");
   if (book.abridged) marks.appendChild(el("span", "mark", "Abridged"));
   if (!book.chaptered) marks.appendChild(el("span", "mark", "Not chaptered"));
@@ -749,8 +801,13 @@ function bookCard(book) {
 
   if (book.note) card.appendChild(el("div", "say", book.note));
   if (!book.readThrough) {
-    card.appendChild(el("div", "say", "Nobody has read this one through, so we cannot say how "
-      + "closely the two keep pace."));
+    // A finished book was read before it was approved; what nobody has read is
+    // the build this card would make, which is a different thing from a
+    // different pair of files. Said plainly, or the two sit and contradict.
+    card.appendChild(el("div", "say", book.prebuilt
+      ? "Nobody has read the edition you would build here through, so we cannot say how "
+        + "closely those two keep pace."
+      : "Nobody has read this one through, so we cannot say how closely the two keep pace."));
   }
   if (picked) card.appendChild(el("div", "took", S.pick.loaded ? "Chosen" : "Fetching…"));
   if (book.kept) {

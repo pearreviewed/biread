@@ -55,6 +55,15 @@ const SHELF = {
         { page: "Micromegas (Phalen)", label: "Phalen", chapters: 7 },
         { page: "The Works of Voltaire/Volume 3/Micromegas", label: "Fleming · 1906", chapters: 1 },
       ],
+      // The one book here that was built, read and approved. Everything in this
+      // block is measured off the finished file by web/build.py; the shape is
+      // copied from what it writes, and the card may claim nothing else.
+      prebuilt: {
+        href: "books/micromegas.html", filename: "Micromégas - bilingual reader.html",
+        english: "Phalen", approved: "2026-08-01", bytes: 1142524,
+        paragraphs: 34, translated: 34, glossed: 34,
+        published: true, solo: false, formats: ["epub", "pdf"],
+      },
     },
     {
       slug: "80days", title: "Le Tour du monde en quatre-vingts jours", author: "Verne",

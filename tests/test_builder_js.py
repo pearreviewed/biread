@@ -45,6 +45,11 @@ def site(tmp_path_factory):
     shutil.copy(Path(__file__).parent / "builder_worker_stub.js", root / "worker.js")
     for font in ("charis-sil-400.woff2", "charis-sil-400-italic.woff2"):
         shutil.copy(FONTS / font, root / font)
+    # A finished book sits beside the builder exactly as the bundle serves it.
+    # What is in it does not matter here — that it is fetchable, and arrives
+    # named as a book rather than as a slug, is the whole of the promise.
+    (root / "books").mkdir()
+    (root / "books" / "micromegas.html").write_bytes(b"<!doctype html><title>Microm\xc3\xa9gas</title>")
 
     handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(root))
     handler.log_message = lambda *args, **kwargs: None
@@ -435,6 +440,62 @@ def test_a_filter_narrows_the_shelf_and_lets_go(page):
 def test_the_pager_stays_away_while_the_shelf_fits_on_one_page(page):
     page.click("[data-route=shelf]")
     assert hidden(page, "#shelf-pager")
+
+
+# ---- books already made --------------------------------------------------
+
+def test_only_an_approved_book_is_offered_ready_to_read(page):
+    page.click("[data-route=shelf]")
+    offered = page.eval_on_selector_all(
+        ".card .get", "n => n.map(b => b.closest('.card').dataset.slug)")
+    assert offered == ["micromegas"], "a card may hand over a book only where one was approved"
+    assert "1.1 MB" in text(page, ".card[data-slug=micromegas] .get")
+
+
+def test_the_ready_line_says_what_is_in_the_book_and_names_the_edition(page):
+    page.click("[data-route=shelf]")
+    said = text(page, ".card[data-slug=micromegas] .ready .say")
+    # Two English editions are on offer, so the one inside is named; every other
+    # clause is measured off the file rather than written by hand.
+    assert "the French, a translation, and the published one (Phalen)" in said
+    assert "hover glosses throughout" in said
+    assert "EPUB and PDF inside" in said
+    assert "Or build your own" in text(page, ".card[data-slug=micromegas] .ready")
+
+
+def test_the_finished_book_does_not_sit_under_a_note_denying_it(page):
+    page.click("[data-route=shelf]")
+    card = text(page, ".card[data-slug=micromegas]")
+    # Nobody has read the wiki pair this card would build. That is not a claim
+    # about the book already made, and must not read as one.
+    assert "Nobody has read the edition you would build here" in card
+    assert "Nobody has read this one through" not in card
+    order = page.eval_on_selector(
+        ".card[data-slug=micromegas]",
+        "c => [...c.children].findIndex(n => n.classList.contains('ready'))")
+    marks = page.eval_on_selector(
+        ".card[data-slug=micromegas]",
+        "c => [...c.children].findIndex(n => n.classList.contains('say'))")
+    assert order < marks, "the book in hand comes before anything about building one"
+
+
+def test_taking_the_finished_book_neither_builds_it_nor_costs_a_key(page):
+    page.click("[data-route=shelf]")
+    with page.expect_download() as caught:
+        page.click(".card[data-slug=micromegas] .get")
+    assert caught.value.suggested_filename == "Micromégas - bilingual reader.html"
+    # The download must not fall through to the card and start a build behind it.
+    assert page.eval_on_selector_all(".card[aria-pressed=true]", "n => n.length") == 0
+    assert not hidden(page, "#s-books")
+
+
+def test_the_card_underneath_still_builds_the_book_yourself(page):
+    page.click("[data-route=shelf]")
+    page.click(".card[data-slug=micromegas] .name")
+    page.wait_for_selector(".card[data-slug=micromegas][aria-pressed=true]")
+    assert not hidden(page, ".card[data-slug=micromegas] .get"), (
+        "a book already made must still be buildable — another English, another language"
+    )
 
 
 # ---- beyond the shelf ----------------------------------------------------
