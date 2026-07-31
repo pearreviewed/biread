@@ -146,6 +146,20 @@ def test_probing_a_pair_costs_no_chapter_fetches():
     assert fetch.seen == ["Germinal", "Germinal (Ellis)"]
 
 
+def test_an_original_with_no_counterpart_is_still_read_for_whose_it_is():
+    """The wiki naming no English edition is a fact about its interwiki links —
+    Germinal and Candide carry none, and both have English editions elsewhere.
+    The second library is English-only, so what it needs asking is the author."""
+    fetch = fetcher({
+        "Germinal": page(links("Germinal/Partie I", "Germinal/Partie II"), author="Émile Zola"),
+    })
+    got = shelf.probe_alone("fr", "Germinal", fetch)
+    assert got["buildable"] and got["chapters"] == 2
+    assert got["author"] == "Émile Zola"
+    # One side asked about, so one page fetched.
+    assert fetch.seen == ["Germinal"]
+
+
 def test_a_book_with_one_side_only_is_not_buildable():
     fetch = fetcher({
         "Germinie Lacerteux": page(links("Germinie Lacerteux/1", "Germinie Lacerteux/2",

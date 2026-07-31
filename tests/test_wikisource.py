@@ -310,6 +310,21 @@ def test_a_search_pages_on_works_and_counts_what_it_did_not_show():
     assert second.more == 0
 
 
+def test_a_header_is_read_in_the_language_the_wiki_writes_it_in():
+    """fr.wikisource's Germinal says `auteur`, not `author` — so looking for one
+    spelling read the byline off half the library, and the French half is the
+    half every original comes from."""
+    french = page("<p>x</p>", auteur="[[Auteur:Émile Zola|Émile Zola]]",
+                  titre="Germinal", annee="1885")
+    assert ws.credits(french).author == "Émile Zola"
+    assert ws.credits(french).title == "Germinal"
+    assert ws.credits(french).year == "1885"
+    english = page("<p>x</p>", author="Emile Zola", translator="Havelock Ellis")
+    assert ws.credits(english).author == "Emile Zola"
+    assert ws.credits(english).translator == "Havelock Ellis"
+    assert ws.credits(page("<p>x</p>")).author is None
+
+
 def test_a_counterpart_is_the_wikis_own_link_or_nothing():
     reply = json.dumps({"query": {"pages": [
         {"title": "Madame Bovary", "langlinks": [{"lang": "en", "title": "Madame Bovary"}]},

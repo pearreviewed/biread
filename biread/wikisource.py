@@ -224,7 +224,18 @@ def header_title(page_html: str) -> str | None:
 # The header block names the edition: its title, its author, who translated it
 # and when. Read, never guessed — a shelf entry claims only what the page says,
 # and a book whose translator the wiki does not name is shown without one.
+#
+# Each wiki writes the field names in its own language: fr.wikisource's header
+# says `auteur` where en.wikisource says `author`, so looking for one spelling
+# only reads the author off half the library — and the French half is the half
+# every original comes from.
 _FIELD = r'"{field}":\s*\{{"wt":"(.*?)"\}}'
+_FIELD_NAMES = {
+    "title": ("title", "titre"),
+    "author": ("author", "auteur"),
+    "translator": ("translator", "traducteur"),
+    "year": ("year", "annee", "année"),
+}
 
 
 @dataclass(frozen=True)
@@ -243,9 +254,13 @@ class Credits:
 
 def credits(page_html: str) -> Credits:
     got = {}
-    for field_ in ("title", "author", "translator", "year"):
-        m = re.search(_FIELD.format(field=field_), page_html)
-        value = _plain(m.group(1)) if m else ""
+    for field_, names in _FIELD_NAMES.items():
+        value = ""
+        for name in names:
+            m = re.search(_FIELD.format(field=name), page_html)
+            value = _plain(m.group(1)) if m else ""
+            if value:
+                break
         got[field_] = value or None
     return Credits(**got)
 

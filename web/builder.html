@@ -589,7 +589,16 @@ const ROUTE_NOTE = {
   align: "We match the published edition you already own to the original by meaning. Every word stays its translator's.",
   shelf: "Books out of copyright, both editions fetched for you from Wikisource and Standard Ebooks. The English is a free translation, so it often reads of its own century — much of the pleasure of the facing page.",
 };
-function setRoute(route) {
+const ROUTES = ["translate", "align", "shelf"];
+function hashRoute() {
+  const r = decodeURIComponent(location.hash.slice(1));
+  return ROUTES.includes(r) ? r : null;
+}
+// A #shelf link can arrive before the shelf does — the books come up with the
+// engine. Hold the intent rather than landing on an empty panel.
+let linkedRoute = null;
+
+function setRoute(route, keepHash) {
   S.route = route;
   for (const b of $("route").children) b.setAttribute("aria-pressed", String(b.dataset.route === route));
   $("route-note").textContent = ROUTE_NOTE[route];
@@ -599,9 +608,19 @@ function setRoute(route) {
   $("files").classList.toggle("one", route !== "align");
   document.querySelector("#s-books .step").classList.toggle("wide", route === "shelf");
   if (route === "shelf") paintShelf();
+  if (!keepHash && hashRoute() !== route) history.replaceState(null, "", "#" + route);
   refreshNext();
 }
 for (const b of $("route").children) b.addEventListener("click", () => setRoute(b.dataset.route));
+
+// Only while step one is up: a hash arriving later must not yank a reader out of
+// the screen they are working in.
+window.addEventListener("hashchange", () => {
+  const r = hashRoute();
+  if (!r || r === S.route || $("s-books").hidden) return;
+  if (r === "shelf" && !S.shelf) { linkedRoute = "shelf"; return; }
+  setRoute(r);
+});
 
 /* --- the shelf ----------------------------------------------------------- */
 const PER_PAGE = 6;
@@ -679,7 +698,10 @@ function bookCard(book) {
   const marks = el("div", "marks");
   if (book.abridged) marks.appendChild(el("span", "mark", "Abridged"));
   if (!book.chaptered) marks.appendChild(el("span", "mark", "Not chaptered"));
-  if (book.counts[0] !== book.counts[1] && book.chaptered) {
+  if (book.library) marks.appendChild(el("span", "mark", "English from " + book.library));
+  // Two counts are only worth comparing once both have been counted: an edition
+  // taken from the second library has not been opened yet.
+  if (book.counts.every(Number.isFinite) && book.counts[0] !== book.counts[1] && book.chaptered) {
     marks.appendChild(el("span", "mark", book.counts.join(" against ") + " chapters"));
   }
   if (marks.children.length) card.appendChild(marks);
@@ -842,18 +864,76 @@ function tookProbe(got) {
   paintLookup();
 }
 
-function hitCard(hit) {
-  const got = hit.probe;
-  const buildable = got && got.buildable;
-  const card = el("div", "hit" + (buildable ? "" : " miss"));
-  card.appendChild(el("div", "name", hit.title));
-  if (!hit.counterpart) {
+// A checkbox that keeps the book in this browser, worded the same wherever the
+// English half came from — what is stored is two names either way.
+function keepBox(card) {
+  const box = el("label", "check");
+  const tick = el("input");
+  tick.type = "checkbox";
+  box.appendChild(tick);
+  box.appendChild(el("span", null, "Keep it on my shelf"));
+  card.appendChild(box);
+  card.appendChild(el("p", "say", "Saved in this browser, so it is here next time. Nothing is "
+    + "uploaded — an entry is two page names, and the book stays its library’s."));
+  return tick;
+}
+
+// The wiki named no counterpart, which is a fact about its interwiki links and
+// not about the book: Germinal and Candide both carry none, and both have
+// English editions. So the second library is asked, by author — and what it
+// answers is offered rather than claimed. Only the reader knows it is the same
+// book, and a wrong pairing would build, render, and look perfectly fine.
+function offerSecondLibrary(card, hit, got) {
+  const others = got.alternatives || [];
+  if (!got.buildable || !others.length) {
     card.appendChild(el("p", null, "The original is here. Wikisource carries no free "
-      + "English translation of it."));
+      + "English translation of it" + (got.author ? ", and Standard Ebooks has none by "
+      + got.author + " either" : "") + "."));
     card.appendChild(el("p", "say", "One side only — there is nothing to face it, so it "
       + "cannot be built."));
     return card;
   }
+  card.classList.remove("miss");
+  card.appendChild(el("p", null, "Wikisource has no English edition of this one. Standard "
+    + "Ebooks has " + (others.length === 1 ? "one" : others.length) + " by "
+    + (got.author || "this author") + ":"));
+  const name = "alt-" + hit.title.replace(/\W+/g, "-");
+  const picks = [];
+  // Nothing is chosen for the reader. Preselecting the first is a quiet claim
+  // that it is the right one, and the whole point here is that we do not know.
+  for (const other of others) {
+    const row = el("label", "check");
+    const dot = el("input");
+    dot.type = "radio";
+    dot.name = name;
+    dot.addEventListener("change", () => { go.disabled = false; });
+    row.appendChild(dot);
+    row.appendChild(el("span", null, other.title + (other.translator ? " · tr. " + other.translator : "")));
+    card.appendChild(row);
+    picks.push([dot, other]);
+  }
+  card.appendChild(el("p", "say", "Take one only if it is the same book. The two libraries "
+    + "are not linked to each other, so this is your author’s shelf there, not a match we "
+    + "can vouch for."));
+  const tick = keepBox(card);
+  const go = el("button", "solid", "Use this edition →");
+  go.style.alignSelf = "flex-start";
+  go.style.fontSize = "14px";
+  go.disabled = true;
+  go.addEventListener("click", () => {
+    const chosen = picks.find(([dot]) => dot.checked);
+    if (chosen) takeFound(hit, tick.checked, chosen[1]);
+  });
+  card.appendChild(go);
+  return card;
+}
+
+function hitCard(hit) {
+  const got = hit.probe;
+  const paired = !!hit.counterpart;
+  const buildable = got && got.buildable;
+  const card = el("div", "hit" + (buildable && paired ? "" : " miss"));
+  card.appendChild(el("div", "name", hit.title));
   if (!got) {
     card.appendChild(el("p", "say", hit.unchecked
       ? "This one was never checked, so whether both editions line up is unknown. "
@@ -861,6 +941,7 @@ function hitCard(hit) {
       : "Looking for both editions…"));
     return card;
   }
+  if (!paired) return offerSecondLibrary(card, hit, got);
   if (!buildable) {
     card.appendChild(el("p", null, "An English translation is listed — " + got.otherPage
       + " — but the chapters of one side could not be found."));
@@ -871,14 +952,7 @@ function hitCard(hit) {
     + (got.english ? " English by " + got.english + "." : " The English translator is not named.")));
   card.appendChild(el("p", "say", "Nobody has read this one through, so it carries no note about "
     + "how closely the two keep pace."));
-  const box = el("label", "check");
-  const tick = el("input");
-  tick.type = "checkbox";
-  box.appendChild(tick);
-  box.appendChild(el("span", null, "Keep it on my shelf"));
-  card.appendChild(box);
-  card.appendChild(el("p", "say", "Saved in this browser, so it is here next time. Nothing is "
-    + "uploaded — an entry is two Wikisource page names, and the book stays the wiki’s."));
+  const tick = keepBox(card);
   const go = el("button", "solid", "Add to the shelf and build");
   go.style.alignSelf = "flex-start";
   go.style.fontSize = "14px";
@@ -942,21 +1016,31 @@ function paintLookup() {
 // A book the reader found goes onto the shelf as what it is: buildable, and
 // vouched for by nobody. Its build time is unknown until both editions are here,
 // so until then the card simply does not claim one.
-function takeFound(hit, keepIt) {
+function takeFound(hit, keepIt, other) {
   const got = hit.probe;
   const slug = "found:" + got.page;
+  // Taken from the second library, the English side is a path and a translator
+  // and nothing else — its chapters are unknown until it is fetched, and a card
+  // that has not counted them says so by leaving the count out.
+  const page = other ? other.path : got.otherPage;
+  const label = other
+    ? other.title + (other.translator ? " · tr. " + other.translator : "")
+    : got.english || got.otherPage;
+  const chapters = other ? null : got.otherChapters;
   const book = {
     slug, title: hit.title, author: got.author || "", kept: !!keepIt,
     chapters: got.chapters, minutes: null, tokens: null,
-    english: got.english || "translator not named",
-    note: "",
+    english: label || "translator not named",
+    note: "", library: other ? "Standard Ebooks" : null,
     readThrough: false, added: true, abridged: false, chaptered: true,
-    counts: [got.chapters, got.otherChapters],
-    translations: [{ page: got.otherPage, label: got.english || got.otherPage, chapters: got.otherChapters }],
+    counts: [got.chapters, chapters],
+    translations: [{ page, label, chapters }],
     found: {
       lang: S.shelf.books[0] ? S.shelf.books[0].lang : "fr", page: got.page,
-      other: S.shelf.books[0] ? S.shelf.books[0].other : "en", otherPage: got.otherPage,
-      title: hit.title, author: got.author, translator: got.translator,
+      other: S.shelf.books[0] ? S.shelf.books[0].other : "en", otherPage: page,
+      title: hit.title, author: got.author,
+      translator: other ? other.translator : got.translator,
+      source: other ? "standardebooks" : "wikisource",
     },
   };
   S.shelf.books = S.shelf.books.filter((b) => b.slug !== slug).concat([book]);
@@ -1425,6 +1509,7 @@ worker.onmessage = (e) => {
         + "has looked at. Beyond it, anything on Wikisource can be fetched the same way — we "
         + "look for the original and a free English translation, and show you what came back.";
       if (S.route === "shelf") paintShelf();
+      if (linkedRoute === "shelf") { linkedRoute = null; setRoute("shelf"); }
     }
     refreshNext(); refreshBuild();
     return;
@@ -1484,7 +1569,10 @@ worker.onmessage = (e) => {
   if (m.type !== "estimate" && m.type !== "inspected") paintProof();
 };
 
-setRoute("translate");
+const linked = hashRoute();
+linkedRoute = linked === "shelf" ? "shelf" : null;
+if (linkedRoute) setRoute("translate", true);
+else setRoute(linked || "translate");
 paintFiles();
 paintTheme();
 </script>

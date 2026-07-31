@@ -387,6 +387,24 @@ def probe(lang: str, page: str, other: str, other_page: str, fetch=None) -> dict
     }
 
 
+def probe_alone(lang: str, page: str, fetch=None) -> dict:
+    """What the original is, when the wiki named nothing to face it.
+
+    Wikisource's interwiki links are sparse — Germinal and Candide both carry
+    none, though English editions of both exist — so "no counterpart" is a fact
+    about the link, not about the book. The second library can be asked instead,
+    and the question it answers is whose book this is: English-only, so it
+    supplies the facing page and never the original.
+    """
+    from biread import wikisource as ws
+
+    found = ws.resolve(lang, page, fetch or ws.default_fetch)
+    return {
+        "page": page, "chapters": len(found.pages), "shape": found.shape,
+        "author": ws.credits(found.html).author, "buildable": bool(found.pages),
+    }
+
+
 # --- keeping the numbers honest ---------------------------------------------
 
 def check(fetch=None) -> list[str]:

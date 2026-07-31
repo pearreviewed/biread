@@ -115,9 +115,13 @@ const SHELF = [
   "    orig_chapters, pub_chapters, info = shelf_mod.load_pair(book, translation_index, ws_fetch, js_progress)",
   "else:",
   "    f = json.loads(found_json)",
+  // A found book's English half may be the wiki's or the second library's. Which
+  // one is the only thing that differs, and load_pages already knows both.
+  "    where = shelf_mod.Translation(f['otherPage'], f.get('translator'),",
+  "                                  source=f.get('source') or 'wikisource')",
   "    orig_chapters, pub_chapters, info = shelf_mod.load_pages(",
   "        f['lang'], f['page'], f['other'], f['otherPage'], ws_fetch, js_progress,",
-  "        (f.get('title'), f.get('author'), f.get('translator')))",
+  "        (f.get('title'), f.get('author'), f.get('translator')), where)",
   "_SHELF[shelf_key] = (orig_chapters, pub_chapters)",
   "json.dumps(info)",
 ].join("\n");
@@ -134,21 +138,33 @@ const SHELF = [
 const LOOK_PAGE = 4;
 const LOOKUP = [
   "import json",
-  "from biread import wikisource as ws, shelf as shelf_mod",
+  "from biread import wikisource as ws, shelf as shelf_mod, standardebooks as se",
   `found = ws.search(query, look_lang, ${LOOK_PAGE}, look_offset, ws_fetch)`,
   "pairs = ws.counterparts([h.title for h in found.hits], look_lang, look_other, ws_fetch)",
   // The count travels with the results, not with the run's return value: the
   // probes come between them, and what was left behind should not wait on them.
   "js_hits(json.dumps({'more': found.more, 'hits': [{'title': h.title, 'snippet': h.snippet, 'counterpart': pairs.get(h.title)} for h in found.hits]}))",
   "probed = 0",
+  // One search of the second library per author, not per book: a page of results
+  // is often three works by the same writer, and their shelf there is one page.
+  "by_author = {}",
   "for h in found.hits:",
-  "    if not pairs.get(h.title):",
-  "        continue",
   "    probed += 1",
   "    try:",
-  "        got = shelf_mod.probe(look_lang, h.title, look_other, pairs[h.title], ws_fetch)",
+  "        if pairs.get(h.title):",
+  "            got = shelf_mod.probe(look_lang, h.title, look_other, pairs[h.title], ws_fetch)",
+  "        else:",
+  // No counterpart on the wiki is a fact about the wiki's links, not about the
+  // book. Ask the second library whose book this is, and offer what it has —
+  // offered, never asserted: only the reader knows it is the same book.
+  "            got = shelf_mod.probe_alone(look_lang, h.title, ws_fetch)",
+  "            author = got.get('author') or ''",
+  "            if author not in by_author:",
+  "                by_author[author] = [{'path': b.path, 'title': b.title, 'translator': b.translator}",
+  "                                     for b in se.by_author(author, ws_fetch)]",
+  "            got['alternatives'] = by_author[author]",
   "    except Exception as err:",
-  "        got = {'page': h.title, 'otherPage': pairs[h.title], 'buildable': False, 'why': str(err)}",
+  "        got = {'page': h.title, 'otherPage': pairs.get(h.title), 'buildable': False, 'why': str(err)}",
   "    got['title'] = h.title",
   "    js_probe(json.dumps(got))",
   "json.dumps({'hits': len(found.hits), 'probed': probed, 'more': found.more})",

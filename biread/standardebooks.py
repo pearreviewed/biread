@@ -21,6 +21,7 @@ browser can pass its own.
 from __future__ import annotations
 
 import re
+import unicodedata
 import urllib.parse
 from dataclasses import dataclass
 from html.parser import HTMLParser
@@ -82,6 +83,34 @@ def search(query: str, fetch: Fetch = default_fetch, limit: int = 8) -> list[Boo
         if len(found) >= limit:
             break
     return found
+
+
+def _fold(name: str) -> str:
+    """A name with its accents and case set aside, for comparing only.
+
+    The site spells its authors in URL slugs (`emile-zola`) and Wikisource spells
+    them as they are written (`Émile Zola`). Those are the same author, and the
+    difference is an artefact of what a URL may contain.
+    """
+    bare = unicodedata.normalize("NFKD", name or "")
+    bare = "".join(c for c in bare if not unicodedata.combining(c))
+    return " ".join(bare.casefold().replace("-", " ").split())
+
+
+def by_author(author: str, fetch: Fetch = default_fetch, limit: int = 8) -> list[Book]:
+    """This author's editions here, and nobody else's.
+
+    A search for a title alone is too loose to trust — "germinal" also returns
+    Voltairine de Cleyre's poetry — so the author is what the results are held
+    to. Where the site names a different author it is a different book, and an
+    empty list is the right answer: these are offered to a reader to confirm,
+    never asserted, and offering the wrong book wastes the one judgement we are
+    relying on.
+    """
+    if not author:
+        return []
+    want = _fold(author)
+    return [b for b in search(author, fetch, limit=limit * 3) if _fold(b.author) == want][:limit]
 
 
 class _Body(HTMLParser):

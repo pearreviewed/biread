@@ -459,6 +459,8 @@ def test_a_search_reports_the_pair_it_found_and_the_side_it_did_not(page):
     assert "Nobody has read this one through" in found
     missing = text(page, ".hit:nth-child(2)")
     assert "no free English translation" in missing
+    # Neither library has it, and the card names both rather than only the wiki.
+    assert "Standard Ebooks has none by Goncourt either" in missing
     assert "cannot be built" in missing
 
 
@@ -494,6 +496,49 @@ def test_a_work_that_was_never_checked_says_so_rather_than_spinning(page):
     last = text(page, ".hit:nth-child(7)")
     assert "never checked" in last
     assert "Looking for both editions" not in last
+
+
+def test_a_missing_counterpart_offers_the_second_library_without_claiming_it(page):
+    """Wikisource's interwiki links are sparse — Germinal and Candide carry none
+    though English editions of both exist — so a miss there is not the end."""
+    look_up(page, "le rêve")
+    page.wait_for_selector(".hit .solid")
+    card = text(page, ".hit")
+    assert "Wikisource has no English edition" in card
+    assert "Standard Ebooks has 2 by Émile Zola" in card
+    assert "The Dream · tr. Eliza Chase" in card
+    # Offered, never asserted: the reader is told plainly what this is not.
+    assert "not a match we can vouch for" in card
+    assert page.locator(".hit input[type=radio]").count() == 2
+    # Nothing is chosen for the reader: preselecting one would be a quiet claim
+    # that it is the right one, which is the thing this screen does not know.
+    assert not page.is_checked(".hit input[type=radio]")
+    assert page.eval_on_selector(".hit .solid", "e => e.disabled")
+
+
+def test_taking_a_second_library_edition_records_where_it_came_from(page):
+    look_up(page, "le rêve")
+    page.wait_for_selector(".hit .solid")
+    page.locator(".hit input[type=radio]").first.check()
+    page.click(".hit .solid")
+    page.wait_for_function("!document.getElementById('to-settings').disabled")
+    found = page.evaluate("S.pick.book.found")
+    assert found["source"] == "standardebooks"
+    assert found["otherPage"] == "/ebooks/emile-zola/the-dream/eliza-chase"
+    assert found["translator"] == "Eliza Chase"
+    card = text(page, ".card[data-slug='found:Le Rêve']")
+    assert "English from Standard Ebooks" in card
+    # Its chapters there are uncounted until it is fetched, so nothing is claimed.
+    assert "against" not in card
+
+
+def test_the_edition_taken_is_the_one_the_reader_picked(page):
+    look_up(page, "le rêve")
+    page.wait_for_selector(".hit .solid")
+    page.locator(".hit input[type=radio]").nth(1).check()
+    page.click(".hit .solid")
+    page.wait_for_function("!document.getElementById('to-settings').disabled")
+    assert page.evaluate("S.pick.book.found.otherPage") == "/ebooks/emile-zola/germinal/havelock-ellis"
 
 
 def test_a_book_still_in_copyright_is_a_plain_no_not_a_spinner(page):

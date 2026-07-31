@@ -145,9 +145,17 @@ self.onmessage = (e) => {
         silent: i === 6,
       }));
     }
+    if (query.includes("rêve") || query.includes("reve")) {
+      // The live shape of the wiki's sparse interwiki links: an original with no
+      // counterpart named, whose author does have editions in the other library.
+      return [{ title: "Le Rêve", snippet: "Zola", counterpart: null, alternatives: [
+        { path: "/ebooks/emile-zola/the-dream/eliza-chase", title: "The Dream", translator: "Eliza Chase" },
+        { path: "/ebooks/emile-zola/germinal/havelock-ellis", title: "Germinal", translator: "Havelock Ellis" },
+      ] }];
+    }
     return [
       { title: "Germinal", snippet: "Émile Zola Germinal", counterpart: "Germinal (Ellis)" },
-      { title: "Germinie Lacerteux", snippet: "Goncourt", counterpart: null },
+      { title: "Germinie Lacerteux", snippet: "Goncourt", counterpart: null, author: "Goncourt" },
     ];
   }
 
@@ -157,19 +165,25 @@ self.onmessage = (e) => {
     const hits = works.slice(offset, offset + LOOK_PAGE);
     postMessage({
       type: "hits",
-      hits: hits.map(({ silent, ...h }) => h),
+      hits: hits.map(({ silent, alternatives, author, ...h }) => h),
       more: Math.max(0, works.length - offset - LOOK_PAGE),
     });
     let probed = 0;
-    for (const hit of hits.filter((h) => h.counterpart && !h.silent)) {
+    for (const hit of hits.filter((h) => !h.silent)) {
       probed += 1;
+      // No counterpart on the wiki: the original alone, and whatever the second
+      // library has by that author, offered for the reader to confirm.
       postMessage({
         type: "probe",
-        data: {
+        data: hit.counterpart ? {
           title: hit.title, page: hit.title, otherPage: hit.counterpart,
           chapters: 40, otherChapters: 40, shape: "chapters", otherShape: "translation",
           author: "Zola", english: "Ellis · 1894", translator: "Havelock Ellis",
           year: "1894", buildable: true,
+        } : {
+          title: hit.title, page: hit.title, chapters: 16, shape: "chapters",
+          author: hit.author || "Émile Zola", buildable: true,
+          alternatives: hit.alternatives || [],
         },
       });
     }

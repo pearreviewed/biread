@@ -1,5 +1,5 @@
 """Reading a published translation out of Standard Ebooks, offline."""
-from biread.standardebooks import Book, address, load, parse, search, text_url
+from biread.standardebooks import Book, address, by_author, load, parse, search, text_url
 
 # The shape the site actually serves: front and back matter are sections too,
 # and are told apart from the body only by what they declare themselves to be.
@@ -110,6 +110,24 @@ def test_an_uncredited_translation_is_not_called_an_english_original():
 
 def test_a_work_is_listed_once_however_often_the_page_links_it():
     assert len(search("flaubert", fetch=lambda url: SEARCH)) == 2
+
+
+def test_an_authors_shelf_holds_nobody_elses():
+    """A title alone is too loose to trust — searching the live site for
+    "germinal" also returns Voltairine de Cleyre's poetry — so results are held
+    to the author, and offering the wrong book is worse than offering none."""
+    mine = by_author("Gustave Flaubert", fetch=lambda url: SEARCH)
+    assert [b.title for b in mine] == ["Salammbo"]
+
+
+def test_an_author_is_the_same_author_however_the_url_had_to_spell_them():
+    """Wikisource writes "Émile Zola"; a URL slug cannot, and says emile-zola."""
+    assert [b.title for b in by_author("Émile Zola", fetch=lambda url: SEARCH)] == ["Doctor Pascal"]
+
+
+def test_an_author_nobody_here_carries_comes_back_empty_not_approximate():
+    assert by_author("Marcel Proust", fetch=lambda url: SEARCH) == []
+    assert by_author("", fetch=lambda url: SEARCH) == []
 
 
 def test_nothing_opens_a_socket_by_itself():
