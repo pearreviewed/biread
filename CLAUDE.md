@@ -376,10 +376,19 @@ Recorded because the reasoning matters more than the outcome.
   the only entry that clears the bar — aligned, all 34 paragraphs glossed, the
   published column beside ours, EPUB and PDF inside. Candide is built and reads
   (469 paragraphs, 464 with English, 30 chapters) but carries **no glosses**, so
-  it is one gloss run short of approval rather than finished. Bovary, 80 Days and
-  20,000 Leagues have never been built at all. Every card without a finished book
-  behind it still builds on the reader's own key, so nothing is blocked — the
-  shelf is simply younger than it looks.
+  it is one gloss run short of approval rather than finished — about **$0.28** of
+  one, on Balanced. Bovary, 80 Days and 20,000 Leagues have never been built at
+  all. Every card without a finished book behind it still builds on the reader's
+  own key, so nothing is blocked — the shelf is simply younger than it looks.
+- **Glossing costs roughly four times translating, and that governs the budget.**
+  Priced off Candide's real French (469 paragraphs, 184,197 characters) against
+  live OpenRouter rates: on DeepSeek v3.1 the translation is $0.077 and the
+  glosses $0.275. Scaled by each book's own character count, translating **and**
+  glossing the whole eight-book shelf from nothing is about **$13** on Balanced
+  and about **$200** on Sonnet — which is the argument for Balanced, stated in
+  money. Both figures are floors: the quote runs ~30% under (see below) and the
+  gloss estimate does not count its rescue retries at all. What this changes is
+  planning — the hover, not the prose, is what a shelf costs.
 - **Three of the five shelf books have not been read through.** Candide (98.9%)
   and Madame Bovary (87.4%) were built and read; Around the World in Eighty Days,
   Micromégas and 20,000 Leagues resolve, fetch and build, but nobody has read one
