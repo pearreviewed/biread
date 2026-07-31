@@ -136,6 +136,15 @@
   .versions .caps { font-size: 9.5px; }
   .versions .pills { gap: 6px; }
   .versions .pills button { font-size: 12.5px; padding: 5px 11px; }
+  /* Under the cards, where the book being fetched is: the footer is three
+     blocks further down and off the fold on a laptop, so a reader who clicked a
+     card saw nothing happen. */
+  .fetching { display: flex; flex-direction: column; gap: 9px; padding: 15px 18px; border: 1px solid var(--rule); border-radius: 15px; background: var(--surface); }
+  .fetching .row { align-items: baseline; font-size: 14px; }
+  .fetching #fetch-at { color: var(--ink); font-weight: 700; }
+  .fetching #fetch-of { flex: none; font: 400 12.5px/1 system-ui, sans-serif; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .fetching .track { height: 2px; background: var(--rule); position: relative; border-radius: 2px; overflow: hidden; }
+  .fetching .track > span { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--solid); transition: width .35s ease; }
   .pager { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-top: 14px; border-top: 1px solid var(--rule); font-size: 13.5px; color: var(--muted); }
   .pager .nums { display: flex; align-items: center; gap: 4px; }
   .pager .nums button { min-width: 32px; padding: 6px 10px; border: 0; border-radius: 999px; background: none; font-size: 14px; color: var(--body); }
@@ -304,6 +313,10 @@
         <label class="find"><span>⌕</span><input id="shelf-find" placeholder="Search the shelf" autocomplete="off" spellcheck="false"></label>
       </div>
       <div class="cards" id="shelf-cards"></div>
+      <div class="fetching" id="fetching" hidden>
+        <div class="row"><span id="fetch-at"></span><span id="fetch-of"></span></div>
+        <div class="track"><span id="fetch-bar"></span></div>
+      </div>
       <div class="pager" id="shelf-pager" hidden>
         <span id="shelf-count"></span>
         <span class="nums" id="shelf-nums"></span>
@@ -822,16 +835,24 @@ function pickBook(slug, index) {
   send("shelf", book.found
     ? { shelfKey: key, found: book.found }
     : { shelfKey: key, shelfSlug: slug, translationIndex: index });
-  $("books-foot").textContent = "Fetching both editions from Wikisource…";
+  sayFetching("Fetching both editions", 0, 0);
+  refreshNext();
 }
 $("shelf-find").addEventListener("input", (e) => { S.query = e.target.value; S.page = 0; paintShelf(); });
 
 /* --- beyond the shelf ----------------------------------------------------- */
 const FETCHING = { "fetch-orig": "Fetching the original", "fetch-pub": "Fetching the English edition" };
+// Said under the cards, beside the book it is about. The footer is three blocks
+// further down — past the pager and the lookup panel — so on a laptop a reader
+// who clicked a card watched nothing happen for the better part of a minute.
+function sayFetching(what, done, total) {
+  $("fetch-at").textContent = what + (S.pick ? " · " + S.pick.title : "");
+  $("fetch-of").textContent = total ? "chapter " + done + " of " + total : "";
+  $("fetch-bar").style.width = total ? Math.round(done / total * 100) + "%" : "0";
+}
 function paintFetching(m) {
   if (S.busy !== "shelf") return paintBinding(m);
-  $("books-foot").textContent = (FETCHING[m.stage] || "Fetching")
-    + " · chapter " + m.done + " of " + m.total;
+  sayFetching(FETCHING[m.stage] || "Fetching", m.done, m.total);
 }
 
 // A search asks for one page of works; asking again from where the last one
@@ -1072,6 +1093,7 @@ function paintFiles() {
 function refreshNext() {
   const enough = S.route === "shelf" ? haveBook() : S.orig && (S.route !== "align" || S.pub);
   $("to-settings").disabled = !(enough && S.ready && !S.busy);
+  $("fetching").hidden = !(S.busy === "shelf" && S.route === "shelf");
   if (S.busy === "shelf") return;
   $("books-foot").textContent = !S.ready ? "Warming up the workshop…"
     : S.route === "shelf" ? (haveBook()
