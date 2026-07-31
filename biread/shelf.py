@@ -26,7 +26,12 @@ PARAGRAPHS_PER_MINUTE = 390
 
 @dataclass(frozen=True)
 class Translation:
-    """One English edition of a work, as the wiki names it."""
+    """One English edition of a work, as its library names it.
+
+    `page` is a Wikisource page name, or a Standard Ebooks path when `source`
+    says so — three of the shelf's books take their French from the wiki and
+    their English from the other library, because the wiki has no usable copy.
+    """
     page: str
     translator: str | None = None
     year: str | None = None
@@ -35,6 +40,8 @@ class Translation:
     chars: int = 0
     abridged: bool = False
     chaptered: bool = True
+    source: str = "wikisource"
+    divisions: bool = False   # read at the division where the French is a book
 
     @property
     def label(self) -> str:
@@ -83,9 +90,10 @@ class Book:
             "note": self.note, "readThrough": self.read_through,
             "coverage": self.coverage, "added": self.added,
             "english": t.label, "abridged": t.abridged, "chaptered": t.chaptered,
-            "counts": [self.chapters, t.chapters],
+            "counts": [self.chapters, t.chapters], "source": t.source,
             "translations": [
-                {"page": x.page, "label": x.label, "chapters": x.chapters}
+                {"page": x.page, "label": x.label, "chapters": x.chapters,
+                 "source": x.source}
                 for x in self.translations
             ],
         }
@@ -161,6 +169,53 @@ SHELF: tuple[Book, ...] = (
         ),
         note="The two editions count their chapters differently, 47 against 46. "
              "That is two editions, not an error, and the matching takes it in stride.",
+    ),
+    Book(
+        slug="lesmis",
+        title="Les Misérables",
+        author="Victor Hugo",
+        page="Les Misérables",
+        chapters=364, paragraphs=12_208, chars=3_025_187,
+        translations=(
+            Translation("/ebooks/victor-hugo/les-miserables/isabel-f-hapgood",
+                        "Hapgood", "1887", 365, 12_192, 3_131_069,
+                        source="standardebooks"),
+        ),
+        note="Three hundred and sixty-five chapters over five volumes, and the "
+             "two editions agree on all but two of them. The longest book here "
+             "by some way — set it going and come back to it.",
+        read_through=True, coverage=0.921,
+    ),
+    Book(
+        slug="notredame",
+        title="Notre-Dame de Paris",
+        author="Victor Hugo",
+        page="Notre-Dame de Paris",
+        chapters=11, paragraphs=4_116, chars=1_009_855,
+        translations=(
+            Translation("/ebooks/victor-hugo/notre-dame-de-paris/isabel-f-hapgood",
+                        "Hapgood", "1888", 11, 3_799, 1_025_227,
+                        source="standardebooks", divisions=True),
+        ),
+        note="The wiki puts each of Hugo’s eleven books on one page where this "
+             "translation gives the fifty-nine chapters inside them, so the two "
+             "are read at the grain they agree on: eleven against eleven.",
+        read_through=True, coverage=0.861,
+    ),
+    Book(
+        slug="salammbo",
+        title="Salammbô",
+        author="Gustave Flaubert",
+        page="Salammbô",
+        chapters=15, paragraphs=2_075, chars=688_530,
+        translations=(
+            Translation("/ebooks/gustave-flaubert/salammbo/j-s-chartres",
+                        "Chartres", "1886", 15, 1_890, 605_414,
+                        source="standardebooks"),
+        ),
+        note="Carthage after the mercenaries’ revolt, and Flaubert at his most "
+             "pitiless. The wiki has no English copy of this one at all.",
+        read_through=True, coverage=0.903,
     ),
 )
 
@@ -245,12 +300,31 @@ def _side(edition, fallback_title: str, fallback_author: str | None) -> dict:
     }
 
 
+def _english_side(chapters: list[dict], path: str, translator: str | None) -> dict:
+    """What a Standard Ebooks edition says about itself, in the same shape.
+
+    It has no page-by-page structure to report, so `shape` says where it came
+    from rather than pretending to a wiki shape it does not have.
+    """
+    return {
+        "title": path.rsplit("/", 2)[1].replace("-", " ").title(),
+        "author": translator, "language": "en", "pages": None,
+        "paragraphs": sum(len(c["paragraphs"]) for c in chapters),
+        "chars": sum(len(p) for c in chapters for p in c["paragraphs"]),
+        "chapters": len(chapters), "year": None,
+        "shape": "standardebooks", "resolved": path,
+    }
+
+
 def load_pages(lang: str, page: str, other: str, other_page: str,
-               fetch=None, on_progress=None, titles: tuple = (None, None, None)):
+               fetch=None, on_progress=None, titles: tuple = (None, None, None),
+               translation: Translation | None = None):
     """Both editions named by page, fetched and read into chapters.
 
     Returns the two chapter lists and what each edition says about itself. Only
-    page names travel from here; the text is the wiki's and stays the reader's.
+    page names travel from here; the text is the library's and stays the
+    reader's. The original is always the wiki's — no other French source lets a
+    browser fetch it — but the English may come from the second library.
     """
     from biread import wikisource as ws
 
@@ -259,6 +333,16 @@ def load_pages(lang: str, page: str, other: str, other_page: str,
     title, author, translator = titles
 
     original = ws.load(lang, page, fetch, lambda i, t: step("fetch-orig", i, t))
+    if translation is not None and translation.source == "standardebooks":
+        from biread import standardebooks as se
+
+        step("fetch-pub", 0, 1)
+        chapters = se.load(other_page, fetch, divisions=translation.divisions)
+        step("fetch-pub", 1, 1)
+        info = {"orig": _side(original, title or page, author),
+                "pub": _english_side(chapters, other_page, translator)}
+        return ws.to_chapters(original), _as_chapters(chapters), info
+
     english = ws.load(other, other_page, fetch, lambda i, t: step("fetch-pub", i, t))
     info = {
         "orig": _side(original, title or page, author),
@@ -267,11 +351,18 @@ def load_pages(lang: str, page: str, other: str, other_page: str,
     return ws.to_chapters(original), ws.to_chapters(english), info
 
 
+def _as_chapters(rows: list[dict]):
+    from biread.cleanup import Chapter
+
+    return [Chapter(number=r["number"], title=r.get("title"), paragraphs=r["paragraphs"])
+            for r in rows]
+
+
 def load_pair(book: Book, index: int = 0, fetch=None, on_progress=None):
     """Both editions of a shelf book, in the translation the reader chose."""
     t = book.translations[index]
     return load_pages(book.lang, book.page, book.other, t.page, fetch, on_progress,
-                      (book.title, book.author, t.translator))
+                      (book.title, book.author, t.translator), translation=t)
 
 
 def probe(lang: str, page: str, other: str, other_page: str, fetch=None) -> dict:
