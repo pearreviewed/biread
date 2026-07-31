@@ -510,3 +510,28 @@ def test_an_echoed_perfect_already_in_the_cache_is_not_shown():
     (shown,) = displayable(para, [unit])
     assert shown.perfect == ""
     assert shown.infinitive == "être"
+
+
+def test_only_a_present_auxiliary_makes_a_perfect():
+    """The two tenses models offer in its place both read like an answer:
+    "avait" is the imparfait of the auxiliary, "n'avait pas pu" the
+    plus-que-parfait. No passé composé lacks a present auxiliary."""
+    from biread.gloss import is_perfect
+
+    assert is_perfect("il a disséqué")
+    assert is_perfect("n'a jamais voulu")
+    assert is_perfect("il y a eu")
+    assert is_perfect("elle est venue")
+    assert not is_perfect("avait")               # imparfait of the auxiliary
+    assert not is_perfect("n'avait pas pu")      # plus-que-parfait
+    assert not is_perfect("pesait")
+
+
+def test_a_pronoun_in_the_surface_no_longer_hides_an_echo():
+    """"Il avait" -> pc="avait" survived the echo test, because the surface
+    carries the pronoun and the answer does not."""
+    from biread.gloss import FIELD, parse_units
+
+    (unit,) = parse_units(f"Il avait{FIELD}verb{FIELD}had{FIELD}inf=avoir{FIELD}pc=avait")
+    assert unit["perfect"] == ""
+    assert unit["infinitive"] == "avoir"

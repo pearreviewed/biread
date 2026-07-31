@@ -30,6 +30,9 @@ class Language:
     #: The half of the gloss prompt that is a fact about the language rather than
     #: about glossing — how units divide, and which verb forms earn a second line.
     gloss_rules: str
+    #: Present-tense forms of the auxiliaries a compound past is built with. A
+    #: perfect offered without one of these is some other tense wearing its name.
+    perfect_auxiliaries: frozenset[str] = frozenset()
 
 
 # Elided forms are listed bare (j, l, qu, n) because units are tokenised on
@@ -134,10 +137,20 @@ FRENCH_PREPOSITIONS = frozenset(
     "contre selon parmi".split()
 )
 
+# A passé composé is an auxiliary in the *present* plus a participle — the rules
+# above say so and give worked examples. Nothing else counts, and that is what
+# tells it from the two tenses models offer in its place: "avait" is the
+# imparfait of the auxiliary, "n'avait pas pu" the plus-que-parfait. Neither
+# carries a present auxiliary, and no passé composé lacks one.
+FRENCH_PERFECT_AUXILIARIES = frozenset(
+    "ai as a avons avez ont suis es est sommes êtes sont".split()
+)
+
 FRENCH = Language(
     name="French",
     function_words=FRENCH_FUNCTION_WORDS,
     coordinators=FRENCH_COORDINATORS,
     prepositions=FRENCH_PREPOSITIONS,
     gloss_rules=FRENCH_GLOSS_RULES,
+    perfect_auxiliaries=FRENCH_PERFECT_AUXILIARIES,
 )

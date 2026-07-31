@@ -136,7 +136,7 @@ def parse_units(block: str) -> list[dict]:
         # tense always carries an auxiliary, so it can never equal its own
         # surface — and showing one that does teaches the reader something false,
         # which is worse than showing nothing.
-        if _same_form(unit["perfect"], unit["surface"]):
+        if _same_form(unit["perfect"], unit["surface"]) or not is_perfect(unit["perfect"]):
             unit["perfect"] = ""
         units.append(unit)
     return units
@@ -144,6 +144,26 @@ def parse_units(block: str) -> list[dict]:
 
 def _same_form(a: str, b: str) -> bool:
     return bool(a) and re.sub(r"\W+", "", a).casefold() == re.sub(r"\W+", "", b).casefold()
+
+
+def is_perfect(form: str) -> bool:
+    """Whether a proposed passé composé is one, on the evidence that settles it.
+
+    The echo test misses a whole class: "Il avait" answered with "avait" differs
+    from its surface only by the pronoun, and "n'avait pas pu" differs entirely
+    while being the plus-que-parfait. Both read like an answer.
+
+    A compound past is a present auxiliary plus a participle — the gloss rules
+    say so and give worked examples. Neither of those two carries a present
+    auxiliary, and no passé composé lacks one.
+    """
+    if not LANGUAGE.perfect_auxiliaries:
+        return True
+    # Tokenised *on* apostrophes, as the function-word list is and for the same
+    # reason: the auxiliary in "il s'est levé" and "n'a jamais voulu" is elided
+    # onto its neighbour, and a token of "s'est" matches nothing.
+    words = {w.casefold() for w in re.findall(r"\w+", form)}
+    return bool(words & LANGUAGE.perfect_auxiliaries)
 
 
 # Models normalise typography however firmly they are told not to: a curly
@@ -280,7 +300,8 @@ def displayable(paragraph: str, units: list[GlossUnit]) -> list[GlossUnit]:
         surface = paragraph[u.start:u.end]
         if over_broad(surface, u.pos):
             continue
-        shown.append(replace(u, perfect="") if _same_form(u.perfect, surface) else u)
+        bogus = _same_form(u.perfect, surface) or not is_perfect(u.perfect)
+        shown.append(replace(u, perfect="") if u.perfect and bogus else u)
     return shown
 
 
