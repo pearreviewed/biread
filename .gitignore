@@ -34,3 +34,8 @@ design-reference/shelf-brief.md
 # Finder leaves these in every folder it opens; they carry local metadata and
 # nothing the repo wants. None has ever been committed — this keeps it that way.
 .DS_Store
+
+# Per-machine tooling: local permissions, a dev-server config pointing at paths
+# only this machine has, and `worktrees/`, which holds live git worktrees — a
+# whole second checkout of this repo. None of it is the project.
+.claude/
