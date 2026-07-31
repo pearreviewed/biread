@@ -190,7 +190,7 @@ default: it is saved in this browser and stands among the cards next visit under
 `python -m biread.shelf` lists the shelf; `--check` re-measures every entry
 against the live wiki and reports what has drifted.
 
-### Glossing (not yet built)
+### Glossing (built)
 
 > gloss is needed. any word on the right side (og language) shoudl be hoverable translated in context, but no articles prepositions and pronouns separately, they should be selected tpgetehr with the connected word and trasnlated in thier context. if the hoverable word is in french passe simple it should also show passe compose version and if the hoverable word is a verb in a form other tahn infinitif, then it should also show inifinitif form
 
@@ -212,16 +212,20 @@ Which resolves to:
 
 > [!NOTE]
 > "right side (og language)" — the original language is French, which is the
-> **left** page in this layout. Read as French/left, flagged, not contradicted.
-> Confirm before building.
+> **left** page in this layout. Read as French/left, flagged, not contradicted,
+> and built that way: the glosses are on the French.
 
-### Page navigation (not yet built)
+*(Built. `gloss.py` per paragraph, `language.py` for what French itself
+contributes, `--gloss` on the CLI and a checkbox on both builder routes.)*
+
+### Page navigation (built)
 
 > can we get rid of the scrubber adn replace it with another way to find a page? like a funciotnality taht allows to find page number
 
-Remove the scrubber. Replace with a way to go to a page number. Shape not yet
-chosen — the standing proposal is that the `12 / 33` counter already in the
-header becomes the control.
+Remove the scrubber. Replace with a way to go to a page number. *(Built: the
+`12 / 33` counter in the header **is** the control — `#counter` is a button that
+becomes `#counter-input` when clicked. The thing that says where you are is the
+thing that takes you elsewhere.)*
 
 The scrubber caused three separate bugs (drag target destroyed mid-gesture,
 stuck scrubbing flag, NaN spread index) which is more than the rest of the
@@ -316,6 +320,7 @@ CI so it stops depending on anyone remembering.
 | How many books, and what may a shelf card claim? | **Five, and only what someone has checked.** A shelf that is *read*, not searched. A card shows title, author, the translator and year **the wiki itself names** (`wikisource.credits`), chapter count, and a build time computed from both editions' size; where the wiki names no translator the card names none. Two of the five have been read through and carry a measured coverage; the other three say plainly that nobody has, rather than borrowing the tone of the two that have. |
 | A book with more than one English translation? | **Offered on the card, with a default, never a demanded choice.** Wikisource lists them and `resolve` reads that list; the shelf carries each one measured. Micromégas has two — Phalen follows the French chapter for chapter, Fleming's 1906 runs as one piece — which is how the default was picked, by looking. |
 | A book that is not on the shelf? | **Its own screen** (`s-lookup`), not a dead end on the shelf. It searches Wikisource for whole works, asks the wiki itself which have an English counterpart (`langlinks`, never a guessed title), and resolves the pairs it finds. A hit with one side only says which side is missing; a search with nothing behind it says the book is probably still in copyright and why we cannot hold it either. A book taken from there joins the shelf marked *Added by a reader*, with no figures it has not earned. |
+| Lookup — what happens to the results it does not show? | **They are counted, and offered.** Four works at a time, with the line above them saying what was left behind — *4 works shown · at least 3 more* — and a button that fetches the next four beside them. The number is a floor: `wikisource.Results.more` counts whole works among the rows the search actually read, never the wiki's own `totalhits`, which counts forty chapters of Germinal as forty results. Every hit with a counterpart is now probed; the old quota of three drew a card that read *Looking for both editions…* forever, which showed less **and** lied. And when probing ends, any hit still unanswered says it was never checked rather than spinning — the page tells the truth even if the engine goes quiet. |
 | Two editions counting their chapters differently? | **Said out loud, and sized.** 47 against 46 is two editions; 4 against 22 is the same book divided quite differently and is described that way, because the aligner drops the numbering and matches by meaning. Both are normal; neither is silent. |
 | How are a book's notes found and taken out? | **By corroboration, never by shape.** `notes.py` removes a paragraph only where the prose actually refers to it (`Micromégas[1]` … `[1] De micros`), or where it belongs to the run of notes closing a chapter, numbered in order. A paragraph opening `1.` is a footnote in one book and an ordinary list in another and there is no telling them apart by looking, so an uncorroborated one is left where it is: a note left in is untidy, a deleted sentence is silent and unrecoverable. Every note taken out is reported to the terminal like any other removal. Scanned per chapter, because markers restart at 1 in each. Verified inert across the whole corpus — all six files come out with the same paragraph count and nothing removed, which is right, because none of them was leaking apparatus. |
 | Builder — what does a file card claim about a book? | Only what the file says: `meta.describe` reads an EPUB's OPF for title, author and language, a PDF for its page count, and counts paragraphs from the parsed text. Everything else stays None and is simply not shown — a filename is not an author, and a confident wrong byline is worse than a blank one. |
@@ -364,10 +369,6 @@ Recorded because the reasoning matters more than the outcome.
 
 ## Known open issues
 
-- **The second library is built but unreached.** `standardebooks.py` searches,
-  fetches and parses, with tests, and no route in the CLI or the builder asks it
-  for anything — so the books it exists for (Salammbô, Les Misérables) are still
-  not gettable from the product. It is a library waiting for a caller.
 - **Three of the five shelf books have not been read through.** Candide (98.9%)
   and Madame Bovary (87.4%) were built and read; Around the World in Eighty Days,
   Micromégas and 20,000 Leagues resolve, fetch and build, but nobody has read one
@@ -378,10 +379,6 @@ Recorded because the reasoning matters more than the outcome.
   5,449 paragraphs took about fourteen minutes in the spike, and every other
   figure is that rate scaled. It is the network's pace, not the model's, so a slow
   connection will beat the estimate in the wrong direction.
-- **The lookup resolves only the first three hits that have a counterpart.** Any
-  further result shows its title and nothing about whether it would build. The cap
-  is silent, which is exactly the kind of quiet truncation the rest of the project
-  refuses.
 - **A find-failure still discards the whole paragraph.** `anchor()` returns None
   if any one unit will not match in order, so one bad unit loses the other
   eighty. The rescue pass hides this in practice — it retries such a paragraph

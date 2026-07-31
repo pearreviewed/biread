@@ -526,7 +526,7 @@ const S = {
   html: null, spent: null, started: 0,
   // the shelf: a catalogue, whichever book is picked, and how it is narrowed
   shelf: null, pick: null, filter: null, page: 0, query: "",
-  hits: null, looked: "",
+  hits: null, looked: "", more: 0, lookOffset: 0,
 };
 
 // Two routes match two editions rather than translating one, and they meet at
@@ -812,19 +812,28 @@ function paintFetching(m) {
     + " · chapter " + m.done + " of " + m.total;
 }
 
-function doLookup() {
+// A search asks for one page of works; asking again from where the last one
+// stopped is how the rest are reached. A fresh query starts over, a further page
+// keeps what is already on screen.
+const LOOK_PAGE = 4;
+function doLookup(offset) {
   const q = $("look-find").value.trim();
   if (!q || S.busy) return;
-  S.hits = null; S.looked = q;
+  const further = offset > 0 && q === S.looked;
+  if (!further) { S.hits = null; S.more = 0; }
+  S.lookOffset = further ? offset : 0;
+  S.looked = q;
   alert_("look-alert", "");
   paintLookup();
-  send("lookup", { query: q });
+  send("lookup", { query: q, lookOffset: further ? offset : 0 });
 }
 $("look-go").addEventListener("click", doLookup);
 $("look-find").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); doLookup(); } });
 
-function tookHits(hits) {
-  S.hits = hits.map((h) => ({ ...h, probe: null }));
+function tookHits(hits, more) {
+  const page = hits.map((h) => ({ ...h, probe: null }));
+  S.hits = S.lookOffset ? (S.hits || []).concat(page) : page;
+  S.more = more || 0;
   paintLookup();
 }
 function tookProbe(got) {
@@ -846,7 +855,10 @@ function hitCard(hit) {
     return card;
   }
   if (!got) {
-    card.appendChild(el("p", "say", "Looking for both editions…"));
+    card.appendChild(el("p", "say", hit.unchecked
+      ? "This one was never checked, so whether both editions line up is unknown. "
+        + "Searching for it by name will look again."
+      : "Looking for both editions…"));
     return card;
   }
   if (!buildable) {
@@ -907,13 +919,23 @@ function paintLookup() {
   wrap.style.display = "flex";
   wrap.style.flexDirection = "column";
   wrap.style.gap = "12px";
-  wrap.appendChild(el("div", "caps", S.hits.length + (S.hits.length === 1 ? " result" : " results")
-    + " · public domain, uncurated"));
+  // What was shown and what was not, in one line. `more` is a floor — it counts
+  // the works the search actually read past this page — so it is worded as one.
+  wrap.appendChild(el("div", "caps", S.hits.length + (S.hits.length === 1 ? " work" : " works")
+    + " shown" + (S.more ? " · at least " + S.more + " more" : "") + " · public domain, uncurated"));
   const grid = el("div", "hits");
   for (const hit of S.hits) grid.appendChild(hitCard(hit));
   wrap.appendChild(grid);
   wrap.appendChild(el("div", "note", "Roughly one search in two comes back with a pair. The rest "
     + "are honest misses, and say which side is missing."));
+  if (S.more) {
+    const go = el("button", "ghost", S.busy === "lookup"
+      ? "Looking…" : "Look at the next " + Math.min(S.more, LOOK_PAGE) + " →");
+    go.style.alignSelf = "flex-start";
+    go.disabled = !!S.busy;
+    go.addEventListener("click", () => doLookup(S.hits.length));
+    wrap.appendChild(go);
+  }
   out.appendChild(wrap);
 }
 
@@ -1409,7 +1431,7 @@ worker.onmessage = (e) => {
   }
   if (m.type === "progress") return paintFetching(m);
   if (m.type === "text") return tookText(m.pairs);
-  if (m.type === "hits") return tookHits(m.hits);
+  if (m.type === "hits") return tookHits(m.hits, m.more);
   if (m.type === "probe") return tookProbe(m.data);
 
   S.busy = null;
@@ -1419,6 +1441,10 @@ worker.onmessage = (e) => {
     paintFiles();
     if (!$("s-settings").hidden) { leafTitles(); priceIt(); }
   } else if (m.type === "looked") {
+    // Probing is over. A hit with a counterpart and no answer is not still being
+    // looked at, whatever its card says, and a spinner that never stops is the
+    // one thing worse here than a plain "unknown".
+    for (const hit of S.hits || []) if (hit.counterpart && !hit.probe) hit.unchecked = true;
     paintLookup();
   } else if (m.type === "sample") {
     S.sample = m.data;
@@ -1435,7 +1461,14 @@ worker.onmessage = (e) => {
     setTimeout(() => { paintDone(); show("done"); }, 350);
   } else if (m.type === "error") {
     const message = "<b>Couldn't finish.</b> " + m.error;
-    if (m.during === "lookup") { S.hits = []; paintLookup(); alert_("look-alert", message); }
+    // A further page that fails loses only itself: the works already on screen
+    // were found, and throwing them away would punish the reader for asking.
+    if (m.during === "lookup") {
+      if (!S.lookOffset) S.hits = [];
+      S.more = 0;
+      paintLookup();
+      alert_("look-alert", message);
+    }
     else if (m.during === "shelf") {
       // A book that will not come down off the shelf is unpicked, so nothing
       // downstream is left holding a half-fetched edition.

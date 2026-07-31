@@ -125,15 +125,24 @@ const SHELF = [
 // Looking beyond the shelf. The search and the two editions' whereabouts are
 // separate questions, and the second is answered book by book so the page can
 // fill each card in as its answer arrives rather than sitting on all of them.
+//
+// Every hit with a counterpart is probed — no quota. A card is drawn the moment
+// the search lands, so a hit left unprobed reads "Looking for both editions…"
+// for as long as the reader is willing to wait: the old cap of three did not
+// show less, it showed a lie. Four probes are the reader's own browser asking
+// the wiki, and they cost nothing but a moment.
+const LOOK_PAGE = 4;
 const LOOKUP = [
   "import json",
   "from biread import wikisource as ws, shelf as shelf_mod",
-  "hits = ws.search(query, look_lang, 4, ws_fetch)",
-  "pairs = ws.counterparts([h.title for h in hits], look_lang, look_other, ws_fetch)",
-  "js_hits(json.dumps([{'title': h.title, 'snippet': h.snippet, 'counterpart': pairs.get(h.title)} for h in hits]))",
+  `found = ws.search(query, look_lang, ${LOOK_PAGE}, look_offset, ws_fetch)`,
+  "pairs = ws.counterparts([h.title for h in found.hits], look_lang, look_other, ws_fetch)",
+  // The count travels with the results, not with the run's return value: the
+  // probes come between them, and what was left behind should not wait on them.
+  "js_hits(json.dumps({'more': found.more, 'hits': [{'title': h.title, 'snippet': h.snippet, 'counterpart': pairs.get(h.title)} for h in found.hits]}))",
   "probed = 0",
-  "for h in hits:",
-  "    if not pairs.get(h.title) or probed >= 3:",
+  "for h in found.hits:",
+  "    if not pairs.get(h.title):",
   "        continue",
   "    probed += 1",
   "    try:",
@@ -142,7 +151,7 @@ const LOOKUP = [
   "        got = {'page': h.title, 'otherPage': pairs[h.title], 'buildable': False, 'why': str(err)}",
   "    got['title'] = h.title",
   "    js_probe(json.dumps(got))",
-  "json.dumps({'hits': len(hits), 'probed': probed})",
+  "json.dumps({'hits': len(found.hits), 'probed': probed, 'more': found.more})",
 ].join("\n");
 
 // One page, done for real, so the reader sees the prose before paying for the
@@ -259,7 +268,8 @@ self.onmessage = async (e) => {
     pyodide.globals.set("query", m.query || "");
     pyodide.globals.set("look_lang", m.lookLang || "fr");
     pyodide.globals.set("look_other", m.lookOther || "en");
-    pyodide.globals.set("js_hits", (hits) => postMessage({ type: "hits", hits: JSON.parse(hits) }));
+    pyodide.globals.set("look_offset", m.lookOffset || 0);
+    pyodide.globals.set("js_hits", (found) => postMessage({ type: "hits", ...JSON.parse(found) }));
     pyodide.globals.set("js_probe", (got) => postMessage({ type: "probe", data: JSON.parse(got) }));
     // Live from here on: reading a PDF reports its pages during pricing and the
     // free build alike, not only while translating.

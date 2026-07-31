@@ -448,29 +448,46 @@ class Hit:
     counterpart: str | None = None      # the page name on the other Wikisource
 
 
+@dataclass(frozen=True)
+class Results:
+    """One page of works, and how many more were seen behind it.
+
+    `more` is a floor, never a total: it counts the whole works in the rows this
+    search actually read, so it can only understate. Wikisource's own
+    `totalhits` is no use here — it counts every chapter page, and forty
+    chapters of Germinal are not forty books.
+    """
+    hits: list[Hit]
+    more: int
+
+
 _TAGS = re.compile(r"<[^>]+>")
 
 
-def search(query: str, lang: str = "fr", limit: int = 6,
-           fetch: Fetch = default_fetch) -> list[Hit]:
-    """Works on one Wikisource matching a query.
+def search(query: str, lang: str = "fr", limit: int = 6, offset: int = 0,
+           fetch: Fetch = default_fetch) -> Results:
+    """Works on one Wikisource matching a query, `limit` at a time.
 
     Only whole works: the search index holds every chapter page too, and three
     chapters of Germinal are not three books. A work is a page with nothing
     above it in the path.
+
+    Paged on the works rather than on the rows, because the wiki numbers its
+    rows and we are counting something else. Every page re-reads from the top —
+    the filtering is ours, so only we know where work number five began.
     """
     import json
 
     url = query_url(lang, action="query", list="search", srsearch=query,
-                    srlimit=str(limit * 5), srnamespace="0")
+                    srlimit=str((offset + limit) * 5), srnamespace="0")
     data = json.loads(fetch(url))
-    hits = []
+    works = []
     for row in data.get("query", {}).get("search", []):
-        if "/" in row["title"] or len(hits) >= limit:
+        if "/" in row["title"]:
             continue
         snippet = html.unescape(_TAGS.sub("", row.get("snippet", ""))).strip()
-        hits.append(Hit(row["title"], lang, re.sub(r"\s+", " ", snippet)))
-    return hits
+        works.append(Hit(row["title"], lang, re.sub(r"\s+", " ", snippet)))
+    return Results(works[offset:offset + limit], max(0, len(works) - offset - limit))
 
 
 def counterparts(titles: list[str], lang: str = "fr", other: str = "en",

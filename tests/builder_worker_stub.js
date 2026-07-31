@@ -129,16 +129,40 @@ self.onmessage = (e) => {
     return;
   }
 
-  if (m.type === "lookup") {
-    const query = (m.query || "").toLowerCase();
-    // A search that finds nothing is the honest half of this screen, so it is
-    // as reachable in the stub as it is in life.
-    const hits = query.includes("camus") || query.includes("nothing") ? [] : [
+  // A search that finds nothing is the honest half of this screen, so it is as
+  // reachable in the stub as it is in life. So is a search that finds more works
+  // than one page holds: the lookup used to cap both the works it showed and the
+  // ones it checked, silently, and every earlier fixture returned exactly one
+  // page of exactly two — the one regime where that code is fine.
+  const LOOK_PAGE = 4;
+  function catalogue(query) {
+    if (query.includes("camus") || query.includes("nothing")) return [];
+    if (query.includes("zola")) {
+      return Array.from({ length: 7 }, (_, i) => ({
+        title: "Zola " + (i + 1), snippet: "Émile Zola", counterpart: "Zola " + (i + 1) + " (Ellis)",
+        // The last one answers nothing, so a card with no probe behind it is
+        // reachable without a control the reader could ever meet.
+        silent: i === 6,
+      }));
+    }
+    return [
       { title: "Germinal", snippet: "Émile Zola Germinal", counterpart: "Germinal (Ellis)" },
       { title: "Germinie Lacerteux", snippet: "Goncourt", counterpart: null },
     ];
-    postMessage({ type: "hits", hits });
-    for (const hit of hits.filter((h) => h.counterpart)) {
+  }
+
+  if (m.type === "lookup") {
+    const works = catalogue((m.query || "").toLowerCase());
+    const offset = m.lookOffset || 0;
+    const hits = works.slice(offset, offset + LOOK_PAGE);
+    postMessage({
+      type: "hits",
+      hits: hits.map(({ silent, ...h }) => h),
+      more: Math.max(0, works.length - offset - LOOK_PAGE),
+    });
+    let probed = 0;
+    for (const hit of hits.filter((h) => h.counterpart && !h.silent)) {
+      probed += 1;
       postMessage({
         type: "probe",
         data: {
@@ -149,7 +173,7 @@ self.onmessage = (e) => {
         },
       });
     }
-    postMessage({ type: "looked", data: { hits: hits.length, probed: hits.length ? 1 : 0 } });
+    postMessage({ type: "looked", data: { hits: hits.length, probed } });
     return;
   }
 

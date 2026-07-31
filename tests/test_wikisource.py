@@ -288,9 +288,26 @@ def test_search_returns_works_not_chapters():
         {"title": "Germinal/Partie I/Chapitre 4", "snippet": "x"},
         {"title": "Germinal (Pouget)", "snippet": "y"},
     ]}})
-    found = ws.search("germinal", "fr", 6, lambda url: hits)
-    assert [h.title for h in found] == ["Germinal", "Germinal (Pouget)"]
-    assert found[0].snippet == "Émile Germinal Zola"
+    found = ws.search("germinal", "fr", 6, fetch=lambda url: hits)
+    assert [h.title for h in found.hits] == ["Germinal", "Germinal (Pouget)"]
+    assert found.hits[0].snippet == "Émile Germinal Zola"
+    assert found.more == 0
+
+
+def test_a_search_pages_on_works_and_counts_what_it_did_not_show():
+    """The cap the lookup used to keep to itself: four shown, the rest silent."""
+    rows = [{"title": f"Book {i}", "snippet": "s"} for i in range(1, 8)]
+    rows.insert(2, {"title": "Book 2/Chapitre 1", "snippet": "not a work"})
+    hits = json.dumps({"query": {"search": rows}})
+
+    first = ws.search("zola", "fr", 4, fetch=lambda url: hits)
+    assert [h.title for h in first.hits] == ["Book 1", "Book 2", "Book 3", "Book 4"]
+    # A chapter page is not one of the three left behind.
+    assert first.more == 3
+
+    second = ws.search("zola", "fr", 4, offset=4, fetch=lambda url: hits)
+    assert [h.title for h in second.hits] == ["Book 5", "Book 6", "Book 7"]
+    assert second.more == 0
 
 
 def test_a_counterpart_is_the_wikis_own_link_or_nothing():

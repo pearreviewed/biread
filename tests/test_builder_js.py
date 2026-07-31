@@ -462,6 +462,40 @@ def test_a_search_reports_the_pair_it_found_and_the_side_it_did_not(page):
     assert "cannot be built" in missing
 
 
+def look_up(page, query):
+    page.click("[data-route=shelf]")
+    page.click("[data-goto=lookup]")
+    page.fill("#look-find", query)
+    page.click("#look-go")
+
+
+def test_a_search_says_how_much_it_is_not_showing_and_offers_it(page):
+    """The lookup used to show four of eleven and keep the seven to itself."""
+    look_up(page, "zola")
+    page.wait_for_selector(".hit .solid")
+    assert page.locator(".hit").count() == 4
+    assert "4 works shown · at least 3 more" in text(page, "#look-out .caps")
+
+    page.click("#look-out button.ghost")
+    page.wait_for_function("document.querySelectorAll('.hit').length === 7")
+    # The rest arrive beside the first four, not instead of them.
+    assert "7 works shown" in text(page, "#look-out .caps")
+    assert "more" not in text(page, "#look-out .caps")
+    assert page.locator("#look-out button.ghost").count() == 0
+
+
+def test_a_work_that_was_never_checked_says_so_rather_than_spinning(page):
+    """A hit with a counterpart and no answer once read 'Looking for both
+    editions…' for as long as the reader was willing to wait."""
+    look_up(page, "zola")
+    page.wait_for_selector(".hit .solid")
+    page.click("#look-out button.ghost")
+    page.wait_for_function("document.querySelectorAll('.hit').length === 7")
+    last = text(page, ".hit:nth-child(7)")
+    assert "never checked" in last
+    assert "Looking for both editions" not in last
+
+
 def test_a_book_still_in_copyright_is_a_plain_no_not_a_spinner(page):
     page.click("[data-route=shelf]")
     page.click("[data-goto=lookup]")
