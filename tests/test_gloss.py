@@ -497,3 +497,16 @@ def test_an_echo_is_caught_through_case_and_punctuation():
 
     (unit,) = parse_units(f"S’attirait{FIELD}verb{FIELD}attracted{FIELD}pc=s'attirait")
     assert unit["perfect"] == ""
+
+
+def test_an_echoed_perfect_already_in_the_cache_is_not_shown():
+    """The parse-time guard came after 250 Candide paragraphs were cached. A
+    false claim should not reach the page on the strength of being old."""
+    from biread.gloss import GlossUnit, displayable
+
+    para = "Monsieur le baron était un des plus puissants seigneurs."
+    start = para.index("était")
+    unit = GlossUnit(start, start + 5, "verb", "was", "être", "était")
+    (shown,) = displayable(para, [unit])
+    assert shown.perfect == ""
+    assert shown.infinitive == "être"

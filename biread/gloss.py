@@ -269,8 +269,19 @@ def anchor(paragraph: str, proposed: list[dict]) -> list[GlossUnit] | None:
 def displayable(paragraph: str, units: list[GlossUnit]) -> list[GlossUnit]:
     """Units narrow enough to show. The width rule is applied here, at the edge
     where units become hovers, rather than baked into the cache — so tightening
-    it drops the offenders on the next render, with nothing to pay again."""
-    return [u for u in units if not over_broad(paragraph[u.start:u.end], u.pos)]
+    it drops the offenders on the next render, with nothing to pay again.
+
+    The echoed perfect is dropped here for the same reason. Parsing already
+    refuses to store one, but caches written before it did still hold them, and
+    a false grammatical claim should not survive to the page on the strength of
+    being old."""
+    shown = []
+    for u in units:
+        surface = paragraph[u.start:u.end]
+        if over_broad(surface, u.pos):
+            continue
+        shown.append(replace(u, perfect="") if _same_form(u.perfect, surface) else u)
+    return shown
 
 
 def coverage(paragraph: str, units: list[GlossUnit]) -> float:
