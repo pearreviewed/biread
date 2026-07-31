@@ -66,7 +66,7 @@ def browser():
 def page(browser, site):
     page = browser.new_page(viewport={"width": 1280, "height": 900}, accept_downloads=True)
     page.goto(site)
-    page.wait_for_selector("#go-key")
+    page.wait_for_selector("[data-route=translate]")
     yield page
     page.close()
 
@@ -90,8 +90,7 @@ def upload(page, selector, name, body=BOOK):
 
 
 def to_settings(page, route="translate", body=BOOK, key="sk-or-v1-test"):
-    """The common path: through the fork and step one, arriving at step two."""
-    page.click("#go-key")
+    """The common path: through step one, arriving at step two."""
     if route == "align":
         page.click("[data-route=align]")
     upload(page, "#f-orig", "livre.txt", body)
@@ -104,27 +103,36 @@ def to_settings(page, route="translate", body=BOOK, key="sk-or-v1-test"):
     page.wait_for_timeout(120)
 
 
-# ---- the fork ------------------------------------------------------------
+# ---- the door ------------------------------------------------------------
 
-def test_the_door_asks_only_who_does_the_work(page):
-    assert showing(page, "fork")
+def test_the_door_asks_for_the_book_first(page):
+    """Who does the work is a question about a book, so the book comes first."""
+    assert showing(page, "books")
     assert text(page, ".hero h1").startswith("The original on one page")
-    assert page.eval_on_selector_all(".fork > div", "n => n.length") == 2
+    assert page.eval_on_selector_all("#route button", "n => n.length") == 3
+    assert page.locator("#engine").count() == 1
+    assert not showing(page, "settings")
 
 
-def test_either_path_leads_to_the_book(page):
-    page.click("#go-local")
-    assert showing(page, "books")
-    page.click("[data-goto=fork]")
-    page.click("#go-key")
-    assert showing(page, "books")
+def test_who_does_the_work_is_asked_on_the_second_step(page):
+    to_settings(page, key=None)
+    assert showing(page, "settings")
+    assert page.get_attribute("[data-engine=key]", "aria-pressed") == "true"
+    assert not hidden(page, "#key-block")
+    page.click("[data-engine=local]")
+    assert page.get_attribute("[data-engine=local]", "aria-pressed") == "true"
+    assert hidden(page, "#key-block")
+    assert not hidden(page, "#local-block")
+    # And back again, without having been sent through the door twice.
+    page.click("[data-engine=key]")
+    assert not hidden(page, "#key-block")
 
 
 def test_the_local_path_asks_for_no_key(page):
-    page.click("#go-local")
     upload(page, "#f-orig", "livre.txt")
     page.wait_for_function("!document.getElementById('to-settings').disabled")
     page.click("#to-settings")
+    page.click("[data-engine=local]")
     assert hidden(page, "#key-block")
     assert not hidden(page, "#local-block")
     assert "ollama pull" in text(page, "#setup")
@@ -138,7 +146,7 @@ def test_the_theme_switches_and_is_remembered(page):
     page.click(".theme button[aria-label=Night]")
     assert page.eval_on_selector("html", "e => e.dataset.theme") == "night"
     page.reload()
-    page.wait_for_selector("#go-key")
+    page.wait_for_selector("[data-route=translate]")
     assert page.eval_on_selector("html", "e => e.dataset.theme") == "night"
     page.click(".theme button[aria-label=Day]")
 
@@ -146,14 +154,12 @@ def test_the_theme_switches_and_is_remembered(page):
 # ---- step one: the route and the files -----------------------------------
 
 def test_the_second_file_is_asked_for_only_when_it_is_needed(page):
-    page.click("#go-key")
     assert hidden(page, "#pick-pub")
     page.click("[data-route=align]")
     assert not hidden(page, "#pick-pub")
 
 
 def test_the_aligned_route_will_not_go_on_without_the_edition(page):
-    page.click("#go-key")
     page.click("[data-route=align]")
     upload(page, "#f-orig", "livre.txt")
     page.wait_for_timeout(200)
@@ -163,7 +169,6 @@ def test_the_aligned_route_will_not_go_on_without_the_edition(page):
 
 
 def test_a_file_card_shows_what_the_file_says_about_itself(page):
-    page.click("#go-key")
     upload(page, "#f-orig", "livre.txt")
     page.wait_for_function(
         "document.getElementById('orig-about').textContent.indexOf('Reading') === -1")
@@ -173,7 +178,6 @@ def test_a_file_card_shows_what_the_file_says_about_itself(page):
 
 
 def test_a_file_card_stays_quiet_about_what_it_cannot_read(page):
-    page.click("#go-key")
     upload(page, "#f-orig", "livre.txt",
            scenario(inspect={"orig": {"title": None, "author": None, "language": None,
                                       "pages": None, "paragraphs": 12, "chars": 900}}))
@@ -314,7 +318,6 @@ def test_a_build_that_fails_comes_back_and_says_why(page):
 
 
 def test_a_file_that_cannot_be_read_says_so_on_the_step_that_asked_for_it(page):
-    page.click("#go-key")
     upload(page, "#f-orig", "livre.txt",
            scenario(failOn="inspect", error="livre.txt is not a readable EPUB"))
     page.wait_for_function("!document.getElementById('books-alert').hidden")
@@ -323,7 +326,7 @@ def test_a_file_that_cannot_be_read_says_so_on_the_step_that_asked_for_it(page):
 
 # ---- shape ---------------------------------------------------------------
 
-@pytest.mark.parametrize("screen", ["fork", "books", "lookup", "settings", "binding", "done"])
+@pytest.mark.parametrize("screen", ["books", "lookup", "settings", "binding", "done"])
 def test_no_screen_scrolls_sideways_on_a_phone(page, screen):
     to_settings(page)
     page.set_viewport_size({"width": 390, "height": 844})
@@ -346,14 +349,12 @@ def test_the_time_left_is_not_guessed_from_a_clock_that_never_started(page):
 
 def to_shelf(page, slug="candide"):
     """Through the fork onto the shelf, with a book picked and fetched."""
-    page.click("#go-key")
     page.click("[data-route=shelf]")
     page.click(f".card[data-slug={slug!r}]")
     page.wait_for_function("!document.getElementById('to-settings').disabled")
 
 
 def test_the_shelf_appears_only_once_the_engine_has_one(page):
-    page.click("#go-key")
     assert not hidden(page, "[data-route=shelf]")
     page.click("[data-route=shelf]")
     assert not hidden(page, "#shelf")
@@ -361,7 +362,6 @@ def test_the_shelf_appears_only_once_the_engine_has_one(page):
 
 
 def test_a_card_shows_the_translator_the_wiki_names_and_nothing_more(page):
-    page.click("#go-key")
     page.click("[data-route=shelf]")
     card = ".card[data-slug=candide]"
     assert "Voltaire" in text(page, card)
@@ -371,7 +371,6 @@ def test_a_card_shows_the_translator_the_wiki_names_and_nothing_more(page):
 
 
 def test_a_book_nobody_has_read_says_so_instead_of_claiming_coverage(page):
-    page.click("#go-key")
     page.click("[data-route=shelf]")
     unread = text(page, ".card[data-slug='80days']")
     assert "Nobody has read this one through" in unread
@@ -381,7 +380,6 @@ def test_a_book_nobody_has_read_says_so_instead_of_claiming_coverage(page):
 
 
 def test_nothing_is_fetched_until_a_book_is_picked(page):
-    page.click("#go-key")
     page.click("[data-route=shelf]")
     assert page.eval_on_selector("#to-settings", "e => e.disabled")
     assert "Nothing is fetched" in text(page, "#books-foot")
@@ -406,7 +404,6 @@ def test_the_shelf_route_prices_the_reading_not_a_translation(page):
 
 
 def test_a_book_with_two_translations_lets_the_reader_choose(page):
-    page.click("#go-key")
     page.click("[data-route=shelf]")
     assert page.eval_on_selector_all(".versions", "n => n.length") == 0
     page.click(".card[data-slug=micromegas]")
@@ -419,7 +416,6 @@ def test_a_book_with_two_translations_lets_the_reader_choose(page):
 
 
 def test_searching_the_shelf_narrows_it_and_says_so_when_it_empties(page):
-    page.click("#go-key")
     page.click("[data-route=shelf]")
     page.fill("#shelf-find", "voltaire")
     assert page.eval_on_selector_all(".card", "n => n.length") == 2
@@ -429,7 +425,6 @@ def test_searching_the_shelf_narrows_it_and_says_so_when_it_empties(page):
 
 
 def test_a_filter_narrows_the_shelf_and_lets_go(page):
-    page.click("#go-key")
     page.click("[data-route=shelf]")
     page.click("#shelf-filters button:nth-child(2)")
     assert page.eval_on_selector_all(".card", "n => n.length") == 1
@@ -438,7 +433,6 @@ def test_a_filter_narrows_the_shelf_and_lets_go(page):
 
 
 def test_the_pager_stays_away_while_the_shelf_fits_on_one_page(page):
-    page.click("#go-key")
     page.click("[data-route=shelf]")
     assert hidden(page, "#shelf-pager")
 
@@ -446,7 +440,6 @@ def test_the_pager_stays_away_while_the_shelf_fits_on_one_page(page):
 # ---- beyond the shelf ----------------------------------------------------
 
 def test_the_lookup_is_its_own_screen_and_comes_back(page):
-    page.click("#go-key")
     page.click("[data-route=shelf]")
     page.click("[data-goto=lookup]")
     assert showing(page, "lookup")
@@ -455,7 +448,6 @@ def test_the_lookup_is_its_own_screen_and_comes_back(page):
 
 
 def test_a_search_reports_the_pair_it_found_and_the_side_it_did_not(page):
-    page.click("#go-key")
     page.click("[data-route=shelf]")
     page.click("[data-goto=lookup]")
     page.fill("#look-find", "germinal")
@@ -471,7 +463,6 @@ def test_a_search_reports_the_pair_it_found_and_the_side_it_did_not(page):
 
 
 def test_a_book_still_in_copyright_is_a_plain_no_not_a_spinner(page):
-    page.click("#go-key")
     page.click("[data-route=shelf]")
     page.click("[data-goto=lookup]")
     page.fill("#look-find", "l'étranger camus")
@@ -484,7 +475,6 @@ def test_a_book_still_in_copyright_is_a_plain_no_not_a_spinner(page):
 
 
 def test_a_found_book_joins_the_shelf_marked_for_what_it_is(page):
-    page.click("#go-key")
     page.click("[data-route=shelf]")
     page.click("[data-goto=lookup]")
     page.fill("#look-find", "germinal")
@@ -502,7 +492,6 @@ def test_a_found_book_joins_the_shelf_marked_for_what_it_is(page):
 
 def find_germinal(page, keep=False):
     """Look Germinal up and take it, keeping it or not."""
-    page.click("#go-key")
     page.click("[data-route=shelf]")
     page.click("[data-goto=lookup]")
     page.fill("#look-find", "germinal")
@@ -517,14 +506,12 @@ def find_germinal(page, keep=False):
 def back_to_the_shelf(page):
     """The same browser, opened again."""
     page.reload()
-    page.wait_for_selector("#go-key")
-    page.click("#go-key")
+    page.wait_for_selector("[data-route=translate]")
     page.wait_for_selector("[data-route=shelf]:not([hidden])")
     page.click("[data-route=shelf]")
 
 
 def test_a_found_book_is_kept_only_if_the_reader_asks(page):
-    page.click("#go-key")
     page.click("[data-route=shelf]")
     page.click("[data-goto=lookup]")
     page.fill("#look-find", "germinal")
@@ -559,7 +546,6 @@ def test_a_kept_book_is_on_the_shelf_next_time_and_can_be_taken_off(page):
 def test_a_book_divided_differently_says_so_rather_than_shrugging(page):
     """Le Père Goriot came back 4 chapters against 22 — real, and not the same
     thing as 47 against 46."""
-    page.click("#go-key")
     assert page.evaluate("agreement(40, 40)") == "40 chapters each — they agree."
     assert page.evaluate("agreement(47, 46)").endswith("two editions counting differently.")
     assert "divided quite differently" in page.evaluate("agreement(4, 22)")

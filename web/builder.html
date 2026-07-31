@@ -76,13 +76,6 @@
   .hero .caps { letter-spacing: .24em; font-size: 11px; }
   .hero h1 { margin-top: 6px; font-size: 41px; line-height: 1.1; letter-spacing: -.015em; }
   .hero p { margin: 8px 0 0; max-width: 41ch; font-size: 17px; color: var(--muted); }
-  .fork { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 34px; }
-  .fork > div { display: flex; flex-direction: column; gap: 11px; padding: 22px 24px 20px; border: 1px solid var(--rule); border-radius: 20px; background: var(--surface); }
-  .fork > div.lead { border-color: var(--solid); background: var(--surface-3); }
-  .fork h2 { font-size: 21px; }
-  .fork p { margin: 0; font-size: 14.5px; color: var(--muted); }
-  .fork .lead p { color: var(--body); }
-  .fork button { margin-top: 4px; align-self: flex-start; }
   .row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
   .tag { flex: none; font: 500 10.5px/1 system-ui, sans-serif; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--rule-2); border-radius: 999px; padding: 5px 9px; white-space: nowrap; }
   .assure { display: flex; justify-content: center; align-items: center; gap: 11px; margin-top: 24px; font-size: 14px; color: var(--muted); flex-wrap: wrap; }
@@ -90,6 +83,7 @@
 
   /* --- step one: route and files --- */
   .step { max-width: 640px; margin: 26px auto 0; display: flex; flex-direction: column; gap: 22px; }
+  .hero + .step { margin-top: 36px; }
   .step h2 { font-size: 29px; line-height: 1.15; }
   .step.wide { max-width: 1040px; }
   .seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; padding: 5px; border: 1px solid var(--rule); border-radius: 18px; background: var(--surface); }
@@ -177,6 +171,13 @@
   .field { display: flex; flex-direction: column; gap: 10px; }
   .field > .row > h2 { font-size: 16.5px; }
   .field .hint { font: 400 11.5px/1 system-ui, sans-serif; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+  .who { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .who button { display: flex; flex-direction: column; gap: 7px; align-items: stretch; text-align: left; padding: 14px 15px 15px; border: 1px solid var(--rule); border-radius: 16px; background: var(--surface); }
+  .who button[aria-pressed="true"] { border-color: var(--solid); background: var(--tint); }
+  .who b { font-size: 15px; color: var(--ink); }
+  .who .row { justify-content: flex-start; align-items: center; gap: 9px; flex-wrap: wrap; }
+  .who .tag { padding: 3px 7px; font-size: 9.5px; letter-spacing: .11em; }
+  .who > button > span:last-child { font-size: 12.5px; line-height: 1.5; color: var(--muted); }
   .pills { display: flex; gap: 7px; flex-wrap: wrap; }
   .pills button { padding: 6px 12px; border: 1px solid var(--rule); border-radius: 999px; background: none; font-size: 13.5px; color: var(--body); }
   .pills button[aria-pressed="true"] { border-color: var(--solid); background: var(--tint); color: var(--ink); }
@@ -255,7 +256,7 @@
   @media (max-width: 860px) {
     body { padding: 16px 16px 36px; }
     .hero h1 { font-size: 31px; }
-    .fork, .files, .two, .tiers, .hits { grid-template-columns: 1fr; }
+    .who, .files, .two, .tiers, .hits { grid-template-columns: 1fr; }
     .cards { grid-template-columns: repeat(2, 1fr); }
     .seg { grid-template-columns: 1fr; }
     .shelf .row.top, .beyond { flex-direction: column; align-items: stretch; }
@@ -277,37 +278,13 @@
 <body>
 <div class="wrap">
 
-<!-- 1 · the fork -->
-<section id="s-fork">
+<!-- 1 · the book and the route -->
+<section id="s-books">
   <div class="topbar"><div class="theme" id="theme"></div></div>
   <div class="hero">
     <div class="caps">Lecteur bilingue</div>
     <h1>The original on one page, your language on the other.</h1>
-    <p>Bring a book. Leave with one file: an open spread, the original on the left, your language on the right, every word a hover away.</p>
-  </div>
-  <div class="fork">
-    <div>
-      <div class="row"><h2>On your own machine</h2><div class="tag">Nothing to pay</div></div>
-      <p>Ollama does the work a few inches from you. No key, no bill. Wants a capable computer and one command to start.</p>
-      <button class="ghost" id="go-local">Set it up locally</button>
-    </div>
-    <div class="lead">
-      <div class="row"><h2>With your own key</h2><div class="tag">You pay the model</div></div>
-      <p>An OpenRouter key, or your Anthropic or OpenAI one, whichever you already have, priced live. Try one page of your own book, then see the exact figure before the rest is sent.</p>
-      <button class="solid" id="go-key">Use my key</button>
-    </div>
-  </div>
-  <div class="assure">
-    <span>You run it yourself, so there's nothing for us to charge.</span><span class="sep">·</span><span>Your key stays in this browser.</span>
-  </div>
-</section>
-
-<!-- 2 · the route and the files -->
-<section id="s-books" hidden>
-  <div class="topbar">
-    <button class="quiet" data-goto="fork">← Paths</button>
-    <div class="chip" id="key-chip" hidden><span class="dot"></span>Key · <code id="key-tail"></code><button class="link" data-goto="settings">change</button></div>
-    <div class="theme"></div>
+    <p>Bring a book, or take one off the shelf. Leave with one file: an open spread, the original on the left, your language on the right, every word a hover away.</p>
   </div>
   <div class="step">
     <div style="display:flex;flex-direction:column;gap:6px">
@@ -361,6 +338,9 @@
     </div>
     <div class="alert" id="books-alert" hidden></div>
   </div>
+  <div class="assure">
+    <span>No account, and nothing to sign.</span><span class="sep">·</span><span>We keep no copy of the book you build.</span>
+  </div>
   <input type="file" id="f-orig" accept=".txt,.epub,.pdf,.html,.htm,.docx" hidden>
   <input type="file" id="f-pub" accept=".txt,.epub,.pdf,.html,.htm,.docx" hidden>
 </section>
@@ -400,6 +380,20 @@
   </div>
   <div class="two">
     <div class="col">
+      <div class="field" id="engine-block">
+        <div class="row"><h2>Who does the work</h2><div class="hint">either way, it's yours</div></div>
+        <div class="who" id="engine">
+          <button data-engine="local" aria-pressed="false">
+            <div class="row"><b>Your own machine</b><span class="tag">Free</span></div>
+            <span>Ollama, running a few inches from you. No key, no bill. Wants a capable computer and one command to start.</span>
+          </button>
+          <button data-engine="key" aria-pressed="true">
+            <div class="row"><b>Your own key</b><span class="tag">You pay</span></div>
+            <span>OpenRouter, Anthropic or OpenAI — whichever you already have, priced live before anything is sent.</span>
+          </button>
+        </div>
+      </div>
+
       <div class="field" id="key-block">
         <div class="row"><h2>Your key</h2><div class="hint">stays in this browser</div></div>
         <div class="pills" id="providers">
@@ -439,7 +433,7 @@
         <div class="note">A multilingual embedding model reads both editions and pairs them paragraph by paragraph.</div>
       </div>
 
-      <label class="check" id="gloss-block"><input type="checkbox" id="gloss" checked><span>Hover-to-translate<span style="color:var(--muted)">, charged once at build</span></span></label>
+      <label class="check" id="gloss-block"><input type="checkbox" id="gloss" checked><span>Hover-to-translate<span style="color:var(--muted)" id="gloss-when">, charged once at build</span></span></label>
 
       <div class="lang"><span class="note">Into</span><select id="lang"><option value="en">English</option></select></div>
     </div>
@@ -522,7 +516,9 @@ const TIERS = {
 };
 
 const S = {
-  route: "translate", provider: "openrouter", local: false,
+  // `cloud` is the key-holding provider to come back to when the reader tries
+  // their own machine and thinks better of it.
+  route: "translate", provider: "openrouter", cloud: "openrouter", local: false,
   tier: "balanced", prices: {}, langs: null,
   orig: null, pub: null, info: { orig: null, pub: null },
   sample: null, sampleIndex: 0, sampleSpend: 0,
@@ -570,7 +566,7 @@ try {
 } catch (e) { setTheme("day"); }
 
 /* --- screens ----------------------------------------------------------- */
-const SCREENS = ["fork", "books", "lookup", "settings", "binding", "done"];
+const SCREENS = ["books", "lookup", "settings", "binding", "done"];
 function show(name) {
   for (const s of SCREENS) $("s-" + s).hidden = s !== name;
   paintTheme();
@@ -580,8 +576,6 @@ function show(name) {
 for (const b of document.querySelectorAll("[data-goto]")) {
   b.addEventListener("click", (e) => { e.stopPropagation(); show(b.dataset.goto); });
 }
-$("go-key").addEventListener("click", () => { S.local = false; setProvider(S.provider === "local" ? "openrouter" : S.provider); show("books"); });
-$("go-local").addEventListener("click", () => { S.local = true; setProvider("local"); show("books"); });
 
 function alert_(id, message) {
   const box = $(id);
@@ -591,7 +585,7 @@ function alert_(id, message) {
 
 /* --- step one: route and files ----------------------------------------- */
 const ROUTE_NOTE = {
-  translate: "A model of your choosing turns the book into your language, paragraph by paragraph. You read one page of it before paying for the rest.",
+  translate: "A model of your choosing turns the book into your language, paragraph by paragraph. You read one page of it before the rest is made.",
   align: "We match the published edition you already own to the original by meaning. Every word stays its translator's.",
   shelf: "Books out of copyright, both editions fetched for you from Wikisource and Standard Ebooks. The English is a free translation, so it often reads of its own century — much of the pleasure of the facing page.",
 };
@@ -645,15 +639,6 @@ function shelfBooks() {
     return (b.title + " " + b.author + " " + b.english).toLowerCase().includes(q);
   });
 }
-// The reading is the whole bill on this route: both editions read once by an
-// embedding model. Quoted only where the rate is actually known — the shelf says
-// nothing about cost rather than a plausible cent.
-function shelfCost(book) {
-  if (!book.tokens) return null;
-  if (S.local) return "free";
-  const rate = (S.prices[$("or-embed").value.trim()] || [])[0];
-  return rate ? money(book.tokens / 1e6 * rate) : null;
-}
 // Two editions rarely count their chapters alike, and that is not a fault — but
 // a book divided into four parts facing one divided into twenty-two is a
 // different thing from 47 against 46, and the reader is told which they have.
@@ -689,8 +674,6 @@ function bookCard(book) {
   facts.appendChild(fact("English", version.label));
   facts.appendChild(fact("Chapters", String(book.chapters)));
   if (book.minutes) facts.appendChild(fact("Build", "about " + book.minutes + " min"));
-  const cost = shelfCost(book);
-  if (cost) facts.appendChild(fact("Reading both", cost));
   card.appendChild(facts);
 
   const marks = el("div", "marks");
@@ -986,10 +969,9 @@ function refreshNext() {
   if (S.busy === "shelf") return;
   $("books-foot").textContent = !S.ready ? "Warming up the workshop…"
     : S.route === "shelf" ? (haveBook()
-        ? "Both editions are here. Cost comes next, before anything is sent."
+        ? "Both editions are here. Who does the work, and what it costs, come next."
         : "Nothing is fetched until you choose a book.")
-    : S.route === "align" ? "Matching costs about a cent; you see the figure next."
-    : "Cost comes next, before anything is sent.";
+    : "Who does the work, and what it costs, come next — before anything is sent.";
 }
 function wireFile(which) {
   const button = $("pick-" + which), input = $("f-" + which);
@@ -1078,6 +1060,10 @@ const PROV_NOTE = {
 function setProvider(prov) {
   S.provider = prov;
   S.local = prov === "local";
+  if (!S.local) S.cloud = prov;
+  for (const b of $("engine").children) {
+    b.setAttribute("aria-pressed", String((b.dataset.engine === "local") === S.local));
+  }
   for (const b of $("providers").children) {
     // Only OpenRouter and OpenAI serve embeddings, and matching two editions needs them.
     const barred = aligning() && b.dataset.prov === "anthropic";
@@ -1092,24 +1078,29 @@ function setProvider(prov) {
   $("model-block").hidden = S.local || (aligning() && !$("gloss").checked);
   $("model-why").hidden = !aligning();
   $("embed-block").hidden = S.local || !aligning();
+  $("gloss-when").textContent = S.local ? ", done once at build" : ", charged once at build";
   $("setup").textContent =
     'OLLAMA_ORIGINS="' + location.origin + '" ollama serve\nollama pull ' + $("local-chat").value.trim() +
     (aligning() ? "\nollama pull " + $("local-embed").value.trim() : "");
   refreshBuild();
 }
+for (const b of $("engine").children) {
+  b.addEventListener("click", () => {
+    // Nothing carries across the switch: a sample drawn on one engine says
+    // nothing about the other, and the price it was weighed from is void.
+    S.sample = null; S.estimate = null;
+    setProvider(b.dataset.engine === "local" ? "local" : S.cloud);
+    paintProof(); priceIt();
+  });
+}
 for (const b of $("providers").children) b.addEventListener("click", () => { if (!b.disabled) { setProvider(b.dataset.prov); priceIt(); } });
-$("key").addEventListener("input", () => { paintKeyChip(); refreshBuild(); });
+$("key").addEventListener("input", refreshBuild);
 $("local-chat").addEventListener("input", () => setProvider(S.provider));
 $("or-embed").addEventListener("input", () => { S.sample = null; paintProof(); priceIt(); });
 
-function paintKeyChip() {
-  const key = $("key").value.trim();
-  $("key-chip").hidden = S.local || !key;
-  $("key-tail").textContent = key.length > 8 ? key.slice(0, 5) + "…" + key.slice(-4) : key;
-}
 try {
   const k = localStorage.getItem("or_key");
-  if (k) { $("key").value = k; $("remember").checked = true; paintKeyChip(); }
+  if (k) { $("key").value = k; $("remember").checked = true; }
 } catch (e) {}
 
 function hasKey() { return S.local || !!$("key").value.trim(); }
