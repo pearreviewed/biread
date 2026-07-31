@@ -200,3 +200,17 @@ def test_get_client_dispatches_on_provider(provider, expected, config, monkeypat
     client = get_client(config(provider=provider, model="m"))
     assert isinstance(client, expected)
     assert client.model == "m"
+
+
+def test_every_cloud_client_sets_a_timeout():
+    """A retry only helps a call that fails, and the SDKs' 600s default is per
+    read operation — a socket that dribbles bytes resets it forever. One gloss
+    run stopped after 52 of 469 paragraphs and held the line for three hours."""
+    from biread.llm.anthropic_client import AnthropicClient
+    from biread.llm.base import REQUEST_TIMEOUT_SECONDS
+    from biread.llm.openai_client import OpenAIClient
+
+    for client in (OpenAIClient("m", "k", "https://openrouter.ai/api/v1"),
+                   AnthropicClient("m", "k")):
+        assert client._client.timeout == REQUEST_TIMEOUT_SECONDS, type(client).__name__
+        assert client._client.max_retries == 2, type(client).__name__

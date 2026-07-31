@@ -1,6 +1,6 @@
 from openai import OpenAI
 
-from .base import Completion, LLMClient
+from .base import REQUEST_TIMEOUT_SECONDS, Completion, LLMClient
 
 
 class OpenAIClient(LLMClient):
@@ -9,7 +9,10 @@ class OpenAIClient(LLMClient):
 
     def __init__(self, model: str, api_key: str, base_url: str | None = None):
         super().__init__(model)
-        self._client = OpenAI(api_key=api_key, base_url=base_url, max_retries=2)
+        # A retry only helps a call that fails. Without a timeout short enough to
+        # fail, max_retries never gets its turn — see base.REQUEST_TIMEOUT_SECONDS.
+        self._client = OpenAI(api_key=api_key, base_url=base_url, max_retries=2,
+                              timeout=REQUEST_TIMEOUT_SECONDS)
 
     def complete(self, system: str, user: str, max_tokens: int) -> Completion:
         response = self._client.chat.completions.create(
