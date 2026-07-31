@@ -200,6 +200,7 @@
   .tier .rate { font: 12px/1.3 system-ui, sans-serif; color: var(--num); font-variant-numeric: tabular-nums; }
   .tier .rec { font: 500 8.5px/1 system-ui, sans-serif; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
   .note { font-size: 12.5px; color: var(--muted); }
+  .note.barred { padding: 9px 12px; border-left: 2px solid var(--rule-2); background: var(--surface); border-radius: 0 10px 10px 0; line-height: 1.5; }
   .check { display: flex; align-items: center; gap: 9px; padding: 13px 16px; border: 1px solid var(--rule); border-radius: 15px; font-size: 14.5px; color: var(--body); cursor: pointer; background: var(--surface); }
   .inline { width: 100%; padding: 4px 9px; font: 12.5px/1.4 ui-monospace, Menlo, monospace; border-radius: 8px; background: var(--surface-3); border: 1px solid var(--rule); color: var(--ink); }
   .setup { background: rgba(0,0,0,.28); border: 1px solid var(--rule); border-radius: 10px; padding: 11px 13px; font: 12px/1.7 ui-monospace, Menlo, monospace; color: #c9d6a8; white-space: pre-wrap; overflow-x: auto; margin: 0; }
@@ -414,6 +415,7 @@
           <button data-prov="anthropic" aria-pressed="false">Anthropic</button>
           <button data-prov="openai" aria-pressed="false">OpenAI</button>
         </div>
+        <div class="note barred" id="barred-note" hidden></div>
         <input type="password" id="key" placeholder="sk-…" autocomplete="off" spellcheck="false">
         <label class="note" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="remember"> Remember on this device</label>
         <div class="note" id="prov-note"></div>
@@ -661,6 +663,32 @@ function forget(slug) {
   refreshNext();
 }
 
+function tookShelf(shelf) {
+  S.shelf = shelf;
+  const curated = shelf.books.length;
+  // Whatever this reader kept stands beside the curated books, marked as theirs.
+  // The lede still counts only the ones somebody has looked at.
+  const mine = keptBooks().filter((b) => !shelf.books.some((x) => x.slug === b.slug));
+  S.shelf.books = shelf.books.concat(mine);
+  $("route").querySelector("[data-route=shelf]").hidden = false;
+  $("look-lede").textContent = "The shelf is " + curated + " books somebody "
+    + "has looked at. Beyond it, anything on Wikisource can be fetched the same way — we "
+    + "look for the original and a free English translation, and show you what came back.";
+  if (S.route === "shelf") paintShelf();
+  if (linkedRoute === "shelf") { linkedRoute = null; setRoute("shelf"); }
+  refreshNext();
+}
+
+// The shelf is a fixed list, written out when the builder is built. It has never
+// needed the engine, and coming up behind one cost four seconds on a warm cache
+// and a good deal more on a first visit — to paint eight cards that were decided
+// before the page was served. Fetched here, in parallel with the engine, which
+// is wanted only once a book is picked.
+fetch("shelf.json")
+  .then((r) => (r.ok ? r.json() : null))
+  .then((shelf) => { if (!S.shelf && shelf && (shelf.books || []).length) tookShelf(shelf); })
+  .catch(() => {});
+
 function shelfBooks() {
   if (!S.shelf) return [];
   const q = S.query.trim().toLowerCase();
@@ -835,7 +863,9 @@ function pickBook(slug, index) {
   send("shelf", book.found
     ? { shelfKey: key, found: book.found }
     : { shelfKey: key, shelfSlug: slug, translationIndex: index });
-  sayFetching("Fetching both editions", 0, 0);
+  // The cards can be clicked before the engine is up, because they no longer
+  // wait for it. The worker queues the request; the panel says which it is.
+  sayFetching(S.ready ? "Fetching both editions" : "Starting up, then fetching both editions", 0, 0);
   refreshNext();
 }
 $("shelf-find").addEventListener("input", (e) => { S.query = e.target.value; S.page = 0; paintShelf(); });
@@ -1181,10 +1211,15 @@ $("gloss").addEventListener("change", () => { setProvider(S.provider); priceIt()
 
 /* --- step two ------------------------------------------------------------ */
 const PROV_NOTE = {
-  openrouter: 'One key reaches every model — <a href="https://openrouter.ai/keys" target="_blank" rel="noopener">openrouter.ai/keys</a>.',
+  openrouter: 'No key yet? Create one at <a href="https://openrouter.ai/keys" target="_blank" rel="noopener">openrouter.ai/keys</a> — it takes a minute, and one key reaches every model.',
   anthropic: "Your Anthropic key builds on Claude. Model ids look like <code>claude-sonnet-5</code>.",
   openai: "Your OpenAI key builds on GPT. Model ids look like <code>gpt-5.4</code>.",
 };
+// A provider greyed out with no reason given is the same silence the rest of
+// this builder refuses. Embeddings are what the two matching routes run on, and
+// Anthropic publishes none.
+const BARRED_NOTE = "Anthropic is greyed out here: matching two editions needs an "
+  + "embedding model, and Anthropic serves none. OpenRouter or OpenAI for this book.";
 function setProvider(prov) {
   S.provider = prov;
   S.local = prov === "local";
@@ -1192,12 +1227,15 @@ function setProvider(prov) {
   for (const b of $("engine").children) {
     b.setAttribute("aria-pressed", String((b.dataset.engine === "local") === S.local));
   }
+  let barred = false;
   for (const b of $("providers").children) {
     // Only OpenRouter and OpenAI serve embeddings, and matching two editions needs them.
-    const barred = aligning() && b.dataset.prov === "anthropic";
-    b.disabled = barred;
+    b.disabled = aligning() && b.dataset.prov === "anthropic";
+    barred = barred || b.disabled;
     b.setAttribute("aria-pressed", String(b.dataset.prov === prov));
   }
+  $("barred-note").hidden = !barred;
+  $("barred-note").textContent = BARRED_NOTE;
   $("prov-note").innerHTML = PROV_NOTE[prov] || "";
   $("key-block").hidden = S.local;
   $("local-block").hidden = !S.local;
@@ -1519,20 +1557,9 @@ worker.onmessage = (e) => {
     }
     sel.addEventListener("change", () => { S.sample = null; paintProof(); priceIt(); });
     S.ready = true;
-    if (m.shelf && m.shelf.books.length) {
-      S.shelf = m.shelf;
-      const curated = m.shelf.books.length;
-      // Whatever this reader kept stands beside the curated books, marked as
-      // theirs. The lede still counts only the ones somebody has looked at.
-      const mine = keptBooks().filter((b) => !m.shelf.books.some((x) => x.slug === b.slug));
-      S.shelf.books = m.shelf.books.concat(mine);
-      $("route").querySelector("[data-route=shelf]").hidden = false;
-      $("look-lede").textContent = "The shelf is " + curated + " books somebody "
-        + "has looked at. Beyond it, anything on Wikisource can be fetched the same way — we "
-        + "look for the original and a free English translation, and show you what came back.";
-      if (S.route === "shelf") paintShelf();
-      if (linkedRoute === "shelf") { linkedRoute = null; setRoute("shelf"); }
-    }
+    // The engine's copy of the shelf is the same list shelf.json holds, so it is
+    // taken only if that file was not there to be had.
+    if (!S.shelf && m.shelf && m.shelf.books.length) tookShelf(m.shelf);
     refreshNext(); refreshBuild();
     return;
   }

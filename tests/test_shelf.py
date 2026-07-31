@@ -146,6 +146,18 @@ def test_probing_a_pair_costs_no_chapter_fetches():
     assert fetch.seen == ["Germinal", "Germinal (Ellis)"]
 
 
+def test_the_catalogue_is_plain_data_a_page_can_be_served():
+    """It is written to web/dist/shelf.json at build time and fetched by the page
+    before the engine exists — four seconds of nothing, on a warm cache, to paint
+    a list decided long before the page was served. So it has to survive a round
+    trip through JSON with nothing of Python left in it."""
+    import json
+
+    got = json.loads(json.dumps(shelf.catalogue(), ensure_ascii=False))
+    assert got == shelf.catalogue()
+    assert got["books"] and all(b["slug"] and b["title"] for b in got["books"])
+
+
 def test_an_original_with_no_counterpart_is_still_read_for_whose_it_is():
     """The wiki naming no English edition is a fact about its interwiki links —
     Germinal and Candide carry none, and both have English editions elsewhere.

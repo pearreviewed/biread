@@ -8,6 +8,7 @@ output is a handful of files you can drop on any static host.
 """
 from __future__ import annotations
 
+import json
 import shutil
 import subprocess
 import sys
@@ -44,6 +45,15 @@ def main() -> None:
         shutil.copy2(WEB / name, DIST / name)
     for font in FONT_FILES:
         shutil.copy2(FONTS / font, DIST / font)
+
+    # The shelf is a fixed list of books that changes only when this runs, and it
+    # was arriving behind a Python runtime booting from a CDN — four seconds on a
+    # warm cache and worse on a first visit, to paint eight cards. Written out
+    # here instead, so the page has it before the engine exists.
+    from biread.shelf import catalogue
+
+    (DIST / "shelf.json").write_text(
+        json.dumps(catalogue(), ensure_ascii=False), encoding="utf-8")
 
     files = sorted(p.name for p in DIST.iterdir())
     print(f"Built {DIST.relative_to(ROOT)}/ — {len(files)} files: {', '.join(files)}")
