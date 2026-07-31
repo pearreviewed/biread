@@ -475,3 +475,25 @@ def test_recovering_intensifiers_does_not_reopen_two_nouns():
     # The point of the recovery is to keep genuine two-noun phrases out.
     for surface in ["au-delà de nos usages", "citoyens de la terre", "la force de son esprit"]:
         assert over_broad(surface, "noun phrase"), surface
+
+
+def test_a_perfect_that_only_echoes_the_surface_is_dropped():
+    """The prompt scopes the passé composé to passé simple verbs, and models
+    offer one on any past tense anyway — cheap ones by answering "était" for
+    "était". A compound tense carries an auxiliary and can never equal its own
+    surface, so an echo is not a perfect; showing it teaches something false."""
+    from biread.gloss import FIELD, parse_units
+
+    echoed, real = parse_units(
+        f"était{FIELD}verb{FIELD}was{FIELD}inf=être{FIELD}pc=était\n"
+        f"il disséqua{FIELD}verb{FIELD}dissected{FIELD}inf=disséquer{FIELD}pc=il a disséqué")
+    assert echoed["perfect"] == ""
+    assert echoed["infinitive"] == "être"      # the infinitive is untouched
+    assert real["perfect"] == "il a disséqué"
+
+
+def test_an_echo_is_caught_through_case_and_punctuation():
+    from biread.gloss import FIELD, parse_units
+
+    (unit,) = parse_units(f"S’attirait{FIELD}verb{FIELD}attracted{FIELD}pc=s'attirait")
+    assert unit["perfect"] == ""

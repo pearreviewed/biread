@@ -130,8 +130,20 @@ def parse_units(block: str) -> list[dict]:
                 unit["infinitive"] = value.strip()
             elif key.strip() == "pc":
                 unit["perfect"] = value.strip()
+        # A perfect that only echoes the surface is not a perfect. Models offer
+        # one on any past tense however plainly the prompt scopes it to the passé
+        # simple, and the cheaper ones answer "était" for "était". A compound
+        # tense always carries an auxiliary, so it can never equal its own
+        # surface — and showing one that does teaches the reader something false,
+        # which is worse than showing nothing.
+        if _same_form(unit["perfect"], unit["surface"]):
+            unit["perfect"] = ""
         units.append(unit)
     return units
+
+
+def _same_form(a: str, b: str) -> bool:
+    return bool(a) and re.sub(r"\W+", "", a).casefold() == re.sub(r"\W+", "", b).casefold()
 
 
 # Models normalise typography however firmly they are told not to: a curly
