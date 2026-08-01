@@ -45,6 +45,12 @@ PUBLISHED = [
         "english": "Phalen",
         "approved": "2026-08-01",
     },
+    {
+        "slug": "candide",
+        "file": "candide.html",
+        "english": "Smollett · 1920",
+        "approved": "2026-08-01",
+    },
 ]
 
 BOOK_DATA = re.compile(
