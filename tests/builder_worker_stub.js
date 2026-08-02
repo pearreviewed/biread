@@ -40,6 +40,14 @@ const SHELF = {
       page: "Candide, ou l’Optimisme", lang: "fr", other: "en",
       chapters: 30, paragraphs: 469, minutes: 3, tokens: 95916,
       note: "Smollett put this into English in Voltaire’s own century.",
+      // The other published book: approved and handed over, but without glosses,
+      // which the card must offer rather than pass over in silence.
+      prebuilt: {
+        href: "books/candide.html", filename: "Candide - bilingual reader.html",
+        english: "Smollett · 1920", approved: "2026-08-01", bytes: 614583,
+        paragraphs: 469, translated: 464, glossed: 0,
+        published: false, solo: true, formats: [],
+      },
       readThrough: true, coverage: 0.989, added: false,
       english: "Smollett · 1920", abridged: false, chaptered: true, counts: [30, 30],
       translations: [{ page: "Candide", label: "Smollett · 1920", chapters: 30 }],

@@ -403,7 +403,7 @@ def run(args: argparse.Namespace) -> None:
     render_book(
         title, chapters, run_result.translations, output_path,
         published, published_note, glosses, downloads, target, revise,
-        args.builder_url,
+        builder_url=args.builder_url,
     )
     print(f"\nWrote {output_path}")
     if args.revise:

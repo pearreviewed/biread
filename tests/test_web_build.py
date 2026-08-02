@@ -15,6 +15,7 @@ from pathlib import Path
 import pytest
 
 from biread.render import script_json
+from biread.targets import ENGLISH
 
 
 def load_build_module():
@@ -83,7 +84,11 @@ def published_as(build, monkeypatch, tmp_path, entries, files=("micromegas.html"
     for name in files:
         (books / name).write_text(
             '<script type="application/json" id="book-data">'
-            + script_json({"pairs": [{"fr": "Une phrase.", "en": "A sentence."}]})
+            + script_json({
+                "titleFr": "Micromégas", "slug": "micromegas", "lang": "en",
+                "ui": dict(ENGLISH.ui), "chapters": [],
+                "pairs": [{"fr": "Une phrase.", "en": "A sentence."}],
+            })
             + "</script>",
             encoding="utf-8",
         )

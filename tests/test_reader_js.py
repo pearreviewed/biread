@@ -38,7 +38,7 @@ DL_EPUB_PUB = b"PK\x03\x04FAKE-EPUB-PUBLISHED\x00\x01\x02"
 
 
 def build_reader(tmp_path_factory, published: bool, downloads=None, target=ENGLISH, revise=False,
-                 builder_url=""):
+                 builder_url="", gloss_on_demand=None):
     paragraphs = [f"{SHORT_FR} ({n})" for n in range(24)]
     paragraphs.insert(12, TALL_FR)
     chapters = [
@@ -64,7 +64,8 @@ def build_reader(tmp_path_factory, published: bool, downloads=None, target=ENGLI
         publications if published else None, "a note" if published else "",
         None, downloads, target,
         {"provider": "anthropic", "model": "claude-sonnet-4-6", "target": "English"} if revise else None,
-        builder_url,
+        gloss_on_demand=gloss_on_demand,
+        builder_url=builder_url,
     )
     return out
 
@@ -1209,4 +1210,163 @@ def test_a_correction_reflows_the_page_without_clipping(browser, revise_path):
         }"""
     )
     assert clipped == []
+    page.close()
+
+
+# ---- glossing on demand ---------------------------------------------------
+# A book published without glosses is glossed by whoever reads it, a page at a
+# time, on their own key. What matters here is that it costs nothing until
+# asked, that the key reaches the provider and nowhere else, that the model's
+# own words never reach the page, and that no figure is ever shown.
+
+GLOSS_ON_DEMAND = {"provider": "openrouter", "model": "deepseek/deepseek-chat-v3.1"}
+OPENROUTER_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
+
+
+@pytest.fixture(scope="module")
+def gloss_path(tmp_path_factory):
+    return build_reader(tmp_path_factory, published=False, gloss_on_demand=GLOSS_ON_DEMAND)
+
+
+def stub_model(page, reply):
+    """Answer every request from the page, and record what was asked."""
+    page.evaluate(
+        """(reply) => {
+          window.__calls = [];
+          window.fetch = function (url, opts) {
+            window.__calls.push({ url: url, headers: (opts && opts.headers) || {},
+                                  body: (opts && opts.body) || '' });
+            return Promise.resolve({
+              ok: true,
+              json: function () {
+                return Promise.resolve({ choices: [{ message: { content: reply } }] });
+              }
+            });
+          };
+        }""", reply)
+
+
+#: A reply that segments the test book's repeated French sentence.
+BAR = "¦"
+GLOSS_REPLY = "@@@1@@@\n" + "\n".join([
+    BAR.join(["Une phrase", "noun phrase", "a sentence"]),
+    BAR.join(["française", "adjective", "French"]),
+    BAR.join(["assez courte", "adjective", "short enough"]),
+])
+
+
+def test_a_book_built_with_glosses_offers_no_way_to_buy_them(reader):
+    assert reader.locator("#gloss-btn").is_hidden()
+
+
+def test_the_offer_appears_only_where_a_page_lacks_glosses(browser, gloss_path):
+    page = _fresh(browser, gloss_path)
+    page.evaluate("() => localStorage.clear()")
+    assert page.locator("#gloss-btn").is_visible()
+    assert page.inner_text("#gloss-btn") == "Add glosses"
+    # Nothing hovers until somebody pays for it.
+    assert page.locator("#stage-wrap .page-left .unit").count() == 0
+    assert page.evaluate("() => window.__calls === undefined")
+    page.close()
+
+
+def test_glossing_a_page_asks_for_a_key_then_calls_only_the_provider(browser, gloss_path):
+    page = _fresh(browser, gloss_path)
+    page.evaluate("() => localStorage.clear()")
+    rewind(page)
+    stub_model(page, GLOSS_REPLY)
+
+    page.click("#gloss-btn")
+    page.wait_for_selector(".revise-key", timeout=3000)
+    assert "glosses" in page.inner_text(".revise-key .info-title")
+    assert page.evaluate("() => window.__calls.length") == 0, "no call before a key"
+
+    page.fill(".revise-key-input", "sk-reader-key")
+    page.click('.revise-key .revise-btn:text-is("Save")')
+    page.wait_for_selector("#stage-wrap .page-left .unit", timeout=5000)
+
+    calls = page.evaluate("() => window.__calls")
+    assert len(calls) == 1, "one call for the page, not one per paragraph"
+    assert calls[0]["url"] == OPENROUTER_ENDPOINT
+    assert calls[0]["headers"]["authorization"] == "Bearer sk-reader-key"
+    assert "deepseek/deepseek-chat-v3.1" in calls[0]["body"]
+    page.close()
+
+
+def test_a_bought_gloss_hovers_and_shows_the_source_text_not_the_models(browser, gloss_path):
+    page = _fresh(browser, gloss_path)
+    page.evaluate("() => localStorage.clear()")
+    rewind(page)
+    stub_model(page, GLOSS_REPLY)
+    page.evaluate("() => localStorage.setItem('biread:revise-key:openrouter', 'sk-x')")
+    page.reload()
+    page.wait_for_function(
+        "() => { const c = document.getElementById('counter');"
+        "return c && c.textContent && !c.textContent.includes('+'); }", timeout=15000)
+    stub_model(page, GLOSS_REPLY)
+    rewind(page)
+
+    page.click("#gloss-btn")
+    page.wait_for_selector("#stage-wrap .page-left .unit", timeout=5000)
+    unit = page.locator("#stage-wrap .page-left .unit").first
+    # The span is a slice of the paragraph, never a string the model returned.
+    assert unit.inner_text() in page.inner_text("#stage-wrap .page-left")
+    unit.hover()
+    page.wait_for_selector(".tip", timeout=3000)
+    assert "a sentence" in page.inner_text(".tip")
+    page.close()
+
+
+def test_the_gloss_offer_never_shows_a_price(browser, gloss_path):
+    page = _fresh(browser, gloss_path)
+    page.evaluate("() => localStorage.clear()")
+    stub_model(page, GLOSS_REPLY)
+    page.click("#gloss-btn")
+    page.wait_for_selector(".revise-key", timeout=3000)
+    shown = page.inner_text("body")
+    for forbidden in ("$", "¢", "cent", "token", "cost", "price", "per 1", "USD"):
+        assert forbidden not in shown.lower().replace("$", "$"), f"the reader showed {forbidden!r}"
+    page.close()
+
+
+def test_a_reply_that_will_not_anchor_leaves_the_page_plain(browser, gloss_path):
+    page = _fresh(browser, gloss_path)
+    page.evaluate("() => localStorage.clear()")
+    page.evaluate("() => localStorage.setItem('biread:revise-key:openrouter', 'sk-x')")
+    page.reload()
+    page.wait_for_function(
+        "() => { const c = document.getElementById('counter');"
+        "return c && c.textContent && !c.textContent.includes('+'); }", timeout=15000)
+    # Surfaces that are not in the paragraph: the model has lost its place.
+    stub_model(page, "@@@1@@@\n" + BAR.join(["mots inventés", "noun", "invented"]))
+    rewind(page)
+    page.click("#gloss-btn")
+    page.wait_for_timeout(900)
+    assert page.locator("#stage-wrap .page-left .unit").count() == 0
+    assert page.inner_text("#gloss-btn") != "Add glosses", "a failure should say so"
+    page.close()
+
+
+def test_bought_glosses_survive_reopening_the_book(browser, gloss_path):
+    page = _fresh(browser, gloss_path)
+    page.evaluate("() => localStorage.clear()")
+    page.evaluate("() => localStorage.setItem('biread:revise-key:openrouter', 'sk-x')")
+    page.reload()
+    page.wait_for_function(
+        "() => { const c = document.getElementById('counter');"
+        "return c && c.textContent && !c.textContent.includes('+'); }", timeout=15000)
+    stub_model(page, GLOSS_REPLY)
+    rewind(page)
+    page.click("#gloss-btn")
+    page.wait_for_selector("#stage-wrap .page-left .unit", timeout=5000)
+
+    # Reopened, with no stub in place: a second call would fail outright, so the
+    # glosses on the page can only have come from what was kept.
+    page.reload()
+    page.wait_for_function(
+        "() => { const c = document.getElementById('counter');"
+        "return c && c.textContent && !c.textContent.includes('+'); }", timeout=15000)
+    rewind(page)
+    page.wait_for_selector("#stage-wrap .page-left .unit", timeout=5000)
+    assert page.locator("#gloss-btn").is_hidden(), "a page already glossed offers nothing"
     page.close()

@@ -14,7 +14,7 @@ from biread.render import (
     script_json,
     slugify,
 )
-from biread.targets import SPANISH
+from biread.targets import ENGLISH, SPANISH
 from biread.translate import hash_text
 
 
@@ -296,3 +296,78 @@ def test_the_edits_link_control_ships_hidden(tmp_path, book):
     out = tmp_path / "x.html"
     render_book("Mon Livre", book, {}, out)
     assert re.search(r'id="edits-btn"[^>]*\shidden', out.read_text(encoding="utf-8"))
+
+
+# ---- re-wrapping a finished book -----------------------------------------
+# A published book carries the reader it was built with, so a shelf that hands
+# out files hands out old ones unless they are re-set in the current one.
+
+def _rewrapped(**kwargs):
+    from biread.render import render_html, rewrap
+
+    book = [Chapter("I", "Titre", ["Il y avait en Vestphalie.", "Une autre phrase."])]
+    html = render_html("Mon Livre", book, {}, downloads=[("epub", "translation", "L.epub", b"PK\x03\x04zz")])
+    return html, rewrap(html, **kwargs)
+
+
+def test_rewrapping_keeps_every_word_of_the_book():
+    from biread.render import BOOK_DATA_RE
+
+    before, after = _rewrapped()
+    was = json.loads(BOOK_DATA_RE.search(before).group(2))
+    now = json.loads(BOOK_DATA_RE.search(after).group(2))
+    assert [p["fr"] for p in now["pairs"]] == [p["fr"] for p in was["pairs"]]
+    assert now["chapters"] == was["chapters"]
+    assert now["titleFr"] == was["titleFr"]
+
+
+def test_rewrapping_carries_an_embedded_edition_across_untouched():
+    before, after = _rewrapped()
+    blob = re.search(r'<script type="application/octet-stream".*?</script>', before, re.S)
+    assert blob and blob.group(0) in after, "the EPUB must survive the re-wrap"
+
+
+def test_rewrapping_refreshes_labels_the_book_was_built_too_early_to_have():
+    """The labels belong to the reader, not the book, and travel inside it — so an
+    old book in a new reader would show blanks wherever a control was added."""
+    from biread.render import BOOK_DATA_RE, rewrap
+
+    before, _ = _rewrapped()
+    stale = BOOK_DATA_RE.sub(
+        lambda m: m.group(1) + json.dumps({
+            **json.loads(m.group(2)), "ui": {"loading": "Opening…"}}) + m.group(3),
+        before)
+    now = json.loads(BOOK_DATA_RE.search(rewrap(stale)).group(2))
+    assert now["ui"]["glossAdd"] == ENGLISH.ui["glossAdd"]
+    assert len(now["ui"]) == len(ENGLISH.ui)
+
+
+def test_the_offer_to_gloss_reaches_a_book_that_has_none():
+    from biread.render import BOOK_DATA_RE
+
+    _, after = _rewrapped(gloss_on_demand={"provider": "openrouter", "model": "m"})
+    data = json.loads(BOOK_DATA_RE.search(after).group(2))
+    assert data["gloss"]["enabled"] is True
+    assert data["gloss"]["endpoint"].startswith("https://openrouter.ai")
+    assert all("h" in pair for pair in data["pairs"]), "a bought gloss is kept by hash"
+    assert data["gloss"]["functionWords"], "the reader needs the language, not just the URL"
+
+
+def test_a_book_that_already_has_glosses_is_never_offered_them():
+    from biread.gloss import GlossUnit
+    from biread.render import BOOK_DATA_RE, render_html, rewrap
+
+    book = [Chapter("I", None, ["Il y avait en Vestphalie."])]
+    glosses = {hash_text("Il y avait en Vestphalie."): [
+        GlossUnit(start=0, end=10, pos="verb", gloss="there was", infinitive="avoir", perfect="")]}
+    html = render_html("L", book, {}, glosses=glosses)
+    data = json.loads(BOOK_DATA_RE.search(
+        rewrap(html, gloss_on_demand={"provider": "openrouter", "model": "m"})).group(2))
+    assert "gloss" not in data, "there is nothing to buy, and an idle button lies"
+
+
+def test_rewrapping_something_that_is_not_a_book_says_so():
+    from biread.render import rewrap
+
+    with pytest.raises(ValueError, match="not a built reader"):
+        rewrap("<!doctype html><p>hello</p>")

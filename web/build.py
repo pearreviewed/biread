@@ -53,6 +53,12 @@ PUBLISHED = [
     },
 ]
 
+# A book published without glosses can still be glossed — by whoever reads it, a
+# page at a time, on their own key. Set here rather than per book because it is
+# one question ("can a reader add these?") with one answer, and a book that
+# already carries glosses ignores it.
+GLOSS_ON_DEMAND = {"provider": "openrouter", "model": "deepseek/deepseek-chat-v3.1"}
+
 BOOK_DATA = re.compile(
     r'<script type="application/json" id="book-data">(.*?)</script>', re.S)
 
@@ -89,7 +95,7 @@ def gather_published(catalogue: dict) -> None:
     not there, is a card promising a download that would 404 in front of a
     reader. Better to stop the build than to ship the promise.
     """
-    from biread.render import download_name
+    from biread.render import download_name, rewrap
 
     by_slug = {book["slug"]: book for book in catalogue["books"]}
     if PUBLISHED:
@@ -101,13 +107,22 @@ def gather_published(catalogue: dict) -> None:
         source = BOOKS / entry["file"]
         if not source.is_file():
             raise SystemExit(f"published book {entry['slug']!r} has no file at {source}")
-        shutil.copy2(source, DIST / "books" / entry["file"])
+        # The checked-in file stays the book as it was approved; what the bundle
+        # serves is that book set in today's reader, and told where a reader may
+        # buy the glosses it lacks. A published file otherwise carries whatever
+        # reader it was built with, so a shelf would quietly hand out old ones.
+        served = DIST / "books" / entry["file"]
+        served.write_text(
+            rewrap(source.read_text(encoding="utf-8"), gloss_on_demand=GLOSS_ON_DEMAND),
+            encoding="utf-8")
         book["prebuilt"] = {
             "href": f"{BOOKS_AT}books/{entry['file']}",
             "filename": download_name(book["title"]) + ".html",
             "english": entry.get("english"),
             "approved": entry["approved"],
-            **measure(source),
+            # Measured on what is served, not on what is checked in: the size a
+            # card quotes is the size a reader downloads.
+            **measure(served),
         }
 
 

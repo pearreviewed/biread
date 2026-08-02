@@ -49,7 +49,8 @@ def site(tmp_path_factory):
     # What is in it does not matter here — that it is fetchable, and arrives
     # named as a book rather than as a slug, is the whole of the promise.
     (root / "books").mkdir()
-    (root / "books" / "micromegas.html").write_bytes(b"<!doctype html><title>Microm\xc3\xa9gas</title>")
+    for name in ("micromegas.html", "candide.html"):
+        (root / "books" / name).write_bytes(b"<!doctype html><title>Un livre</title>")
 
     handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(root))
     handler.log_message = lambda *args, **kwargs: None
@@ -448,7 +449,8 @@ def test_only_an_approved_book_is_offered_ready_to_read(page):
     page.click("[data-route=shelf]")
     offered = page.eval_on_selector_all(
         ".card .get", "n => n.map(b => b.closest('.card').dataset.slug)")
-    assert offered == ["micromegas"], "a card may hand over a book only where one was approved"
+    assert offered == ["candide", "micromegas"], (
+        "a card may hand over a book only where one was approved")
     assert "1.1 MB" in text(page, ".card[data-slug=micromegas] .get")
 
 
@@ -690,3 +692,18 @@ def test_a_book_divided_differently_says_so_rather_than_shrugging(page):
     assert page.evaluate("agreement(47, 46)").endswith("two editions counting differently.")
     assert "divided quite differently" in page.evaluate("agreement(4, 22)")
     assert page.evaluate("agreement(1, 22)").startswith("1 chapter against 22")
+
+
+def test_a_book_without_glosses_offers_them_rather_than_passing_over_it(page):
+    page.click("[data-route=shelf]")
+    said = text(page, ".card[data-slug=candide] .ready")
+    assert "the French beside the published translation" in said
+    assert "No hover glosses in this one" in said
+    assert "on your own key" in said
+    # The builder is the one place allowed to name a figure.
+    assert "penny" in said
+
+
+def test_a_book_that_has_glosses_is_not_offered_them_again(page):
+    page.click("[data-route=shelf]")
+    assert "No hover glosses" not in text(page, ".card[data-slug=micromegas] .ready")

@@ -16,6 +16,9 @@
     <button class="counter" id="counter" data-i18n-aria="goToPage" aria-label="Go to a page"></button>
     <input class="counter-input" id="counter-input" type="text" inputmode="numeric" autocomplete="off" data-i18n-aria="pageNumber" aria-label="Page number" hidden>
     <button class="btn-pill" id="blur-toggle" data-i18n="blur">Blur translation</button>
+    <!-- Only on a book published without glosses, and only once it says where to
+         ask for them. Hidden by default so every other book is untouched. -->
+    <button class="btn-pill" id="gloss-btn" data-i18n="glossAdd" hidden>Add glosses</button>
     <div class="segmented-row">
       <div class="segmented" role="group" aria-label="Translation source">
         <button id="seg-translation" data-i18n="translation" aria-pressed="true">AI translation</button>

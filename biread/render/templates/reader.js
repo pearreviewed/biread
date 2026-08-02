@@ -29,6 +29,12 @@
   // Reader-side correction of the AI translation (opt-in --revise). Null unless
   // the build embedded it; every branch below is a no-op when it stays null.
   var REVISE = (DATA.revise && DATA.revise.enabled) ? DATA.revise : null;
+  // Glossing a paragraph at a time, on the reader's own key, for a book that was
+  // published without glosses. Carries the whole protocol — the prompt, the
+  // field separator, and what French itself contributes — so the judgement below
+  // reads the same data biread/gloss.py reads. Null on a book built with glosses
+  // already in it, and on any book that never enabled this.
+  var GLOSS = (DATA.gloss && DATA.gloss.enabled) ? DATA.gloss : null;
   // The corner tags. The source is always French — the masthead and the left
   // column's lang say so — and the target follows the build's language.
   var SOURCE_TAG = 'FR';
@@ -120,6 +126,8 @@
   var apiKey = '';
   var reviseCtl = null;
   var keyPanel = null;
+  var bought = {};      // glosses this reader paid for, by paragraph hash
+  var glossBusy = false;
   var reviseTarget = null;
   var reviseBusy = false;
   var undoStack = []; // this session's corrections, for Cmd/Ctrl+Z
@@ -215,16 +223,25 @@
     var h = PAIRS[i].h;
     return !!(h && overrides[h] && overrides[h].base === PAIRS[i].en);
   }
-  function keyName() { return 'biread:revise-key:' + (REVISE ? REVISE.provider : ''); }
-  function loadKey() {
-    try { return localStorage.getItem(keyName()) || sessionStorage.getItem(keyName()) || ''; }
+  // Keyed by provider, not by feature: one OpenRouter key rewrites a phrase and
+  // glosses a paragraph equally well, so a reader who has given it once has
+  // given it. The name is historical — correction wanted a key first — and
+  // renaming it would only throw away the keys readers have already saved.
+  function keyName(cfg) {
+    var of = cfg || REVISE || GLOSS;
+    return 'biread:revise-key:' + (of ? of.provider : '');
+  }
+  function loadKey(cfg) {
+    var name = keyName(cfg);
+    try { return localStorage.getItem(name) || sessionStorage.getItem(name) || ''; }
     catch (e) { return ''; }
   }
-  function storeKey(key, remember) {
+  function storeKey(key, remember, cfg) {
+    var name = keyName(cfg);
     try {
-      localStorage.removeItem(keyName());
-      sessionStorage.removeItem(keyName());
-      if (key) (remember ? localStorage : sessionStorage).setItem(keyName(), key);
+      localStorage.removeItem(name);
+      sessionStorage.removeItem(name);
+      if (key) (remember ? localStorage : sessionStorage).setItem(name, key);
     } catch (e) {}
   }
 
@@ -892,6 +909,238 @@
     span.classList.add('pinned');
   }, true);
 
+  // ---------- glossing on demand ----------
+  // A second implementation of biread/gloss.py's judgement, because the reader
+  // is who pays for it and the reader is not Python. The algorithms are written
+  // twice; the French they read is written once and travels in GLOSS, so the two
+  // cannot quietly disagree about the language. tests/test_gloss_parity.py holds
+  // them to the same answers on the same paragraphs.
+  //
+  // The safety argument is the one gloss.py makes: what comes back is a
+  // *proposal*. Every unit is located in the real paragraph and only its offsets
+  // are kept, so a model that fixes an accent or drops a word cannot put its
+  // version on the page — at worst the search fails and the paragraph stays
+  // plain.
+  var WORD_RE = /[\p{L}\p{M}]+/gu;
+  var NON_WORD_RE = /[^\p{L}\p{N}_]+/gu;
+
+  function wordsIn(text) { return text.toLowerCase().match(WORD_RE) || []; }
+  function inList(list, word) { return list.indexOf(word) !== -1; }
+
+  // Normalised text, and a map from each normalised index back to the original.
+  // Models normalise typography however firmly they are told not to, and French
+  // prose is one long chain of elisions, so matching is done on the folded form
+  // while offsets keep pointing at the source character for character.
+  function foldText(text) {
+    var out = '', index = [], i, j, folded;
+    for (i = 0; i < text.length; i++) {
+      folded = GLOSS.fold[text[i]] || text[i];
+      for (j = 0; j < folded.length; j++) { out += folded[j]; index.push(i); }
+    }
+    return { text: out, index: index };
+  }
+
+  function sameForm(a, b) {
+    return !!a && a.replace(NON_WORD_RE, '').toLowerCase()
+      === b.replace(NON_WORD_RE, '').toLowerCase();
+  }
+
+  // A compound past is a present auxiliary plus a participle. Anything offered
+  // as a passé composé without one is some other tense wearing its name, and a
+  // false grammatical claim is worse than none.
+  function isPerfect(form) {
+    if (!GLOSS.perfectAuxiliaries.length) return true;
+    var words = wordsIn(form);
+    for (var i = 0; i < words.length; i++) {
+      if (inList(GLOSS.perfectAuxiliaries, words[i])) return true;
+    }
+    return false;
+  }
+
+  function parseUnits(block) {
+    var lines = block.split('\n'), units = [], i, k, parts, unit, extra, eq;
+    for (i = 0; i < lines.length; i++) {
+      parts = lines[i].split(GLOSS.field).map(function (p) { return p.trim(); });
+      if (parts.length < 3 || !parts[0]) continue;
+      unit = { surface: parts[0], pos: parts[1], gloss: parts[2], infinitive: '', perfect: '' };
+      for (k = 3; k < parts.length; k++) {
+        extra = parts[k];
+        eq = extra.indexOf('=');
+        if (eq === -1) continue;
+        if (extra.slice(0, eq).trim() === 'inf') unit.infinitive = extra.slice(eq + 1).trim();
+        else if (extra.slice(0, eq).trim() === 'pc') unit.perfect = extra.slice(eq + 1).trim();
+      }
+      if (sameForm(unit.perfect, unit.surface) || !isPerfect(unit.perfect)) unit.perfect = '';
+      units.push(unit);
+    }
+    return units;
+  }
+
+  // Locate each proposed unit, in order. Null if any one cannot be found at or
+  // after the last — the model has lost its place, and the whole segmentation is
+  // untrustworthy. Gaps are fine; they render as plain text.
+  function anchorUnits(paragraph, proposed) {
+    var hay = foldText(paragraph), located = [], cursor = 0, i, surface, found;
+    for (i = 0; i < proposed.length; i++) {
+      surface = foldText(proposed[i].surface).text.trim();
+      if (!surface) continue;
+      found = hay.text.indexOf(surface, cursor);
+      if (found === -1) return null;
+      cursor = found + surface.length;
+      located.push([
+        hay.index[found], hay.index[found + surface.length - 1] + 1,
+        proposed[i].pos, proposed[i].gloss, proposed[i].infinitive, proposed[i].perfect
+      ]);
+    }
+    return located.length ? located : null;
+  }
+
+  // True if a marker word sits between two content words: "Moscovie ou Chine"
+  // and "citoyens de la terre" are each two logical parts, and a hover explains
+  // one part. A leading "et …" is not — nothing content-bearing precedes it.
+  function splitBetweenContent(surface, markers) {
+    var words = wordsIn(surface), seen = false, pending = false, i;
+    for (i = 0; i < words.length; i++) {
+      if (inList(markers, words[i]) && seen) pending = true;
+      else if (!inList(GLOSS.functionWords, words[i])) {
+        if (pending) return true;
+        seen = true;
+      }
+    }
+    return false;
+  }
+
+  function contentWords(surface) {
+    return wordsIn(surface).filter(function (w) {
+      return !inList(GLOSS.functionWords, w);
+    });
+  }
+
+  // Too wide to be one hover. A noun phrase may carry an adjective, so two
+  // content words are allowed; anything that predicates may not, because its
+  // second content word is a subject or an object rather than part of the phrase.
+  function overBroad(surface, pos) {
+    if (splitBetweenContent(surface, GLOSS.coordinators)) return true;
+    if (splitBetweenContent(surface, GLOSS.prepositions)) return true;
+    var limit = new RegExp(GLOSS.predicatePos, 'i').test(pos || '')
+      ? 1 : GLOSS.maxContentWords;
+    return contentWords(surface).length > limit;
+  }
+
+  // The width rule applied at the edge where units become hovers, so tightening
+  // it drops the offenders on the next render with nothing to pay again.
+  function displayableUnits(paragraph, units) {
+    var shown = [], i, u, surface;
+    for (i = 0; i < units.length; i++) {
+      u = units[i];
+      surface = paragraph.slice(u[0], u[1]);
+      if (overBroad(surface, u[2])) continue;
+      if (u[5] && (sameForm(u[5], surface) || !isPerfect(u[5]))) {
+        shown.push([u[0], u[1], u[2], u[3], u[4], '']);
+      } else shown.push(u);
+    }
+    return shown;
+  }
+
+  // Glosses a reader has bought, kept against the source paragraph so they
+  // survive a rebuild and go stale safely if that paragraph changes — the same
+  // bargain a correction makes.
+  function loadBoughtGlosses() {
+    var stored = lsGet('glosses');
+    bought = stored && stored.byHash ? stored.byHash : {};
+    for (var i = 0; i < PAIRS.length; i++) {
+      if (!PAIRS[i].units && PAIRS[i].h && bought[PAIRS[i].h]) {
+        PAIRS[i].units = displayableUnits(PAIRS[i].fr, bought[PAIRS[i].h]);
+      }
+    }
+  }
+
+  // Paragraphs on the French page in front of the reader that have no units yet.
+  // The published column is somebody else's prose and is never glossed; the
+  // French is what carries the hover.
+  function unglossedHere() {
+    var spread = spreads[S.spreadIndex], want = [];
+    if (!spread) return want;
+    eachPart(spread, function (p) {
+      if (!PAIRS[p].units && PAIRS[p].fr.trim() && want.indexOf(p) === -1) want.push(p);
+    });
+    return want;
+  }
+
+  function updateGlossButton() {
+    var btn = document.getElementById('gloss-btn');
+    if (!btn) return;
+    // Shown only where there is something to gloss and somewhere to ask. A page
+    // already glossed offers nothing, which is the honest state of that page.
+    var pending = GLOSS && !S.mobile && GLOSS.endpoint ? unglossedHere() : [];
+    btn.hidden = !pending.length;
+    btn.disabled = glossBusy;
+    btn.textContent = i18n(glossBusy ? 'glossAdding' : 'glossAdd');
+  }
+
+  // One call for the page: five short paragraphs cost a fifth of five calls, and
+  // the model reads them as the continuous prose they are.
+  function glossPrompt(indices) {
+    var lines = [];
+    for (var i = 0; i < indices.length; i++) {
+      lines.push('@@@' + (i + 1) + '@@@\n' + PAIRS[indices[i]].fr);
+    }
+    return lines.join('\n\n');
+  }
+
+  function glossPage() {
+    if (!GLOSS || glossBusy) return;
+    var indices = unglossedHere();
+    if (!indices.length) return;
+    if (!apiKey) { openKeyPanel(GLOSS, glossPage); return; }
+    glossBusy = true;
+    updateGlossButton();
+    // Output runs several times the input here, so the ceiling is generous.
+    providerRequest(GLOSS, apiKey, GLOSS.prompt, glossPrompt(indices), 8192).then(
+      function (out) {
+        glossBusy = false;
+        var landed = applyGlosses(indices, out);
+        // Settle the button before saying anything on it: updateGlossButton
+        // rewrites the label, so reporting first would erase the report.
+        updateGlossButton();
+        if (!landed) showGlossError();
+      },
+      function () { glossBusy = false; updateGlossButton(); showGlossError(); }  // same order
+    );
+  }
+
+  // Split the reply on its paragraph markers and locate each block in the
+  // paragraph it claims to be about. A block that will not anchor leaves that
+  // paragraph plain — never a guess, and never the model's own text on the page.
+  function applyGlosses(indices, reply) {
+    var blocks = String(reply || '').split(/@@@\s*(\d+)\s*@@@/), any = false, i;
+    var byNumber = {};
+    for (i = 1; i < blocks.length; i += 2) byNumber[Number(blocks[i])] = blocks[i + 1] || '';
+    for (i = 0; i < indices.length; i++) {
+      var block = byNumber[i + 1];
+      // One paragraph asked for and no marker returned: the whole reply is that
+      // paragraph's answer.
+      if (block == null && indices.length === 1 && blocks.length === 1) block = blocks[0];
+      if (!block) continue;
+      var located = anchorUnits(PAIRS[indices[i]].fr, parseUnits(block));
+      if (!located) continue;
+      PAIRS[indices[i]].units = displayableUnits(PAIRS[indices[i]].fr, located);
+      if (PAIRS[indices[i]].h) bought[PAIRS[indices[i]].h] = located;
+      any = true;
+    }
+    if (!any) return false;
+    lsSet('glosses', { v: STORE_VERSION, byHash: bought });
+    paint();
+    return true;
+  }
+
+  function showGlossError() {
+    var btn = document.getElementById('gloss-btn');
+    if (!btn) return;
+    btn.textContent = i18n('glossFailed');
+    setTimeout(updateGlossButton, 3200);
+  }
+
   // ---------- revise ----------
   // Correct the AI translation in place: select a phrase, then rewrite it on the
   // reader's OWN key or type the fix by hand. A fix is a local override (above);
@@ -899,10 +1148,11 @@
   var PROVIDER_LABEL = {
     anthropic: 'Anthropic', openai: 'OpenAI', openrouter: 'OpenRouter', ollama: 'Ollama'
   };
-  function providerLabel() {
-    return REVISE ? (PROVIDER_LABEL[REVISE.provider] || REVISE.provider) : '';
+  function providerLabel(cfg) {
+    var of = cfg || REVISE || GLOSS;
+    return of ? (PROVIDER_LABEL[of.provider] || of.provider) : '';
   }
-  function reviseText(key) { return i18n(key).replace('{provider}', providerLabel()); }
+  function reviseText(key, cfg) { return i18n(key).replace('{provider}', providerLabel(cfg)); }
 
   // Record the visible slice's offsets into the full generated text (so a
   // selection maps back to the whole paragraph), and, on a corrected paragraph,
@@ -1050,13 +1300,13 @@
 
   function runRewrite() {
     if (!reviseTarget || reviseBusy) return;
-    if (!apiKey) { openKeyPanel(); return; } // offsets are held in reviseTarget, not the DOM selection
+    if (!apiKey) { openKeyPanel(REVISE, runRewrite); return; } // offsets live in reviseTarget, not the DOM selection
     var i = reviseTarget.i, start = reviseTarget.start, end = reviseTarget.end;
     var note = reviseCtl && reviseCtl._note ? reviseCtl._note.value.trim() : '';
     var full = generatedEnglish(i);
     var prompts = revisePrompts(PAIRS[i].fr, full, full.slice(start, end), note);
     setReviseBusy(true);
-    providerRequest(apiKey, prompts.system, prompts.user).then(function (out) {
+    providerRequest(REVISE, apiKey, prompts.system, prompts.user).then(function (out) {
       setReviseBusy(false);
       var revised = cleanSpan(out);
       if (revised) applyRevision(i, start, end, revised);
@@ -1144,7 +1394,10 @@
   // The key-entry panel reuses the ⓘ panel's look. The key is sent only to the
   // provider's own endpoint (providerRequest) and, when remembered, kept only in
   // this browser. No token, price, or spend figure appears anywhere.
-  function openKeyPanel() {
+  // Shared by correction and glossing: same key, same provider, different
+  // reason for wanting it. `after` is what the key was asked for.
+  function openKeyPanel(cfg, after) {
+    cfg = cfg || REVISE;
     closeKeyPanel();
     if (reviseCtl) reviseCtl.hidden = true; // one panel at a time — keep it light
     var panel = document.createElement('div');
@@ -1162,12 +1415,12 @@
 
     var title = document.createElement('div');
     title.className = 'info-title';
-    title.textContent = i18n('reviseKeyTitle');
+    title.textContent = i18n(cfg === GLOSS ? 'glossKeyTitle' : 'reviseKeyTitle');
     var rule = document.createElement('div');
     rule.className = 'info-rule';
     var body = document.createElement('div');
     body.className = 'info-body';
-    body.textContent = reviseText('reviseKeyBody');
+    body.textContent = reviseText('reviseKeyBody', cfg);
     panel.appendChild(title);
     panel.appendChild(rule);
     panel.appendChild(body);
@@ -1176,7 +1429,7 @@
     input.type = 'password';
     input.className = 'revise-key-input';
     input.autocomplete = 'off';
-    input.placeholder = reviseText('reviseKeyPlaceholder');
+    input.placeholder = reviseText('reviseKeyPlaceholder', cfg);
     input.value = apiKey;
     input.addEventListener('mousedown', function (e) { e.stopPropagation(); });
     input.addEventListener('keydown', function (e) {
@@ -1198,7 +1451,7 @@
     row.className = 'revise-row';
     var forget = reviseButton('reviseForget', function () {
       apiKey = '';
-      storeKey('', false);
+      storeKey('', false, cfg);
       input.value = '';
       input.focus();
     });
@@ -1209,9 +1462,11 @@
 
     function commit() {
       apiKey = input.value.trim();
-      storeKey(apiKey, cb.checked);
+      storeKey(apiKey, cb.checked, cfg);
       closeKeyPanel();
-      if (apiKey && reviseTarget) runRewrite();
+      if (!apiKey) return;
+      if (after) after();
+      else if (reviseTarget) runRewrite();
     }
 
     document.body.appendChild(panel);
@@ -1223,11 +1478,13 @@
     if (reviseCtl) reviseCtl.hidden = false;
   }
 
-  // One browser-side client, shaped by the wire style the build recorded. The
-  // endpoint is embedded only by --revise, so a plain book carries no URL at all;
-  // the key rides only on the request to that endpoint, and nowhere else.
-  function providerRequest(key, system, user) {
-    var style = REVISE.style, url = REVISE.endpoint, headers, body;
+  // One browser-side client, shaped by the wire style the build recorded, and
+  // pointed at whichever feature is calling — correcting a phrase or glossing a
+  // paragraph. An endpoint is embedded only by --revise or gloss-on-demand, so a
+  // plain book carries no URL at all; the key rides only on the request to that
+  // endpoint, and nowhere else.
+  function providerRequest(cfg, key, system, user, maxTokens) {
+    var style = cfg.style, url = cfg.endpoint, headers, body;
     if (!url) return Promise.reject(new Error('no endpoint'));
     if (style === 'anthropic') {
       headers = {
@@ -1236,7 +1493,7 @@
         'anthropic-dangerous-direct-browser-access': 'true'
       };
       body = {
-        model: REVISE.model, max_tokens: 1024, system: system,
+        model: cfg.model, max_tokens: maxTokens || 1024, system: system,
         messages: [{ role: 'user', content: user }]
       };
     } else {
@@ -1245,7 +1502,7 @@
       headers = { 'content-type': 'application/json' };
       if (style !== 'ollama') headers.authorization = 'Bearer ' + key;
       body = {
-        model: REVISE.model,
+        model: cfg.model,
         messages: [{ role: 'system', content: system }, { role: 'user', content: user }]
       };
       if (style === 'ollama') body.stream = false;
@@ -1421,6 +1678,7 @@
     view.book.style.opacity = S.fade ? '0' : '1';
     if (S.mobile) paintMobile(options); else paintDesk(options);
     paintRibbon();
+    if (GLOSS) updateGlossButton();
   }
 
   function pageInner(xfade) {
@@ -1840,6 +2098,8 @@
     for (var i = 0; i < nodes.length; i++) nodes[i].classList.toggle('blurred', S.blurEnglish);
   });
 
+  document.getElementById('gloss-btn').addEventListener('click', glossPage);
+
   var segTranslation = document.getElementById('seg-translation');
   var segPublished = document.getElementById('seg-published');
   if (SOLO) {
@@ -2161,7 +2421,9 @@
   // ---------- boot ----------
   function boot() {
     applyStaticLabels();
-    if (REVISE) { loadOverrides(); apiKey = loadKey(); importEditsFromHash(); updateEditsButton(); }
+    if (REVISE) { loadOverrides(); importEditsFromHash(); updateEditsButton(); }
+    if (GLOSS) loadBoughtGlosses();
+    if (REVISE || GLOSS) apiKey = loadKey();
     var storedBookmarks = lsGet('bookmarks');
     if (storedBookmarks && Array.isArray(storedBookmarks.pairs)) {
       S.bookmarks = storedBookmarks.pairs.filter(function (p) {

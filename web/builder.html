@@ -748,6 +748,15 @@ function madeOf(book) {
   }
   return "Made already: " + parts.join(", ") + ".";
 }
+// A book that went out without glosses can still have them, and the price is
+// said here because the builder is the one place allowed to name one — the
+// reader shows no figure, ever. A page at a time, so nobody buys a book to read
+// a chapter.
+function glossOffer(book) {
+  if (book.prebuilt.glossed) return null;
+  return "No hover glosses in this one. You can add them as you read, a page at "
+    + "a time, on your own key — around a penny for a chapter.";
+}
 function readyBlock(book) {
   const box = el("div", "ready");
   const get = el("button", "get", "Ready to read · " + weight(book.prebuilt.bytes));
@@ -760,6 +769,8 @@ function readyBlock(book) {
   });
   box.appendChild(get);
   box.appendChild(el("div", "say", madeOf(book)));
+  const offer = glossOffer(book);
+  if (offer) box.appendChild(el("div", "say", offer));
   box.appendChild(el("div", "say", "Or build your own — tap the card."));
   return box;
 }

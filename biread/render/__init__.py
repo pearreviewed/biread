@@ -19,9 +19,9 @@ import unicodedata
 from pathlib import Path
 
 from ..cleanup import Chapter
-from ..gloss import displayable
+from ..gloss import displayable, protocol
 from ..numbering import chapter_number, to_roman
-from ..targets import ENGLISH, Target
+from ..targets import ENGLISH, TARGETS, Target
 from ..translate import hash_text
 
 TEMPLATES = Path(__file__).parent / "templates"
@@ -138,6 +138,7 @@ def build_book_data(
     target: Target = ENGLISH,
     solo: bool = False,
     revise: dict | None = None,
+    gloss_on_demand: dict | None = None,
     builder_url: str = "",
 ) -> dict:
     """`pairs` is a flat list of {fr, en} across the whole book, including any
@@ -167,7 +168,10 @@ def build_book_data(
         for paragraph in chapter.paragraphs:
             key = hash_text(paragraph)
             pair = {"fr": paragraph, "en": translations.get(key, "")}
-            if revise:
+            if revise or gloss_on_demand:
+                # Both keep the reader's own work — a hand fix, a bought gloss —
+                # against the source paragraph, so it survives a rebuild and goes
+                # stale safely if that paragraph changes.
                 pair["h"] = key
             if published:
                 pair["pub"] = published.get(key, "")
@@ -216,6 +220,21 @@ def build_book_data(
             "endpoint": REVISE_ENDPOINT.get(provider, ""),
             "style": REVISE_STYLE.get(provider, "openai"),
         }
+    if gloss_on_demand:
+        # A book published without glosses can still be glossed — by its reader,
+        # a paragraph at a time, on their own key. No cost or price lives here,
+        # and none is ever shown: the shelf card quotes the figure, the reader
+        # never does. What travels is the protocol (`gloss.protocol`) and where
+        # to send it.
+        provider = gloss_on_demand["provider"]
+        data["gloss"] = {
+            "enabled": True,
+            "provider": provider,
+            "model": gloss_on_demand["model"],
+            "endpoint": REVISE_ENDPOINT.get(provider, ""),
+            "style": REVISE_STYLE.get(provider, "openai"),
+            **protocol(gloss_on_demand.get("lang", target.name)),
+        }
     if builder_url:
         # Where this book's reader can cross to the builder. Set only when there
         # is somewhere real to go, so a book that travels never shows an arrow
@@ -235,28 +254,103 @@ def render_html(
     target: Target = ENGLISH,
     solo: bool = False,
     revise: dict | None = None,
+    gloss_on_demand: dict | None = None,
     builder_url: str = "",
 ) -> str:
     """The finished reader as a single HTML string. `render_book` writes it to a
     file; the in-browser builder hands the same string straight to a download."""
     data = build_book_data(
         title, chapters, translations, published, published_note, glosses, downloads,
-        target, solo, revise, builder_url,
+        target, solo, revise, gloss_on_demand, builder_url,
     )
 
-    css = fill((TEMPLATES / "reader.css").read_text(encoding="utf-8"), {
+    return fill((TEMPLATES / "reader.html").read_text(encoding="utf-8"), {
+        "TITLE": escape_html(title),
+        "CSS": _reader_css(),
+        "BOOK_DATA": script_json(data),
+        "JS": (TEMPLATES / "reader.js").read_text(encoding="utf-8"),
+        "DOWNLOADS": _download_scripts(downloads),
+        "UI_LOADING": escape_html(target.ui["loading"]),
+    })
+
+
+BOOK_DATA_RE = re.compile(
+    r'(<script type="application/json" id="book-data">)(.*?)(</script>)', re.S)
+
+
+def _reader_css() -> str:
+    """The stylesheet with the fonts and paper inlined — the same sheet whether a
+    book is being built or an existing one re-wrapped."""
+    return fill((TEMPLATES / "reader.css").read_text(encoding="utf-8"), {
         "FONT_REGULAR": _b64(ASSETS / "fonts" / "charis-sil-400.woff2"),
         "FONT_ITALIC": _b64(ASSETS / "fonts" / "charis-sil-400-italic.woff2"),
         "PAPER_GRAIN": _b64(ASSETS / "paper-grain.png"),
     })
 
+
+DOWNLOAD_BLOB_RE = re.compile(
+    r'<script type="application/octet-stream".*?</script>', re.S)
+
+
+def rewrap(html: str, gloss_on_demand: dict | None = None) -> str:
+    """A finished book re-rendered in today's reader, keeping every word of it.
+
+    A published book otherwise carries the reader it was built with, and a shelf
+    that hands out files quietly hands out old ones — Micromégas shipped a reader
+    a fortnight behind the repository, and Candide could not offer glosses at all
+    because the code that offers them did not exist when it was made. Rebuilding
+    from source would mean fetching both editions and matching them again, paying
+    for work already done and correct.
+
+    So the text is lifted out and set in the current templates. Paragraphs,
+    offsets, alignment and any embedded EPUB or PDF ride across untouched; what
+    changes is only the reader around them.
+
+    `gloss_on_demand` additionally tells the book where its reader may buy the
+    glosses it lacks. A book that already carries glosses ignores it — there is
+    nothing to buy, and an idle button is a lie about the page.
+    """
+    found = BOOK_DATA_RE.search(html)
+    if not found:
+        raise ValueError("not a built reader: no book data")
+    data = json.loads(found.group(2))
+
+    if gloss_on_demand and not any(pair.get("units") for pair in data["pairs"]):
+        for pair in data["pairs"]:
+            # A bought gloss is kept against its source paragraph, so a rebuild
+            # that changes the paragraph drops it rather than pinning it to prose
+            # it was never made for.
+            pair.setdefault("h", hash_text(pair["fr"]))
+        provider = gloss_on_demand["provider"]
+        data["gloss"] = {
+            "enabled": True,
+            "provider": provider,
+            "model": gloss_on_demand["model"],
+            "endpoint": REVISE_ENDPOINT.get(provider, ""),
+            "style": REVISE_STYLE.get(provider, "openai"),
+            **protocol(gloss_on_demand.get("lang", "English")),
+        }
+
+    # The labels belong to the reader, not to the book, and they travel inside it
+    # — so an old book set in a new reader would carry old labels and show blanks
+    # wherever a control has been added since. Refreshed from the table, in the
+    # book's own language.
+    ui = dict(data.get("ui") or {})
+    for target in TARGETS.values():
+        if target.code == data.get("lang"):
+            ui = dict(target.ui)
+            break
+    data["ui"] = ui
+
     return fill((TEMPLATES / "reader.html").read_text(encoding="utf-8"), {
-        "TITLE": escape_html(title),
-        "CSS": css,
+        "TITLE": escape_html(data["titleFr"]),
+        "CSS": _reader_css(),
         "BOOK_DATA": script_json(data),
         "JS": (TEMPLATES / "reader.js").read_text(encoding="utf-8"),
-        "DOWNLOADS": _download_scripts(downloads),
-        "UI_LOADING": escape_html(target.ui["loading"]),
+        # Verbatim: these are the base64 editions, and re-encoding them would be
+        # a great deal of work to arrive at the same bytes.
+        "DOWNLOADS": "\n".join(DOWNLOAD_BLOB_RE.findall(html)),
+        "UI_LOADING": escape_html(ui.get("loading", ENGLISH.ui["loading"])),
     })
 
 
@@ -271,11 +365,12 @@ def render_book(
     downloads: list[Download] | None = None,
     target: Target = ENGLISH,
     revise: dict | None = None,
+    gloss_on_demand: dict | None = None,
     builder_url: str = "",
 ) -> None:
     html = render_html(
         title, chapters, translations, published, published_note, glosses, downloads,
-        target, revise=revise, builder_url=builder_url,
+        target, revise=revise, gloss_on_demand=gloss_on_demand, builder_url=builder_url,
     )
     output_path.parent.mkdir(parents=True, exist_ok=True)
     tmp = output_path.with_name(output_path.name + ".tmp")

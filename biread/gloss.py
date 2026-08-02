@@ -305,6 +305,32 @@ def displayable(paragraph: str, units: list[GlossUnit]) -> list[GlossUnit]:
     return shown
 
 
+def protocol(gloss_lang: str = "English") -> dict:
+    """Everything a client outside Python needs to gloss a paragraph itself.
+
+    The reader glosses on demand, on its reader's own key, and to do that it has
+    to run this stage's judgement: what to ask, how to read the answer, how to
+    find each unit in the real text, and which are too broad to hover. The
+    algorithms are necessarily written twice — once here, once in the reader —
+    but the *data* they read is written once, and travels in the book.
+
+    So a word added to the closed class reaches the reader in the next build
+    rather than in a second edit to a second language, and the two cannot
+    disagree about French while agreeing about French in a comment.
+    """
+    return {
+        "prompt": gloss_system_prompt(gloss_lang),
+        "field": FIELD,
+        "fold": FOLD,
+        "maxContentWords": MAX_CONTENT_WORDS,
+        "predicatePos": PREDICATE_POS_RE.pattern,
+        "functionWords": sorted(LANGUAGE.function_words),
+        "coordinators": sorted(LANGUAGE.coordinators),
+        "prepositions": sorted(LANGUAGE.prepositions),
+        "perfectAuxiliaries": sorted(LANGUAGE.perfect_auxiliaries),
+    }
+
+
 def coverage(paragraph: str, units: list[GlossUnit]) -> float:
     """Share of the paragraph's non-space characters that are hoverable."""
     total = sum(1 for ch in paragraph if not ch.isspace())
