@@ -1,0 +1,16 @@
+{
+  "books": [
+    {
+      "slug": "micromegas",
+      "file": "micromegas.html",
+      "english": "Phalen",
+      "approved": "2026-08-01"
+    },
+    {
+      "slug": "candide",
+      "file": "candide.html",
+      "english": "Smollett · 1920",
+      "approved": "2026-08-01"
+    }
+  ]
+}

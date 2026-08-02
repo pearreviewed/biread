@@ -94,9 +94,11 @@ def published_as(build, monkeypatch, tmp_path, entries, files=("micromegas.html"
         )
     dist = tmp_path / "dist"
     dist.mkdir()
+    manifest = books / "published.json"
+    manifest.write_text(json.dumps({"books": entries}, ensure_ascii=False), encoding="utf-8")
     monkeypatch.setattr(build, "BOOKS", books)
     monkeypatch.setattr(build, "DIST", dist)
-    monkeypatch.setattr(build, "PUBLISHED", entries)
+    monkeypatch.setattr(build, "MANIFEST", manifest)
     return dist
 
 
@@ -152,6 +154,17 @@ def test_the_shelf_it_ships_names_a_book_that_exists():
 
     build = load_build_module()
     slugs = {b["slug"] for b in catalogue()["books"]}
-    for entry in build.PUBLISHED:
+    assert build.published(), "the shelf publishes nothing at all"
+    for entry in build.published():
         assert entry["slug"] in slugs, f"{entry['slug']} is published but not on the shelf"
         assert (build.BOOKS / entry["file"]).is_file(), f"{entry['file']} is missing"
+
+
+def test_a_shelf_that_has_published_nothing_yet_builds_fine(build, monkeypatch, tmp_path):
+    """The manifest is written by `biread.publish`, so it does not exist until the
+    first book is approved — and a bundle with no books is a normal bundle."""
+    monkeypatch.setattr(build, "MANIFEST", tmp_path / "absent.json")
+    assert build.published() == []
+    shelf = json.loads(json.dumps(SHELF))
+    build.gather_published(shelf)
+    assert "prebuilt" not in shelf["books"][0]

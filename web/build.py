@@ -30,34 +30,32 @@ FONT_FILES = ("charis-sil-400.woff2", "charis-sil-400-italic.woff2")
 # decided, not a thing that happened to align.
 #
 # What a card *claims* is measured off the file in `measure`, never declared, so
-# replacing a build updates the card and cannot drift from it. Two things are
-# stated here because no file can say them about itself: which English edition
-# is inside, and that a person approved it.
+# replacing a build updates the card and cannot drift from it. Only what no file
+# can say about itself is written down: which English edition is inside, and
+# that a person approved it.
+#
+# The list lives in `web/books/published.json` rather than here, because
+# `biread.publish` writes it — a command editing Python source to add a row is a
+# worse thing than a command editing a list of rows.
 #
 # `BOOKS_AT` is where the finished books are served from. Empty means beside the
 # builder, which is what a static host gives you and what localhost gives you
 # now. The day there is a server, this line is the only one that changes.
 BOOKS_AT = ""
-PUBLISHED = [
-    {
-        "slug": "micromegas",
-        "file": "micromegas.html",
-        "english": "Phalen",
-        "approved": "2026-08-01",
-    },
-    {
-        "slug": "candide",
-        "file": "candide.html",
-        "english": "Smollett · 1920",
-        "approved": "2026-08-01",
-    },
-]
+MANIFEST = BOOKS / "published.json"
 
 # A book published without glosses can still be glossed — by whoever reads it, a
 # page at a time, on their own key. Set here rather than per book because it is
 # one question ("can a reader add these?") with one answer, and a book that
 # already carries glosses ignores it.
 GLOSS_ON_DEMAND = {"provider": "openrouter", "model": "deepseek/deepseek-chat-v3.1"}
+
+
+def published() -> list[dict]:
+    """Every book approved for the shelf, oldest first. Empty before the first."""
+    if not MANIFEST.is_file():
+        return []
+    return json.loads(MANIFEST.read_text(encoding="utf-8"))["books"]
 
 BOOK_DATA = re.compile(
     r'<script type="application/json" id="book-data">(.*?)</script>', re.S)
@@ -98,9 +96,10 @@ def gather_published(catalogue: dict) -> None:
     from biread.render import download_name, rewrap
 
     by_slug = {book["slug"]: book for book in catalogue["books"]}
-    if PUBLISHED:
+    books = published()
+    if books:
         (DIST / "books").mkdir(exist_ok=True)
-    for entry in PUBLISHED:
+    for entry in books:
         book = by_slug.get(entry["slug"])
         if book is None:
             raise SystemExit(f"published book {entry['slug']!r} is not on the shelf")
@@ -126,10 +125,17 @@ def gather_published(catalogue: dict) -> None:
         }
 
 
+#: Everything a bundle consists of. Anything else at the top of DIST is left
+#: over from a previous shape of the project — three pages from an abandoned
+#: type experiment were sitting there, and a deploy would have published them.
+BUNDLED = {"builder.html", "worker.js", "shelf.json", *FONT_FILES}
+
+
 def main() -> None:
     DIST.mkdir(parents=True, exist_ok=True)
-    for stale in DIST.glob("*.whl"):
-        stale.unlink()
+    for stale in DIST.iterdir():
+        if stale.is_file() and stale.name not in BUNDLED:
+            stale.unlink()
 
     subprocess.run(
         [sys.executable, "-m", "pip", "wheel", str(ROOT), "--no-deps", "-w", str(DIST)],
@@ -164,7 +170,7 @@ def main() -> None:
 
     files = sorted(p.name for p in DIST.iterdir() if p.is_file())
     print(f"Built {DIST.relative_to(ROOT)}/ — {len(files)} files: {', '.join(files)}")
-    for entry in PUBLISHED:
+    for entry in published():
         book = next(b for b in shelf["books"] if b["slug"] == entry["slug"])
         made = book["prebuilt"]
         print(f"  ready to read: {book['title']} — {made['paragraphs']} paragraphs, "

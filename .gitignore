@@ -39,3 +39,7 @@ design-reference/shelf-brief.md
 # only this machine has, and `worktrees/`, which holds live git worktrees — a
 # whole second checkout of this repo. None of it is the project.
 .claude/
+
+# Screenshots the spot-check leaves beside a book: evidence for one approval,
+# not part of the project.
+web/books/checks/
