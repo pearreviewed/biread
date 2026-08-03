@@ -44,6 +44,12 @@ FONT_FILES = ("charis-sil-400.woff2", "charis-sil-400-italic.woff2")
 BOOKS_AT = ""
 MANIFEST = BOOKS / "published.json"
 
+# The way back out of a book. Absolute rather than relative, because the point of
+# a finished book is that it leaves: `../builder.html` works only for the copy
+# still sitting beside the builder, and a downloaded one would carry a dead link
+# — which is worse than none, and none is what both shelf books shipped with.
+BUILDER_AT = "https://vps-bab9636f.vps.ovh.net/builder.html"
+
 # A book published without glosses can still be glossed — by whoever reads it, a
 # page at a time, on their own key. Set here rather than per book because it is
 # one question ("can a reader add these?") with one answer, and a book that
@@ -112,7 +118,8 @@ def gather_published(catalogue: dict) -> None:
         # reader it was built with, so a shelf would quietly hand out old ones.
         served = DIST / "books" / entry["file"]
         served.write_text(
-            rewrap(source.read_text(encoding="utf-8"), gloss_on_demand=GLOSS_ON_DEMAND),
+            rewrap(source.read_text(encoding="utf-8"), gloss_on_demand=GLOSS_ON_DEMAND,
+                   builder_url=BUILDER_AT),
             encoding="utf-8")
         book["prebuilt"] = {
             "href": f"{BOOKS_AT}books/{entry['file']}",

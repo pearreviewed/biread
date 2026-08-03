@@ -292,7 +292,8 @@ DOWNLOAD_BLOB_RE = re.compile(
     r'<script type="application/octet-stream".*?</script>', re.S)
 
 
-def rewrap(html: str, gloss_on_demand: dict | None = None) -> str:
+def rewrap(html: str, gloss_on_demand: dict | None = None,
+           builder_url: str = "") -> str:
     """A finished book re-rendered in today's reader, keeping every word of it.
 
     A published book otherwise carries the reader it was built with, and a shelf
@@ -309,6 +310,10 @@ def rewrap(html: str, gloss_on_demand: dict | None = None) -> str:
     `gloss_on_demand` additionally tells the book where its reader may buy the
     glosses it lacks. A book that already carries glosses ignores it — there is
     nothing to buy, and an idle button is a lie about the page.
+
+    `builder_url` is the way back. A finished book had none, so a reader who
+    opened one off the shelf had no route to the builder or the shelf but the
+    browser's Back button — and none at all once the file was downloaded.
     """
     found = BOOK_DATA_RE.search(html)
     if not found:
@@ -341,6 +346,9 @@ def rewrap(html: str, gloss_on_demand: dict | None = None) -> str:
             ui = dict(target.ui)
             break
     data["ui"] = ui
+
+    if builder_url:
+        data["builderUrl"] = builder_url
 
     return fill((TEMPLATES / "reader.html").read_text(encoding="utf-8"), {
         "TITLE": escape_html(data["titleFr"]),
