@@ -43,3 +43,6 @@ design-reference/shelf-brief.md
 # Screenshots the spot-check leaves beside a book: evidence for one approval,
 # not part of the project.
 web/books/checks/
+
+# the sync service builds its own venv on the host
+server/.venv/

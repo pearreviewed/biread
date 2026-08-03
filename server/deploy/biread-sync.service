@@ -1,0 +1,29 @@
+[Unit]
+Description=biread-sync — the bookmark, never the book
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+User=love
+Group=love
+WorkingDirectory=/srv/apps/biread/server
+EnvironmentFile=/etc/biread/sync.env
+ExecStart=/srv/apps/biread/server/.venv/bin/uvicorn biread_sync.app:app \
+    --host 127.0.0.1 --port 8080 --proxy-headers --forwarded-allow-ips 127.0.0.1
+Restart=on-failure
+RestartSec=2
+
+# It listens on loopback, reads one env file, and talks to Postgres. Nothing
+# else is any of its business.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/srv/apps/biread/server
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target
