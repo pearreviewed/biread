@@ -736,6 +736,7 @@
     var pos = currentPosition();
     lsSet('last', { v: STORE_VERSION, pair: pos.p, frac: pos.f });
     writeUrl();
+    syncSoon();
   }
 
   // The reading state a link carries, or null if the URL holds none.
@@ -1329,14 +1330,16 @@
     if (!revised || !PAIRS[i].h) return;
     var h = PAIRS[i].h, full = generatedEnglish(i);
     undoStack.push({ h: h, prev: overrides[h] || null }); // remember the pre-edit state
-    overrides[h] = { base: PAIRS[i].en, text: full.slice(0, start) + revised + full.slice(end) };
+    overrides[h] = { base: PAIRS[i].en, text: full.slice(0, start) + revised + full.slice(end),
+                     at: Date.now() };
     saveOverrides();
     updateEditsButton();
     hideRevise();
+    syncSoon();
     repaginate(currentPosition());
   }
   function revertRevision(i) {
-    if (PAIRS[i].h) { delete overrides[PAIRS[i].h]; saveOverrides(); }
+    if (PAIRS[i].h) { delete overrides[PAIRS[i].h]; saveOverrides(); syncSoon(); }
     updateEditsButton();
     hideRevise();
     repaginate(currentPosition());
@@ -2294,6 +2297,7 @@
       empty.className = 'popover-empty';
       empty.textContent = i18n('noBookmarks');
       pop.appendChild(empty);
+      if (SYNC.offered) pop.appendChild(renderSyncFoot());
       return pop;
     }
     S.bookmarks.forEach(function (pair) {
@@ -2331,7 +2335,33 @@
       row.appendChild(remove);
       pop.appendChild(row);
     });
+    if (SYNC.offered) pop.appendChild(renderSyncFoot());
     return pop;
+  }
+
+  // Sync lives at the foot of this panel because it is the same subject the
+  // panel is already about: where you are in the book.
+  function renderSyncFoot() {
+    var foot = document.createElement('div');
+    foot.className = 'sync-foot';
+
+    var line = document.createElement('div');
+    line.className = 'sync-line';
+    line.textContent = SYNC.signedIn
+      ? i18n('syncKept').replace('{handle}', SYNC.handle)
+      : i18n('syncOffer');
+
+    var act = document.createElement('button');
+    act.className = 'sync-act';
+    act.textContent = i18n(SYNC.signedIn ? 'syncSignOut' : 'syncSignIn');
+    act.addEventListener('click', function (e) {
+      e.stopPropagation();
+      if (SYNC.signedIn) signOut(); else signIn();
+    });
+
+    foot.appendChild(line);
+    foot.appendChild(act);
+    return foot;
   }
 
   function renderInfoPanel() {
@@ -2418,6 +2448,166 @@
     return banner;
   }
 
+  // ---------- sync ----------
+  // A book served over http(s) asks its own host, once, whether it keeps places.
+  // A file opened from the desktop asks nobody anything — that a downloaded book
+  // phones nowhere is most of why it is one file. Everything below is therefore
+  // silent when the host does not answer, or answers that sign-in is not set up.
+  var SYNC = { offered: false, signedIn: false, handle: '', bookId: '', timer: null };
+
+  // Not a security boundary — an identity. Two 32-bit passes over the text, which
+  // is why crypto.subtle is not used: it is absent outside a secure context, and
+  // a book served over plain http would lose sync for a hash that guards nothing.
+  function textHash(s) {
+    var a = 0x811c9dc5, b = 0x27d4eb2f;
+    for (var i = 0; i < s.length; i++) {
+      var c = s.charCodeAt(i);
+      a = Math.imul(a ^ c, 0x01000193) >>> 0;
+      b = Math.imul(b + c, 0x85ebca6b) >>> 0;
+    }
+    return ('0000000' + a.toString(16)).slice(-8) + ('0000000' + b.toString(16)).slice(-8);
+  }
+
+  // A paragraph's own name. Books built with --revise carry one; the rest are
+  // named by their text, so a book made before any of this still syncs.
+  var paraKeys = null;
+  function paraKey(i) {
+    if (!paraKeys) paraKeys = [];
+    if (paraKeys[i] == null) paraKeys[i] = PAIRS[i].h || textHash(PAIRS[i].fr || '');
+    return paraKeys[i];
+  }
+  function pairForKey(key) {
+    for (var i = 0; i < PAIRS.length; i++) if (paraKey(i) === key) return i;
+    return -1;
+  }
+  function bookIdentity() {
+    var fr = [];
+    for (var i = 0; i < PAIRS.length; i++) fr.push(PAIRS[i].fr || '');
+    return textHash(fr.join('\n')) + '-' + PAIRS.length;
+  }
+
+  function syncGet(path) {
+    return fetch(path, { credentials: 'same-origin' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .catch(function () { return null; });
+  }
+
+  function syncStart() {
+    if (!/^https?:$/.test(location.protocol)) return;
+    syncGet('/api/health').then(function (health) {
+      // No sync service, or one with no way in: say nothing rather than offer a
+      // button that fails.
+      if (!health || !health.ok || !health.signIn) return;
+      SYNC.offered = true;
+      SYNC.bookId = bookIdentity();
+      return syncGet('/api/me').then(function (me) {
+        SYNC.signedIn = !!(me && me.signedIn);
+        SYNC.handle = (me && me.handle) || '';
+        renderOverlays();
+        if (SYNC.signedIn) syncPull();
+      });
+    });
+  }
+
+  function syncPull() {
+    syncGet('/api/shelf').then(function (data) {
+      if (!data || !data.books) return;
+      var mine = null;
+      for (var i = 0; i < data.books.length; i++) {
+        if (data.books[i].bookId === SYNC.bookId) mine = data.books[i];
+      }
+      if (!mine) return syncPush();   // first sight of this book — put it up
+      adoptEdits(mine.edits || []);
+      adoptPosition(mine.position);
+    });
+  }
+
+  // Never a silent jump. Where another device stopped is offered through the
+  // same banner a returning reader already knows, and declined by ignoring it.
+  function adoptPosition(pos) {
+    if (!pos || !pos.h || !S.ready) return;
+    var i = pairForKey(pos.h);
+    if (i < 0 || i === currentPair()) return;
+    S.resumePair = i;
+    S.resumeFrac = typeof pos.frac === 'number' ? pos.frac : 0;
+    renderOverlays();
+  }
+
+  // A correction arrives as the sentence its reader wrote plus a hash of the
+  // paragraph it replaced. If that hash is not the paragraph this book holds,
+  // the fix was made against different prose and is dropped — the same staleness
+  // rule the local store already applies, carried over the wire.
+  function adoptEdits(edits) {
+    if (!REVISE || !edits.length) return;
+    var changed = false;
+    for (var n = 0; n < edits.length; n++) {
+      var e = edits[n], i = pairForKey(e.h);
+      if (i < 0 || textHash(PAIRS[i].en || '') !== e.baseHash) continue;
+      var when = Date.parse(e.updatedAt) || 0, held = overrides[e.h];
+      if (held && (held.at || 0) >= when) continue;
+      overrides[e.h] = { base: PAIRS[i].en, text: e.text, at: when };
+      changed = true;
+    }
+    if (!changed) return;
+    saveOverrides();
+    updateEditsButton();
+    repaginate(currentPosition());
+  }
+
+  function syncSoon() {
+    if (!SYNC.signedIn) return;
+    clearTimeout(SYNC.timer);
+    SYNC.timer = setTimeout(syncPush, 2500);
+  }
+
+  function syncPush() {
+    if (!SYNC.signedIn || !SYNC.bookId) return;
+    var pos = currentPosition();
+    var body = {
+      title: DATA.titleFr || null,
+      lang: DATA.lang || null,
+      position: { h: paraKey(pos.p), frac: pos.f },
+      updatedAt: new Date().toISOString(),
+      edits: pendingEdits(),
+    };
+    fetch('/api/shelf/' + encodeURIComponent(SYNC.bookId), {
+      method: 'PUT',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }).then(function (r) {
+      // A session that has run out is not an error to shout about: fold the
+      // offer back to signed-out and let the reader sign in again when they like.
+      if (r.status === 401) { SYNC.signedIn = false; renderOverlays(); }
+    }).catch(function () {});
+  }
+
+  function pendingEdits() {
+    if (!REVISE) return [];
+    var out = [];
+    for (var h in overrides) {
+      var ov = overrides[h];
+      if (!ov || typeof ov.text !== 'string') continue;
+      out.push({ h: h, baseHash: textHash(ov.base || ''), text: ov.text,
+                 updatedAt: new Date(ov.at || Date.now()).toISOString() });
+      if (out.length >= 500) break;   // the server's ceiling; see server/shelf.py
+    }
+    return out;
+  }
+
+  function signIn() {
+    location.href = '/api/auth/github?next='
+      + encodeURIComponent(location.pathname + location.search);
+  }
+  function signOut() {
+    fetch('/api/auth/signout', { method: 'POST', credentials: 'same-origin' })
+      .then(function () {
+        SYNC.signedIn = false;
+        SYNC.handle = '';
+        renderOverlays();
+      }).catch(function () {});
+  }
+
   // ---------- boot ----------
   function boot() {
     applyStaticLabels();
@@ -2471,7 +2661,18 @@
     var stage = document.getElementById('stage-wrap');
     lastBox = { width: Math.round(stage.clientWidth), height: Math.round(stage.clientHeight) };
     watchLayout();
+    syncStart();
   }
+
+  // A page closed mid-debounce would otherwise lose the last page turn, which is
+  // exactly the one a reader wants on the other device.
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'hidden' && SYNC.timer) {
+      clearTimeout(SYNC.timer);
+      SYNC.timer = null;
+      syncPush();
+    }
+  });
 
   if (document.fonts && document.fonts.ready) {
     // Fonts are inlined, so this settles immediately — the timeout only stops a

@@ -89,8 +89,18 @@ def spot_check(book: Path, shots_dir: Path | None = None) -> Look:
                 page = browser.new_page(viewport={"width": 1440, "height": 900},
                                         device_scale_factor=2)
                 errors: list[str] = []
-                page.on("console",
-                        lambda m: errors.append(m.text) if m.type == "error" else None)
+                # A book served anywhere asks its host once whether it keeps
+                # reading positions, and is built to be told no. The check server
+                # says no by 404, which is the designed answer and not a fault —
+                # every other console error still is.
+                def logged(m) -> None:
+                    if m.type != "error":
+                        return
+                    where = (m.location or {}).get("url", "")
+                    if "/api/" not in where and "/api/" not in m.text:
+                        errors.append(m.text)
+
+                page.on("console", logged)
                 page.on("pageerror", lambda e: errors.append(str(e)))
                 page.goto(f"http://127.0.0.1:{port}/{book.name}")
                 page.wait_for_selector("#stage-wrap .page-left", timeout=30000)

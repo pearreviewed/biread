@@ -202,6 +202,9 @@ p.pair-en.blurred { filter: blur(5px); }
 .bm-row .popover-row { flex: 1; }
 .bm-remove { background: transparent; border: none; color: #8f7d5e; font-size: 15px; padding: 4px 8px; }
 .popover-empty { padding: 6px 12px 4px; font-size: 14px; font-style: italic; color: #9a8a6a; }
+.sync-foot { margin-top: 10px; padding: 10px 12px 2px; border-top: 1px solid rgba(180,150,100,.18); }
+.sync-line { font-size: 13px; color: #9a8a6a; line-height: 1.4; }
+.sync-act { margin-top: 6px; background: transparent; border: none; padding: 0; color: #e8cf94; font-size: 13px; text-decoration: underline; text-underline-offset: 3px; }
 
 .info-panel { background: #211b14; color: #efe6d2; border-radius: 10px; box-shadow: 0 18px 44px rgba(0,0,0,.55); padding: 18px 20px; position: fixed; top: calc(var(--header-h, 66px) + 10px); right: 30px; width: 360px; z-index: 60; animation: xfade .16s ease-out; }
 .info-panel.mobile { left: 16px; right: 16px; width: auto; }
