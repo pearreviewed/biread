@@ -2448,6 +2448,36 @@
     return banner;
   }
 
+  // ---------- day and night ----------
+  // The same choice as the builder's, under the builder's own key, so one machine
+  // never holds two opinions about it. Only the desk changes: the page keeps its
+  // cream and its grain either way, because that is the book rather than the room
+  // it is read in. No saved answer means night — the dark desk is the design, not
+  // a fallback — and nothing is written until a reader actually picks.
+  function applyTheme(mode, remember) {
+    document.documentElement.setAttribute('data-theme', mode);
+    var buttons = document.querySelectorAll('#theme-control button');
+    for (var i = 0; i < buttons.length; i++) {
+      buttons[i].setAttribute(
+        'aria-pressed', String(buttons[i].getAttribute('data-theme-set') === mode));
+    }
+    if (remember) { try { localStorage.setItem('biread_theme', mode); } catch (e) {} }
+  }
+
+  function startTheme() {
+    var saved = null;
+    try { saved = localStorage.getItem('biread_theme'); } catch (e) {}
+    applyTheme(saved === 'day' ? 'day' : 'night', false);
+    document.getElementById('theme-control').addEventListener('click', function (e) {
+      var picked = e.target.closest && e.target.closest('[data-theme-set]');
+      if (picked) applyTheme(picked.getAttribute('data-theme-set'), true);
+    });
+  }
+
+  // Run before the book is laid out, not inside boot(), so a reader who chose day
+  // never watches a dark desk repaint itself.
+  startTheme();
+
   // ---------- sync ----------
   // A book served over http(s) asks its own host, once, whether it keeps places.
   // A file opened from the desktop asks nobody anything — that a downloaded book

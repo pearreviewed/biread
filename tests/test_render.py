@@ -327,6 +327,27 @@ def test_rewrapping_carries_an_embedded_edition_across_untouched():
     assert blob and blob.group(0) in after, "the EPUB must survive the re-wrap"
 
 
+def test_rewrapping_hands_an_older_books_editions_to_todays_reader():
+    """Before a book could carry two editions a blob was `dl-epub` and its menu
+    entry named no source. Micromégas is such a book, and re-wrapped without this
+    it kept its download buttons and lost its files — the menu listed EPUB and
+    PDF and clicking either did nothing."""
+    from biread.render import BOOK_DATA_RE, rewrap
+
+    before, _ = _rewrapped()
+    old = before.replace('id="dl-epub-translation"', 'id="dl-epub"')
+    old = BOOK_DATA_RE.sub(
+        lambda m: m.group(1) + json.dumps({
+            **json.loads(m.group(2)),
+            "downloads": [{"format": "epub", "filename": "L.epub"}]}) + m.group(3),
+        old)
+    after = rewrap(old)
+    data = json.loads(BOOK_DATA_RE.search(after).group(2))
+    assert data["downloads"][0]["source"] == "translation"
+    assert 'id="dl-epub-translation"' in after
+    assert re.search(r'id="dl-epub"', after) is None
+
+
 def test_rewrapping_refreshes_labels_the_book_was_built_too_early_to_have():
     """The labels belong to the reader, not the book, and travel inside it — so an
     old book in a new reader would show blanks wherever a control was added."""

@@ -19,8 +19,8 @@ html, body { margin: 0; padding: 0; }
    number off the bottom of a short window. */
 body {
   height: 100vh; overflow: hidden;
-  background: radial-gradient(120% 90% at 50% 15%, #2c2418 0%, #1c160f 55%, #120d08 100%);
-  display: flex; flex-direction: column; font-family: 'Charis SIL', Charter, Cambria, Georgia, serif; color: #ded2b8;
+  background: var(--desk);
+  display: flex; flex-direction: column; font-family: 'Charis SIL', Charter, Cambria, Georgia, serif; color: var(--ink);
 }
 button { font-family: inherit; cursor: pointer; }
 button:focus-visible { outline: 2px solid rgba(200,175,130,.85); outline-offset: 2px; }
@@ -30,11 +30,59 @@ button:focus-visible { outline: 2px solid rgba(200,175,130,.85); outline-offset:
 ::selection { background: rgba(180,150,100,.5); }
 ::-moz-selection { background: rgba(180,150,100,.5); }
 
+/* ---------- day and night ----------
+   Night is the reader's own light: a dark desk with the book lit on it. Day
+   lightens the desk, the header and the panels — and stops there. The page keeps
+   its cream and its paper grain in both, because that is the book, not the room
+   it is read in, and it was already the easiest thing in the design to look at.
+   The choice is shared with the builder under the same `biread_theme` key, so
+   the two never disagree on one machine. */
+:root {
+  --desk: radial-gradient(120% 90% at 50% 15%, #2c2418 0%, #1c160f 55%, #120d08 100%);
+  --ink: #ded2b8;
+  --ink-dim: #8f7d5e;
+  --ink-soft: #c8b891;
+  --ink-bright: #f4ead0;
+  --rule: rgba(180,150,100,.28);
+  --rule-faint: rgba(180,150,100,.14);
+  --fill: rgba(120,95,55,.16);
+  --fill-strong: rgba(180,150,100,.26);
+  --panel: #211b14;
+  --panel-ink: #efe6d2;
+  --panel-shadow: 0 18px 44px rgba(0,0,0,.55);
+  --accent: #d8c39a;
+  --accent-quiet: #e8cf94;
+  --accent-ink: #1c160f;
+  --good: #b9c99a;
+  --bad: #d29c86;
+  --book-shadow: 0 2px 0 rgba(0,0,0,.3), 0 34px 70px -24px rgba(0,0,0,.72), 0 10px 26px rgba(0,0,0,.45);
+}
+:root[data-theme="day"] {
+  --desk: radial-gradient(120% 90% at 50% 15%, #f6efe1 0%, #e9ddc5 55%, #dccdaf 100%);
+  --ink: #453a29;
+  --ink-dim: #7a6b4e;
+  --ink-soft: #5f5238;
+  --ink-bright: #2c2418;
+  --rule: rgba(120,95,55,.30);
+  --rule-faint: rgba(120,95,55,.16);
+  --fill: rgba(120,95,55,.10);
+  --fill-strong: rgba(120,95,55,.20);
+  --panel: #fdf7ea;
+  --panel-ink: #3f3524;
+  --panel-shadow: 0 18px 44px rgba(90,70,40,.26);
+  --accent: #6f5730;
+  --accent-quiet: #7a5f33;
+  --accent-ink: #fdf7ea;
+  --good: #5c7a3f;
+  --bad: #a4482c;
+  --book-shadow: 0 1px 0 rgba(120,95,55,.20), 0 26px 54px -22px rgba(92,70,38,.36), 0 8px 20px rgba(92,70,38,.16);
+}
+
 /* ---------- header ---------- */
-#app-header { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 16px 30px; border-bottom: 1px solid rgba(180,150,100,.14); flex-wrap: wrap; }
+#app-header { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 16px 30px; border-bottom: 1px solid var(--rule-faint); flex-wrap: wrap; }
 .header-left { display: flex; align-items: baseline; gap: 14px; min-width: 0; }
-.eyebrow { font-size: 12px; letter-spacing: .34em; text-transform: uppercase; color: #8f7d5e; white-space: nowrap; }
-.booktitle { font-size: 18px; color: #cbbc9b; font-style: italic; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.eyebrow { font-size: 12px; letter-spacing: .34em; text-transform: uppercase; color: var(--ink-dim); white-space: nowrap; }
+.booktitle { font-size: 18px; color: var(--ink-soft); font-style: italic; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .header-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 /* The counter is the page finder: it already says where you are, so it is also
    what takes you elsewhere. Sized alike so swapping one for the other does not
@@ -42,17 +90,17 @@ button:focus-visible { outline: 2px solid rgba(200,175,130,.85); outline-offset:
    `nowrap` is load-bearing: without it a two-digit count wraps inside the box,
    the counter grows to two lines, and the whole header jumps taller past page 9. */
 .counter, .counter-input { font-family: inherit; font-size: 13px; letter-spacing: .18em; min-width: 72px; width: 72px; text-align: right; white-space: nowrap; padding: 3px 6px; border-radius: 6px; }
-.counter { color: #7d6e52; background: none; border: 1px solid transparent; }
-.counter:hover { color: #c8b891; border-color: rgba(180,150,100,.28); }
+.counter { color: var(--ink-dim); background: none; border: 1px solid transparent; }
+.counter:hover { color: var(--ink-soft); border-color: var(--rule); }
 .counter:empty { visibility: hidden; }
-.counter-input { color: #f4ead0; background: rgba(120,95,55,.16); border: 1px solid rgba(200,175,130,.55); outline: none; }
+.counter-input { color: var(--ink-bright); background: var(--fill); border: 1px solid rgba(200,175,130,.55); outline: none; }
 
 /* Copy a link to the current page. The address bar already tracks the page, so
    this is the discoverable way to hand it to another device. */
-.link-btn { display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 8px; border: 1px solid transparent; background: none; color: #7d6e52; position: relative; }
-.link-btn:hover, .link-btn.active { color: #c8b891; border-color: rgba(180,150,100,.28); }
-.link-btn.copied { color: #b9c99a; }
-.link-btn.copied::after { content: 'Link copied'; position: absolute; top: calc(100% + 6px); right: 0; white-space: nowrap; font-size: 12px; letter-spacing: .04em; color: #cdbf9d; background: #211b14; border-radius: 6px; padding: 4px 8px; box-shadow: 0 8px 22px rgba(0,0,0,.5); animation: xfade .16s ease-out; }
+.link-btn { display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 8px; border: 1px solid transparent; background: none; color: var(--ink-dim); position: relative; }
+.link-btn:hover, .link-btn.active { color: var(--ink-soft); border-color: var(--rule); }
+.link-btn.copied { color: var(--good); }
+.link-btn.copied::after { content: 'Link copied'; position: absolute; top: calc(100% + 6px); right: 0; white-space: nowrap; font-size: 12px; letter-spacing: .04em; color: var(--ink-soft); background: var(--panel); border-radius: 6px; padding: 4px 8px; box-shadow: var(--panel-shadow); animation: xfade .16s ease-out; }
 
 /* Link + download are a "take it with you" pair at the far edge, set a little
    apart from the controls that work the book in place. The gap goes before the
@@ -65,34 +113,42 @@ button:focus-visible { outline: 2px solid rgba(200,175,130,.85); outline-offset:
 /* Placed after .link-btn.copied::after so it wins for the edits button. */
 .edits-btn.copied::after { content: 'Edits link copied'; }
 
-.btn-pill { font-size: 14px; color: #e4d7ba; background: rgba(120,95,55,.16); border: 1px solid rgba(180,150,100,.28); border-radius: 999px; padding: 7px 16px; }
+.btn-pill { font-size: 14px; color: var(--ink); background: var(--fill); border: 1px solid var(--rule); border-radius: 999px; padding: 7px 16px; }
 .segmented-row { display: flex; align-items: center; gap: 6px; }
-.segmented { display: flex; align-items: stretch; border: 1px solid rgba(180,150,100,.28); border-radius: 999px; overflow: hidden; }
-.segmented button { font-size: 14px; border: none; padding: 7px 15px; background: transparent; color: #c8b891; transition: background .2s ease, color .2s ease; }
-.segmented button[aria-pressed="true"] { background: rgba(180,150,100,.26); color: #f4ead0; }
-.segmented button[aria-disabled="true"] { color: rgba(228,215,186,.34); cursor: default; opacity: .6; }
-.seg-divider { width: 1px; align-self: stretch; background: rgba(180,150,100,.28); }
-.info-btn { flex: 0 0 auto; width: 24px; height: 24px; border-radius: 50%; border: 1px solid rgba(180,150,100,.5); background: transparent; color: #d8c8a4; font-family: Georgia, serif; font-style: italic; font-size: 14px; line-height: 1; display: flex; align-items: center; justify-content: center; }
+.segmented { display: flex; align-items: stretch; border: 1px solid var(--rule); border-radius: 999px; overflow: hidden; }
+.segmented button { font-size: 14px; border: none; padding: 7px 15px; background: transparent; color: var(--ink-soft); transition: background .2s ease, color .2s ease; }
+.segmented button[aria-pressed="true"] { background: var(--fill-strong); color: var(--ink-bright); }
+.segmented button[aria-disabled="true"] { color: var(--ink); cursor: default; opacity: .6; }
+.seg-divider { width: 1px; align-self: stretch; background: var(--rule); }
+.info-btn { flex: 0 0 auto; width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--rule); background: transparent; color: var(--ink-soft); font-family: Georgia, serif; font-style: italic; font-size: 14px; line-height: 1; display: flex; align-items: center; justify-content: center; }
 .info-btn.active { background: rgba(180,150,100,.22); }
 
-.nav-controls { display: flex; align-items: center; border: 1px solid rgba(180,150,100,.28); border-radius: 999px; overflow: hidden; }
-.nav-controls button { font-size: 14px; color: #e4d7ba; background: transparent; border: none; padding: 7px 12px; letter-spacing: .02em; }
+.nav-controls { display: flex; align-items: center; border: 1px solid var(--rule); border-radius: 999px; overflow: hidden; }
+.nav-controls button { font-size: 14px; color: var(--ink); background: transparent; border: none; padding: 7px 12px; letter-spacing: .02em; }
 .nav-controls button.active { background: rgba(180,150,100,.2); }
 .bm-star { display: flex; align-items: center; }
 .bm-star svg { display: block; transition: fill .18s ease; }
 
-.fontsize-control { display: flex; align-items: center; border: 1px solid rgba(180,150,100,.28); border-radius: 999px; overflow: hidden; }
-.fontsize-control button { color: #e4d7ba; background: transparent; border: none; padding: 7px 13px; }
+.fontsize-control { display: flex; align-items: center; border: 1px solid var(--rule); border-radius: 999px; overflow: hidden; }
+.fontsize-control button { color: var(--ink); background: transparent; border: none; padding: 7px 13px; }
 .fontsize-control button:first-child { font-size: 13px; }
 .fontsize-control button:last-child { font-size: 17px; padding: 5px 13px; }
+
+/* The desk's other bottom corner, opposite the crossing to the builder. Fixed,
+   so it is never part of the header's width and cannot push it to wrap. */
+.theme-control { position: fixed; right: 22px; bottom: 16px; z-index: 30; display: flex; align-items: center; gap: 2px; padding: 3px; border: 1px solid var(--rule); border-radius: 999px; }
+.theme-control button { width: 26px; height: 24px; font: 13px/1 system-ui, sans-serif; color: var(--ink-dim); background: none; border: none; border-radius: 999px; }
+.theme-control button:hover { color: var(--ink-soft); }
+.theme-control button[aria-pressed="true"] { background: var(--fill-strong); color: var(--ink-bright); }
+@media (max-width: 640px) { .theme-control { display: none; } }
 
 /* ---------- crossing to the builder ---------- */
 /* Rare, one-way, and not something you flip while reading — so a quiet link in
    the desk's bottom-left corner rather than a header control. Present only when
    the book carries a builder URL; `[hidden]` needs the explicit rule because
    `display: flex` would otherwise defeat the attribute. */
-#builder-link { position: fixed; left: 22px; bottom: 16px; z-index: 30; display: flex; align-items: center; gap: 6px; padding: 4px 6px; color: #7d6e52; font-size: 13px; letter-spacing: .02em; text-decoration: none; transition: color .15s ease; }
-#builder-link:hover { color: #c8b891; }
+#builder-link { position: fixed; left: 22px; bottom: 16px; z-index: 30; display: flex; align-items: center; gap: 6px; padding: 4px 6px; color: var(--ink-dim); font-size: 13px; letter-spacing: .02em; text-decoration: none; transition: color .15s ease; }
+#builder-link:hover { color: var(--ink-soft); }
 #builder-link svg { display: block; }
 #builder-link[hidden] { display: none; }
 @media (max-width: 640px) { #builder-link { display: none; } }
@@ -108,7 +164,7 @@ button:focus-visible { outline: 2px solid rgba(200,175,130,.85); outline-offset:
    which a bare max-width used to do, squaring the book off on big screens. Width
    still follows height on a short window, and the type scales with the book, so
    the line length stays roughly constant. */
-.book-desk { position: relative; margin: 0 auto; border-radius: 5px; cursor: pointer; background: #e9ddc0; transition: opacity .18s ease; box-shadow: 0 2px 0 rgba(0,0,0,.3), 0 34px 70px -24px rgba(0,0,0,.72), 0 10px 26px rgba(0,0,0,.45); }
+.book-desk { position: relative; margin: 0 auto; border-radius: 5px; cursor: pointer; background: #e9ddc0; transition: opacity .18s ease; box-shadow: var(--book-shadow); }
 .book-mobile { position: relative; width: min(560px,92vw); height: 100%; max-height: 1200px; margin: 0 auto; border-radius: 5px; cursor: pointer; transition: opacity .18s ease; }
 
 .page { position: absolute; top: 0; bottom: 0; width: 50%; padding: calc(var(--fpx) * 2.5) calc(var(--fpx) * 3.3) calc(var(--fpx) * 2.3); overflow: hidden; background-color: #fdf4ee; background-image: url(data:image/png;base64,@@PAPER_GRAIN@@), radial-gradient(170% 125% at 98% 50%, #fdf5ef 0%, #fbf1e7 97.5%, #f0dcc8 99.4%, #caa885 100%); box-shadow: inset -20px 0 34px -20px rgba(70,45,15,.30); }
@@ -138,12 +194,12 @@ p.pair { margin: 0 -12px 0.5em; padding: 2px 12px; font-size: var(--fpx); line-h
 .unit { border-radius: 3px; cursor: help; transition: background .12s ease; }
 .unit:hover, .unit.pinned { background: rgba(180,150,100,.26); }
 
-.tip { position: fixed; z-index: 70; max-width: 300px; background: #211b14; color: #efe6d2; border-radius: 8px; padding: 9px 12px; box-shadow: 0 12px 32px rgba(0,0,0,.55); pointer-events: none; animation: xfade .12s ease-out; }
-.tip-surface { font-size: 15px; color: #f4ead0; }
-.tip-pos { font-size: 12px; font-style: italic; color: #9a8a6a; margin-top: 1px; }
+.tip { position: fixed; z-index: 70; max-width: 300px; background: var(--panel); color: var(--panel-ink); border-radius: 8px; padding: 9px 12px; box-shadow: var(--panel-shadow); pointer-events: none; animation: xfade .12s ease-out; }
+.tip-surface { font-size: 15px; color: var(--ink-bright); }
+.tip-pos { font-size: 12px; font-style: italic; color: var(--ink-dim); margin-top: 1px; }
 .tip-gloss { font-size: 14px; line-height: 1.4; margin-top: 6px; }
-.tip-form { font-size: 12.5px; color: #c3b590; margin-top: 4px; }
-.tip-form-label { color: #9a8a6a; }
+.tip-form { font-size: 12.5px; color: var(--ink-soft); margin-top: 4px; }
+.tip-form-label { color: var(--ink-dim); }
 
 /* A paragraph resumed from the previous page is not a new paragraph. */
 p.pair.continued { text-indent: 0; }
@@ -186,41 +242,41 @@ p.pair-en.blurred { filter: blur(5px); }
 
 
 /* ---------- overlays ---------- */
-.popover { background: #211b14; color: #efe6d2; border-radius: 10px; box-shadow: 0 18px 44px rgba(0,0,0,.55); padding: 12px 8px; z-index: 60; position: fixed; top: calc(var(--header-h, 66px) + 8px); right: 30px; width: 280px; max-height: 60vh; overflow-y: auto; animation: xfade .16s ease-out; }
+.popover { background: var(--panel); color: var(--panel-ink); border-radius: 10px; box-shadow: var(--panel-shadow); padding: 12px 8px; z-index: 60; position: fixed; top: calc(var(--header-h, 66px) + 8px); right: 30px; width: 280px; max-height: 60vh; overflow-y: auto; animation: xfade .16s ease-out; }
 .popover.mobile { left: 16px; right: 16px; width: auto; }
 /* The download menu is short — two rows at most — so it need not be as wide. */
 .popover.dl-menu { width: 208px; }
 .popover.dl-menu.mobile { width: auto; }
-.popover-title { font-size: 11px; letter-spacing: .22em; text-transform: uppercase; color: #8f7d5e; padding: 2px 12px 8px; }
-.popover-row { display: block; width: 100%; text-align: left; background: transparent; border: none; border-radius: 6px; padding: 8px 12px; color: #e7dcc2; }
+.popover-title { font-size: 11px; letter-spacing: .22em; text-transform: uppercase; color: var(--ink-dim); padding: 2px 12px 8px; }
+.popover-row { display: block; width: 100%; text-align: left; background: transparent; border: none; border-radius: 6px; padding: 8px 12px; color: var(--panel-ink); }
 .popover-row.active { background: rgba(180,150,100,.16); }
 .popover-row .sub { font-size: 15px; font-style: italic; margin-top: 1px; }
-.popover-row .eyebrow-sm { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: #8f7d5e; }
-.popover-row .page-ref { color: #e8cf94; font-size: 13px; }
-.popover-row .chapter-ref { font-style: italic; margin-left: 8px; color: #c3b590; }
+.popover-row .eyebrow-sm { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-dim); }
+.popover-row .page-ref { color: var(--accent-quiet); font-size: 13px; }
+.popover-row .chapter-ref { font-style: italic; margin-left: 8px; color: var(--ink-soft); }
 .bm-row { display: flex; align-items: center; gap: 6px; padding: 2px 4px 2px 0; }
 .bm-row .popover-row { flex: 1; }
-.bm-remove { background: transparent; border: none; color: #8f7d5e; font-size: 15px; padding: 4px 8px; }
-.popover-empty { padding: 6px 12px 4px; font-size: 14px; font-style: italic; color: #9a8a6a; }
-.sync-foot { margin-top: 10px; padding: 10px 12px 2px; border-top: 1px solid rgba(180,150,100,.18); }
-.sync-line { font-size: 13px; color: #9a8a6a; line-height: 1.4; }
-.sync-act { margin-top: 6px; background: transparent; border: none; padding: 0; color: #e8cf94; font-size: 13px; text-decoration: underline; text-underline-offset: 3px; }
+.bm-remove { background: transparent; border: none; color: var(--ink-dim); font-size: 15px; padding: 4px 8px; }
+.popover-empty { padding: 6px 12px 4px; font-size: 14px; font-style: italic; color: var(--ink-dim); }
+.sync-foot { margin-top: 10px; padding: 10px 12px 2px; border-top: 1px solid var(--rule-faint); }
+.sync-line { font-size: 13px; color: var(--ink-dim); line-height: 1.4; }
+.sync-act { margin-top: 6px; background: transparent; border: none; padding: 0; color: var(--accent-quiet); font-size: 13px; text-decoration: underline; text-underline-offset: 3px; }
 
-.info-panel { background: #211b14; color: #efe6d2; border-radius: 10px; box-shadow: 0 18px 44px rgba(0,0,0,.55); padding: 18px 20px; position: fixed; top: calc(var(--header-h, 66px) + 10px); right: 30px; width: 360px; z-index: 60; animation: xfade .16s ease-out; }
+.info-panel { background: var(--panel); color: var(--panel-ink); border-radius: 10px; box-shadow: var(--panel-shadow); padding: 18px 20px; position: fixed; top: calc(var(--header-h, 66px) + 10px); right: 30px; width: 360px; z-index: 60; animation: xfade .16s ease-out; }
 .info-panel.mobile { left: 16px; right: 16px; width: auto; }
-.info-close { position: absolute; top: 10px; right: 12px; cursor: pointer; color: #a2926f; font-size: 18px; line-height: 1; background: none; border: none; }
-.info-title { font-size: 13px; letter-spacing: .06em; font-weight: 600; color: #f6efdd; padding-right: 18px; }
-.info-rule { height: 1px; background: rgba(255,255,255,.15); margin: 10px 0; }
-.info-body { font-size: 14.5px; line-height: 1.5; color: #ddd0b6; }
-.info-cmd { margin: 11px 0; padding: 9px 11px; background: rgba(0,0,0,.32); border-radius: 6px; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12.5px; color: #c7b78f; white-space: pre-wrap; word-break: break-word; }
-.info-foot { font-size: 13px; line-height: 1.5; color: #a99a78; }
+.info-close { position: absolute; top: 10px; right: 12px; cursor: pointer; color: var(--ink-dim); font-size: 18px; line-height: 1; background: none; border: none; }
+.info-title { font-size: 13px; letter-spacing: .06em; font-weight: 600; color: var(--ink-bright); padding-right: 18px; }
+.info-rule { height: 1px; background: var(--rule-faint); margin: 10px 0; }
+.info-body { font-size: 14.5px; line-height: 1.5; color: var(--panel-ink); }
+.info-cmd { margin: 11px 0; padding: 9px 11px; background: var(--fill); border-radius: 6px; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12.5px; color: var(--ink-soft); white-space: pre-wrap; word-break: break-word; }
+.info-foot { font-size: 13px; line-height: 1.5; color: var(--ink-dim); }
 
-.resume-banner { position: fixed; top: calc(var(--header-h, 66px) + 6px); left: 50%; transform: translateX(-50%); z-index: 61; display: flex; align-items: center; gap: 14px; background: #211b14; color: #efe6d2; border-radius: 999px; box-shadow: 0 12px 32px rgba(0,0,0,.5); padding: 8px 10px 8px 18px; max-width: calc(100vw - 32px); animation: xfade .18s ease-out; font-size: 14.5px; }
-.resume-banner .hl { font-style: italic; color: #f0e6d0; }
-.resume-go { font-size: 14px; color: #1c160f; background: #d8c39a; border: none; border-radius: 999px; padding: 6px 14px; font-weight: 600; }
-.resume-x { background: transparent; border: none; color: #9a8a6a; font-size: 18px; line-height: 1; padding: 2px 6px; }
+.resume-banner { position: fixed; top: calc(var(--header-h, 66px) + 6px); left: 50%; transform: translateX(-50%); z-index: 61; display: flex; align-items: center; gap: 14px; background: var(--panel); color: var(--panel-ink); border-radius: 999px; box-shadow: var(--panel-shadow); padding: 8px 10px 8px 18px; max-width: calc(100vw - 32px); animation: xfade .18s ease-out; font-size: 14.5px; }
+.resume-banner .hl { font-style: italic; color: var(--ink-bright); }
+.resume-go { font-size: 14px; color: var(--accent-ink); background: var(--accent); border: none; border-radius: 999px; padding: 6px 14px; font-weight: 600; }
+.resume-x { background: transparent; border: none; color: var(--ink-dim); font-size: 18px; line-height: 1; padding: 2px 6px; }
 
-.loading-msg { flex: 1; display: flex; align-items: center; justify-content: center; color: #8f7d5e; font-size: 18px; font-style: italic; }
+.loading-msg { flex: 1; display: flex; align-items: center; justify-content: center; color: var(--ink-dim); font-size: 18px; font-style: italic; }
 
 @media (prefers-reduced-motion: reduce) {
   .leaf, .leaf-mobile { transition: none !important; }
@@ -233,20 +289,20 @@ p.pair-en.blurred { filter: blur(5px); }
 /* ---------- revise ---------- */
 /* The floating control by a selection in the AI column, and the key panel. Both
    speak the reader's dark-panel language; no number ever appears in either. */
-.revise { position: fixed; z-index: 72; width: 280px; max-width: calc(100vw - 16px); background: #211b14; color: #efe6d2; border-radius: 9px; box-shadow: 0 14px 36px rgba(0,0,0,.55); padding: 10px; animation: xfade .12s ease-out; }
-.revise-note, .revise-edit { width: 100%; font-family: inherit; font-size: 14px; color: #f4ead0; background: rgba(120,95,55,.16); border: 1px solid rgba(200,175,130,.4); border-radius: 6px; padding: 6px 8px; outline: none; }
+.revise { position: fixed; z-index: 72; width: 280px; max-width: calc(100vw - 16px); background: var(--panel); color: var(--panel-ink); border-radius: 9px; box-shadow: var(--panel-shadow); padding: 10px; animation: xfade .12s ease-out; }
+.revise-note, .revise-edit { width: 100%; font-family: inherit; font-size: 14px; color: var(--ink-bright); background: var(--fill); border: 1px solid rgba(200,175,130,.4); border-radius: 6px; padding: 6px 8px; outline: none; }
 .revise-edit { line-height: 1.4; resize: vertical; }
-.revise-note::placeholder, .revise-edit::placeholder { color: #9a8a6a; }
+.revise-note::placeholder, .revise-edit::placeholder { color: var(--ink-dim); }
 .revise-row { display: flex; gap: 8px; margin-top: 8px; }
-.revise-btn { flex: 1; font-family: inherit; font-size: 13px; color: #e4d7ba; background: rgba(120,95,55,.16); border: 1px solid rgba(180,150,100,.34); border-radius: 999px; padding: 6px 12px; }
-.revise-btn:hover:not(:disabled) { background: rgba(180,150,100,.26); }
-.revise-btn.primary { color: #1c160f; background: #d8c39a; border-color: transparent; font-weight: 600; }
+.revise-btn { flex: 1; font-family: inherit; font-size: 13px; color: var(--ink); background: var(--fill); border: 1px solid rgba(180,150,100,.34); border-radius: 999px; padding: 6px 12px; }
+.revise-btn:hover:not(:disabled) { background: var(--fill-strong); }
+.revise-btn.primary { color: var(--accent-ink); background: var(--accent); border-color: transparent; font-weight: 600; }
 .revise-btn:disabled { opacity: .5; cursor: default; }
 .revise-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
-.revise-link { background: none; border: none; color: #a2926f; font-size: 12px; padding: 2px; text-decoration: underline; }
-.revise-link:hover { color: #c8b891; }
-.revise-status { margin-top: 8px; font-size: 12.5px; font-style: italic; color: #a99a78; }
-.revise-status.error { color: #d29c86; font-style: normal; }
+.revise-link { background: none; border: none; color: var(--ink-dim); font-size: 12px; padding: 2px; text-decoration: underline; }
+.revise-link:hover { color: var(--ink-soft); }
+.revise-status { margin-top: 8px; font-size: 12.5px; font-style: italic; color: var(--ink-dim); }
+.revise-status.error { color: var(--bad); font-style: normal; }
 
 /* A corrected paragraph carries a small revert mark in the outer margin. It is
    absolutely positioned, so it is invisible to pagination's height measurement. */
@@ -254,9 +310,9 @@ p.pair-en.revised { position: relative; }
 .revise-undo { position: absolute; top: 3px; right: -17px; width: 16px; height: 16px; padding: 0; line-height: 15px; text-align: center; font-size: 12px; border: none; border-radius: 50%; background: rgba(180,150,100,.24); color: #8a7551; }
 .revise-undo:hover { background: rgba(180,150,100,.42); color: #3a3125; }
 
-.revise-key-input { width: 100%; margin-top: 12px; font-family: inherit; font-size: 14px; color: #f4ead0; background: rgba(120,95,55,.16); border: 1px solid rgba(200,175,130,.4); border-radius: 6px; padding: 7px 9px; outline: none; }
-.revise-key-input::placeholder { color: #9a8a6a; }
-.revise-remember { display: flex; align-items: center; gap: 5px; margin-top: 10px; font-size: 13px; color: #c3b590; cursor: pointer; accent-color: #b79a5f; }
+.revise-key-input { width: 100%; margin-top: 12px; font-family: inherit; font-size: 14px; color: var(--ink-bright); background: var(--fill); border: 1px solid rgba(200,175,130,.4); border-radius: 6px; padding: 7px 9px; outline: none; }
+.revise-key-input::placeholder { color: var(--ink-dim); }
+.revise-remember { display: flex; align-items: center; gap: 5px; margin-top: 10px; font-size: 13px; color: var(--ink-soft); cursor: pointer; accent-color: #b79a5f; }
 /* When Rewrite-without-a-key raises the panel, it sits above the control that
    is still holding the selection behind it, so the consent copy stays readable
    and the note the reader typed survives into the rewrite. */

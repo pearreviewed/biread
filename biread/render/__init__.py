@@ -291,6 +291,29 @@ def _reader_css() -> str:
 DOWNLOAD_BLOB_RE = re.compile(
     r'<script type="application/octet-stream".*?</script>', re.S)
 
+#: `id="dl-epub"` — the scheme before a book could carry two editions.
+LEGACY_BLOB_ID_RE = re.compile(r'(id="dl-[a-z]+)(")')
+
+
+def _carry_downloads(html: str, data: dict) -> str:
+    """The built editions, moved into today's reader.
+
+    Before a book could carry both editions, a blob was `dl-<format>` and its
+    menu entry named no source; now both are keyed by edition as well. A book
+    made before that — Micromégas — re-wrapped without this kept its buttons and
+    lost its files: the menu still listed EPUB and PDF, and clicking either did
+    nothing at all, because the reader was looking for `dl-epub-translation`.
+    An older book has one edition, and it is the generated one.
+    """
+    for entry in data.get("downloads") or []:
+        entry.setdefault("source", "translation")
+    # Verbatim otherwise: these are the base64 editions, and re-encoding them
+    # would be a great deal of work to arrive at the same bytes.
+    return "\n".join(
+        LEGACY_BLOB_ID_RE.sub(r"\1-translation\2", blob)
+        for blob in DOWNLOAD_BLOB_RE.findall(html)
+    )
+
 
 def rewrap(html: str, gloss_on_demand: dict | None = None,
            builder_url: str = "") -> str:
@@ -350,14 +373,14 @@ def rewrap(html: str, gloss_on_demand: dict | None = None,
     if builder_url:
         data["builderUrl"] = builder_url
 
+    downloads = _carry_downloads(html, data)
+
     return fill((TEMPLATES / "reader.html").read_text(encoding="utf-8"), {
         "TITLE": escape_html(data["titleFr"]),
         "CSS": _reader_css(),
         "BOOK_DATA": script_json(data),
         "JS": (TEMPLATES / "reader.js").read_text(encoding="utf-8"),
-        # Verbatim: these are the base64 editions, and re-encoding them would be
-        # a great deal of work to arrive at the same bytes.
-        "DOWNLOADS": "\n".join(DOWNLOAD_BLOB_RE.findall(html)),
+        "DOWNLOADS": downloads,
         "UI_LOADING": escape_html(ui.get("loading", ENGLISH.ui["loading"])),
     })
 

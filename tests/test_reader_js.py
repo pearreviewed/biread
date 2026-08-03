@@ -1370,3 +1370,77 @@ def test_bought_glosses_survive_reopening_the_book(browser, gloss_path):
     page.wait_for_selector("#stage-wrap .page-left .unit", timeout=5000)
     assert page.locator("#gloss-btn").is_hidden(), "a page already glossed offers nothing"
     page.close()
+
+
+# ---------- day and night ----------
+# The desk changes; the book does not. And the control lives out on the desk
+# rather than in the header, because a ninth header control put it on its
+# wrapping threshold — where a button changing its own label resized the stage
+# and forced a repagination that wiped whatever the button was saying.
+
+def paper(page):
+    return page.evaluate(
+        "() => getComputedStyle(document.querySelector('#stage-wrap .page-left'))"
+        ".backgroundColor")
+
+
+def desk(page):
+    return page.evaluate("() => getComputedStyle(document.body).backgroundImage")
+
+
+def test_a_book_opens_at_night(browser, tmp_path_factory):
+    page = _fresh(browser, build_reader(tmp_path_factory, published=False))
+    page.evaluate("() => localStorage.clear()")
+    page.reload()
+    page.wait_for_selector("#theme-control")
+    assert page.evaluate("() => document.documentElement.dataset.theme") == "night"
+    page.close()
+
+
+def test_day_lightens_the_desk_and_leaves_the_page_alone(browser, tmp_path_factory):
+    page = _fresh(browser, build_reader(tmp_path_factory, published=False))
+    page.evaluate("() => localStorage.clear()")
+    page.reload()
+    page.wait_for_function(
+        "() => { const c = document.getElementById('counter');"
+        "return c && c.textContent && !c.textContent.includes('+'); }", timeout=15000)
+    was_desk, was_paper = desk(page), paper(page)
+    page.click('[data-theme-set="day"]')
+    page.wait_for_timeout(200)
+    assert page.evaluate("() => document.documentElement.dataset.theme") == "day"
+    assert desk(page) != was_desk, "day should light the room"
+    assert paper(page) == was_paper, "the page is the book, and does not change"
+    page.close()
+
+
+def test_the_choice_is_remembered_and_shared_with_the_builder(browser, tmp_path_factory):
+    page = _fresh(browser, build_reader(tmp_path_factory, published=False))
+    page.evaluate("() => localStorage.clear()")
+    page.reload()
+    page.wait_for_selector("#theme-control")
+    page.click('[data-theme-set="day"]')
+    # The builder's own key, so one machine never holds two opinions about it.
+    assert page.evaluate("() => localStorage.getItem('biread_theme')") == "day"
+    page.reload()
+    page.wait_for_selector("#theme-control")
+    assert page.evaluate("() => document.documentElement.dataset.theme") == "day"
+    assert page.get_attribute('[data-theme-set="day"]', "aria-pressed") == "true"
+    page.close()
+
+
+def test_switching_the_light_does_not_move_the_book(browser, tmp_path_factory):
+    """The regression that sent this control out of the header in the first place."""
+    page = _fresh(browser, build_reader(tmp_path_factory, published=False))
+    page.evaluate("() => localStorage.clear()")
+    page.reload()
+    page.wait_for_function(
+        "() => { const c = document.getElementById('counter');"
+        "return c && c.textContent && !c.textContent.includes('+'); }", timeout=15000)
+    before = (page.evaluate("() => document.getElementById('app-header').offsetHeight"),
+              spread_count(page), current_spread(page))
+    page.click('[data-theme-set="day"]')
+    page.wait_for_timeout(600)
+    after = (page.evaluate("() => document.getElementById('app-header').offsetHeight"),
+             spread_count(page), current_spread(page))
+    assert before == after, "the light changed and the book moved"
+    page.close()

@@ -64,6 +64,15 @@
 <!-- A quiet crossing to the builder, in the desk's bottom-left corner. Revealed
      by JS only when the book was built with a builder URL, so a book that travels
      never offers an arrow into nothing. Desktop only. -->
+<!-- Day and night, in the desk's other bottom corner. It belongs down here rather
+     than in the header because it is about the room the book is read in, not
+     about the book — and because the header is full: a ninth control there put
+     it on the wrapping threshold, where a button changing its own label resized
+     the stage and forced a repagination. -->
+<div class="theme-control" id="theme-control">
+  <button data-theme-set="day" data-i18n-aria="dayMode" aria-label="Day" aria-pressed="false">☀</button>
+  <button data-theme-set="night" data-i18n-aria="nightMode" aria-label="Night" aria-pressed="true">☾</button>
+</div>
 <a id="builder-link" href="#" hidden>
   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
   <span data-i18n="builderLink">Builder</span>
