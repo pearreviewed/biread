@@ -15,6 +15,22 @@ BASE=$(sudo grep -oP '^BIREAD_BASE_URL=\K.*' "$ENV")
 echo "Setting up GitHub sign-in for $BASE"
 echo
 
+# Without a terminal there is nobody to ask, and `read` would fail at once and
+# take the script down with it — looking, from the outside, exactly like nothing
+# happened. Say what is missing instead.
+if [ ! -t 0 ]; then
+    cat >&2 <<'WHY'
+This needs a terminal to ask you for the two values, and ssh did not give it one.
+Add -t:
+
+  ssh -t -i ~/.ssh/id_ed25519_ovh <your-user>@<your-host> \
+      /srv/apps/biread/server/deploy/enable-signin.sh
+
+Nothing has been changed.
+WHY
+    exit 1
+fi
+
 read -rp "Client ID: " CLIENT_ID
 read -rsp "Client secret (not shown): " CLIENT_SECRET
 echo
