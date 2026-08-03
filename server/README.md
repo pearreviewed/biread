@@ -27,13 +27,23 @@ Configuration, all from the environment:
 | Variable | Meaning |
 |---|---|
 | `BIREAD_DATABASE_URL` | libpq connection string. Default `dbname=love`, which is peer auth on the host. |
-| `BIREAD_BASE_URL` | Where this server is reachable, e.g. `http://<your-host>`. Used to build the OAuth callback and to refuse off-site redirects. |
+| `BIREAD_BASE_URL` | Where this server is reachable, e.g. `https://vps-bab9636f.vps.ovh.net`. Used to build the OAuth callback and to refuse off-site redirects. Its scheme also decides whether the session cookie is marked `Secure` — set on a plain-http origin the browser drops it, so sign-in would fail silently rather than insecurely. |
 | `BIREAD_GITHUB_CLIENT_ID` / `_SECRET` | From a GitHub OAuth App whose callback is `<base>/api/auth/github/callback`. |
 | `BIREAD_SESSION_DAYS` | How long a sign-in lasts. Default 90. |
 
-Sign-in is GitHub only for now, because Google will not accept a bare IP address
-as a redirect target — it wants a domain and https. `auth.py` keeps the provider
-in one place so the second one is a small addition, not a rewrite.
+Sign-in is GitHub only. Google needs a domain you can *prove is yours*, and the
+name this box answers to — `vps-bab9636f.vps.ovh.net`, OVH's own — cannot be
+verified by us. That is a fact about the address, not about the code: `auth.py`
+keeps the provider in one place, so Google is a small addition the day there is
+a domain to verify.
+
+## Serving it
+
+`deploy/nginx-biread.conf` is the live site file, certbot's lines and all:
+static bundle at the root, this service at `/api/`, TLS on the OVH hostname, and
+port 80 redirecting *everything* — including requests to the bare IP, which was
+handed out before there was a certificate — to the https name. `deploy/
+biread-sync.service` runs uvicorn on loopback as `love`.
 
 ## The API
 
