@@ -188,3 +188,30 @@ def test_sign_in_says_so_when_it_is_not_configured(client, monkeypatch):
 def test_a_sign_in_that_started_elsewhere_is_refused(client):
     assert client.get("/api/auth/github/callback?code=x&state=y",
                       follow_redirects=False).status_code == 400
+
+
+# ---------- what the log is allowed to remember ----------
+
+@pytest.mark.parametrize("path,logged", [
+    ("/api/auth/github/callback?code=abc123&state=xyz789",
+     "/api/auth/github/callback?code=<redacted>&state=<redacted>"),
+    # The one thing you actually want to see when a sign-in goes wrong.
+    ("/api/auth/github?next=/books/candide.html",
+     "/api/auth/github?next=/books/candide.html"),
+    ("/api/shelf", "/api/shelf"),
+    ("/api/shelf?", "/api/shelf?"),
+    ("/api/x?token=t&api_key=k&page=2",
+     "/api/x?token=<redacted>&api_key=<redacted>&page=2"),
+])
+def test_a_credential_never_reaches_the_log(path, logged):
+    from biread_sync.logs import scrub
+    assert scrub(path) == logged
+
+
+def test_the_filter_leaves_records_it_does_not_understand_alone():
+    import logging
+    from biread_sync.logs import Scrubbed
+    record = logging.LogRecord("uvicorn.access", logging.INFO, "", 0,
+                               "something else", ("only", "two"), None)
+    assert Scrubbed().filter(record) is True
+    assert record.args == ("only", "two")

@@ -6,12 +6,13 @@ from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import JSONResponse, RedirectResponse
 
-from . import auth, db
+from . import auth, db, logs
 from .shelf import Entry, forget, merge, read
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    logs.install()
     db.start()
     auth.sweep()
     yield
