@@ -1,3 +1,4 @@
+import re
 import pytest
 
 from biread.align import _flow_anchored, _shape_spread, align_published
@@ -302,3 +303,80 @@ def test_editions_that_divide_alike_are_still_paired_chapter_by_chapter():
     french = [Chapter(ROMAN[i], f"T{i}", [f"Le {fr} dort ici."]) for i, (fr, _) in enumerate(words)]
     english = [Chapter(ROMAN[i], f"T{i}", [f"The {en} sleeps here."]) for i, (_, en) in enumerate(words)]
     assert len(_chapter_pairs(french, english)) == len(french)
+
+
+# ---------- numbering that looks sound and is not ----------
+# A translation that drops a chapter and renumbers what follows leaves both
+# editions with contiguous, complete-looking numbers and every later pairing off
+# by one. The 1911 Twenty Thousand Leagues omits French XI: 46 of 47 chapters
+# "matched", 37 were the wrong chapter, and coverage fell to 24%.
+
+TOPICS = 9
+
+
+def topic_vector(text: str) -> list[float]:
+    """A chapter about topic *n*, with a little of its neighbours in it — enough
+    that the wrong chapter still scores something, as real prose does."""
+    n = int(re.search(r"topic-(\d+)", text).group(1))
+    vec = [0.0] * (TOPICS + 2)
+    vec[n] = 1.0
+    for near in (n - 1, n + 1):
+        if 0 <= near < len(vec):
+            vec[near] = 0.5
+    return vec
+
+
+def topics(texts):
+    return [topic_vector(t) for t in texts]
+
+
+def about(number, topic):
+    return chapter(str(number), [f"Ceci traite de topic-{topic}, longuement et en détail.",
+                            f"Encore topic-{topic}, pour faire trois paragraphes.",
+                            f"Toujours topic-{topic}, et voilà."])
+
+
+def test_a_translation_that_drops_a_chapter_stops_being_trusted_by_number():
+    # French I-VI; the published edition omits French III and renumbers, so its
+    # numbers run I-V and every one from III on names the wrong chapter.
+    french = [about(n, n) for n in range(1, 7)]
+    published = [about(i + 1, topic) for i, topic in enumerate([1, 2, 4, 5, 6])]
+
+    texts, report = align_published(french, published, embed=topics)
+
+    # Chapter IV's French must not be facing chapter V's English.
+    fourth = french[3].paragraphs[0]
+    assert "topic-5" not in texts[hash_text(fourth)]
+
+
+def test_sound_numbering_is_still_trusted():
+    """The check must not push good books onto the slower whole-book path."""
+    french = [about(n, n) for n in range(1, 7)]
+    published = [about(n, n) for n in range(1, 7)]
+
+    texts, _ = align_published(french, published, embed=topics)
+
+    for n, ch in enumerate(french, start=1):
+        assert f"topic-{n}" in texts[hash_text(ch.paragraphs[0])]
+
+
+def test_too_few_chapters_to_judge_leaves_the_numbering_alone():
+    french = [about(1, 1), about(2, 2)]
+    published = [about(1, 1), about(2, 2)]
+    texts, _ = align_published(french, published, embed=topics)
+    assert "topic-2" in texts[hash_text(french[1].paragraphs[0])]
+
+
+def test_the_dropped_chapter_is_left_blank_not_filled_with_the_next_one():
+    """An omitted chapter should face an empty page, never a plausible wrong one."""
+    french = [about(n, n) for n in range(1, 7)]
+    published = [about(i + 1, topic) for i, topic in enumerate([1, 2, 4, 5, 6])]
+
+    texts, _ = align_published(french, published, embed=topics)
+
+    third = french[2].paragraphs[0]          # French III — the chapter they dropped
+    assert texts[hash_text(third)] == ""
+    # And every chapter that does exist finds its own counterpart again.
+    for n in (1, 2, 4, 5, 6):
+        opening = french[n - 1].paragraphs[0]
+        assert f"topic-{n}" in texts[hash_text(opening)]

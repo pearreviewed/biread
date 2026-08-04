@@ -91,6 +91,14 @@ class _Body(HTMLParser):
 
     def handle_starttag(self, tag: str, attrs) -> None:
         if tag in _VOID:
+            # A line break separates words as surely as a space does, and dropping
+            # it outright ran them together: this edition's chapter headings came
+            # out as "CHAPTER VIIIMOBILIS IN MOBILI". Verse and addresses break
+            # the same way wherever an edition sets them with <br>.
+            if tag == "br":
+                for buf in (self._buf, self._title_buf):
+                    if buf is not None:
+                        buf.append(" ")
             return
         classes = dict(attrs).get("class", "")
         skips = tag in _SKIP_TAGS or any(c in classes for c in _SKIP_CLASSES)

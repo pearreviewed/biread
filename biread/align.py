@@ -733,8 +733,97 @@ def embed_nearest(
 NUMBERING_AGREES = 0.8
 
 
+def _chapter_gist(chapter: Chapter) -> str:
+    """Enough of a chapter to recognise it by. Its opening prose, several
+    paragraphs of it, so a stray heading left in the body cannot be the whole
+    signal."""
+    return " ".join(prose_only(chapter.paragraphs)[:3])[:1200]
+
+
+#: How many of the numbered pairings may look wrong before the numbering itself
+#: is disbelieved. Generous, because a translation genuinely rewrites and two
+#: adjacent chapters can read alike; a shift by one fails on nearly all of them.
+NUMBERING_MISMATCH = 0.25
+
+
+def _chapter_vectors(
+    french: list[Chapter], published: list[Chapter], embed: Embed
+) -> tuple[list[list[float]], list[list[float]]]:
+    """One vector per chapter a side. Two embedding calls for a whole book."""
+    return ([_unit(v) for v in embed([_chapter_gist(c) for c in french])],
+            [_unit(v) for v in embed([_chapter_gist(c) for c in published])])
+
+
+def _pair_by_content(
+    french: list[Chapter], published: list[Chapter],
+    fr_vecs: list[list[float]], pub_vecs: list[list[float]],
+) -> list[tuple[Chapter, Chapter | None]]:
+    """Pair chapters by what they are about, in order, letting either side skip.
+
+    The same monotonic matching the paragraphs get, run over whole chapters — a
+    47-by-46 problem rather than a 3,404-by-2,140 one, which is why the answer to
+    untrustworthy numbering is to re-derive the chapters rather than to throw the
+    chapter structure away: the whole-book path cannot carry a book this size.
+    A French chapter the translation genuinely lacks pairs with None and is left
+    blank, which is what an omitted chapter deserves.
+    """
+    n, m = len(fr_vecs), len(pub_vecs)
+    best = [[0.0] * (m + 1) for _ in range(n + 1)]
+    for i in range(1, n + 1):
+        for j in range(1, m + 1):
+            similarity = sum(a * b for a, b in zip(fr_vecs[i - 1], pub_vecs[j - 1]))
+            best[i][j] = max(best[i - 1][j], best[i][j - 1],
+                             best[i - 1][j - 1] + similarity)
+
+    partner: dict[int, int] = {}
+    i, j = n, m
+    while i > 0 and j > 0:
+        similarity = sum(a * b for a, b in zip(fr_vecs[i - 1], pub_vecs[j - 1]))
+        if best[i][j] == best[i - 1][j - 1] + similarity:
+            partner[i - 1] = j - 1
+            i, j = i - 1, j - 1
+        elif best[i][j] == best[i - 1][j]:
+            i -= 1
+        else:
+            j -= 1
+    return [(c, published[partner[k]] if k in partner else None)
+            for k, c in enumerate(french)]
+
+
+def _numbering_holds(
+    published: list[Chapter], pairs: list[tuple[Chapter, Chapter | None]],
+    fr_vecs: list[list[float]], pub_vecs: list[list[float]],
+) -> bool:
+    """Do the chapters the numbers paired actually correspond?
+
+    A translation that drops a chapter and renumbers what follows leaves both
+    editions carrying contiguous, complete-looking numbers, with every later
+    pairing off by one. There is no gap to find and no count to compare — the
+    1911 Twenty Thousand Leagues omits French XI and renumbers, so 46 of 47
+    chapters "matched" and 37 of them were the wrong chapter.
+
+    Nothing structural can see that. Only the text can: a chapter is checked
+    against the one its number chose and against that one's neighbours, and if
+    a neighbour is the better read of it, the numbering is not to be trusted.
+    """
+    place = {id(c): i for i, c in enumerate(published)}
+    checkable = [(i, place[id(pub)]) for i, (_, pub) in enumerate(pairs) if pub is not None]
+    if len(checkable) < 4:
+        return True
+
+    def score(i: int, j: int) -> float:
+        return sum(a * b for a, b in zip(fr_vecs[i], pub_vecs[j]))
+
+    wrong = 0
+    for i, j in checkable:
+        neighbours = [k for k in (j - 1, j + 1) if 0 <= k < len(pub_vecs)]
+        if any(score(i, k) > score(i, j) for k in neighbours):
+            wrong += 1
+    return wrong <= len(checkable) * NUMBERING_MISMATCH
+
+
 def _chapter_pairs(
-    french: list[Chapter], published: list[Chapter]
+    french: list[Chapter], published: list[Chapter], embed: Embed | None = None
 ) -> list[tuple[Chapter, Chapter | None]]:
     """Chapter against chapter where the two editions divide the book alike, and
     the whole book against the whole book where they do not.
@@ -750,7 +839,12 @@ def _chapter_pairs(
     pairs = _pair_by_number(french, published)
     matched = sum(1 for _, pub in pairs if pub is not None)
     if matched >= 2 and matched >= len(pairs) * NUMBERING_AGREES:
-        return pairs
+        if embed is None:
+            return pairs
+        fr_vecs, pub_vecs = _chapter_vectors(french, published, embed)
+        if _numbering_holds(published, pairs, fr_vecs, pub_vecs):
+            return pairs
+        return _pair_by_content(french, published, fr_vecs, pub_vecs)
     return [(
         Chapter(None, None, [p for c in french for p in c.paragraphs]),
         Chapter(None, None, [p for c in published for p in c.paragraphs]),
@@ -769,7 +863,7 @@ def _by_embeddings(
     `progress(done, total)` is called per chapter, so a long book is not silent while
     it embeds."""
     report.method = "pivot"
-    pairs = _chapter_pairs(french, published)
+    pairs = _chapter_pairs(french, published, embed)
     aligned: dict[str, str] = {}
     for index, (fr, pub) in enumerate(pairs):
         if progress:

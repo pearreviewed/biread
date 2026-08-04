@@ -370,3 +370,20 @@ def test_ordinary_spans_keep_the_spaces_around_them():
             'the room without another word.</p>')
     _, paragraphs = ws.parse(page(body))
     assert paragraphs[0] == "He said bonjour and then left the room without another word."
+
+
+def test_a_line_break_separates_words():
+    """<br> is whitespace. Dropped outright it ran headings together — the 1911
+    Twenty Thousand Leagues gave "CHAPTER VIIIMOBILIS IN MOBILI"."""
+    body = ('<div class="wst-center"><p><span style="font-size:120%;">CHAPTER VIII</span>'
+            '<br/><span style="font-size:83%;">MOBILIS IN MOBILI</span></p></div>')
+    _, paragraphs = ws.parse(page(body))
+    assert paragraphs[0] == "CHAPTER VIII MOBILIS IN MOBILI"
+
+
+def test_verse_set_with_breaks_keeps_its_words_apart():
+    body = ("<p>Roses are red<br/>violets are blue<br/>and every line of this "
+            "little verse is set with a break.</p>")
+    _, paragraphs = ws.parse(page(body))
+    assert paragraphs[0] == ("Roses are red violets are blue and every line of this "
+                             "little verse is set with a break.")
