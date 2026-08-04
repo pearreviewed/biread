@@ -1842,11 +1842,39 @@
   }
 
 
+  // A thousand-spread book would otherwise say "1 / 1076" in a box measured for
+  // "12 / 38", and the total looked as though it stopped at 999. The total is
+  // abbreviated; the page you are on never is, because it is what you read to
+  // know where you are — and typing into the finder still takes the real number.
+  function shortTotal(n) {
+    return n < 1000 ? String(n) : (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
+  }
+
+  // Sized once from the widest label this book can produce, so the header cannot
+  // jump as the page number gains a digit — the reason the width was pinned in
+  // the first place.
+  var counterWidthFor = -1;
+  function fitCounter(el, total) {
+    if (total === counterWidthFor) return;
+    counterWidthFor = total;
+    var was = el.textContent;
+    el.style.width = 'auto';
+    el.textContent = total + ' / ' + shortTotal(total) + '+';
+    var needed = Math.max(72, Math.ceil(el.getBoundingClientRect().width));
+    el.textContent = was;
+    // The finder swaps into the counter's place, so it takes the same width or
+    // the header shifts the moment you click to type a page.
+    el.style.width = needed + 'px';
+    var input = document.getElementById('counter-input');
+    if (input) input.style.width = needed + 'px';
+  }
+
   function updateCounter() {
     var el = document.getElementById('counter');
     if (!S.ready || !spreads.length) { el.textContent = ''; return; }
-    el.textContent =
-      S.spreadIndex + 1 + ' / ' + spreads.length + (fullyPaginated() ? '' : '+');
+    fitCounter(el, spreads.length);
+    el.textContent = S.spreadIndex + 1 + ' / ' + shortTotal(spreads.length)
+      + (fullyPaginated() ? '' : '+');
   }
 
   // The counter is the page finder: the thing that says where you are is the
