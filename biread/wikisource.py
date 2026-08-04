@@ -83,8 +83,9 @@ class _Body(HTMLParser):
         super().__init__(convert_charrefs=True)
         self.paragraphs: list[str] = []
         self.title: str | None = None
-        self._stack: list[bool] = []      # per open element: does it start a skip?
+        self._stack: list[tuple[bool, bool]] = []  # per open element: (skips, drop cap)
         self._skip = 0
+        self._drop = 0
         self._buf: list[str] | None = None
         self._title_buf: list[str] | None = None
 
@@ -96,11 +97,20 @@ class _Body(HTMLParser):
         # The title lives inside the header, which is itself dropped.
         if "wst-header-title-text" in classes:
             self._title_buf = []
-        self._stack.append(skips)
+        # A drop cap is a big first letter, and the wiki puts the space *inside*
+        # it — `<span class="dropinitial">N </span><span class="sc">ous</span>`.
+        # Rendered that space is nothing, because the span floats; read as text
+        # it splits the first word of a chapter, which is the most looked-at
+        # word in the book. Madame Bovary opened on "N ous étions à l'étude".
+        drop = "dropinitial" in classes
+        self._stack.append((skips, drop))
         if skips:
             self._skip += 1
-        elif tag == "p" and self._buf is None:
-            self._buf = []
+        else:
+            if drop:
+                self._drop += 1
+            if tag == "p" and self._buf is None:
+                self._buf = []
 
     def handle_endtag(self, tag: str) -> None:
         if tag in _VOID or not self._stack:
@@ -115,8 +125,11 @@ class _Body(HTMLParser):
             if text:
                 self.title = text
                 self._title_buf = None
-        if self._stack.pop():
+        skipped, drop = self._stack.pop()
+        if skipped:
             self._skip -= 1
+        elif drop:
+            self._drop -= 1
 
     def handle_data(self, data: str) -> None:
         if self._title_buf is not None:
@@ -124,7 +137,7 @@ class _Body(HTMLParser):
         if self._skip:
             return
         if self._buf is not None:
-            self._buf.append(data)
+            self._buf.append(data.strip() if self._drop else data)
 
 
 # French runs a dialogue inside one paragraph, each new speaker opened by an

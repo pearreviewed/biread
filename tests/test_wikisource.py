@@ -339,3 +339,34 @@ def test_asking_after_nothing_asks_the_wiki_nothing():
         raise AssertionError("should not have called out")
 
     assert ws.counterparts([], fetch=refuse) == {}
+
+
+# The wiki's own drop-cap markup, byte for byte as Madame Bovary carries it: the
+# space sits *inside* the floated span, where rendering swallows it and reading
+# does not.
+DROP_CAP = (
+    '<p><span style="font-size:0; line-height:0; display:block" class="lettrine">'
+    '<br/></span><span class="dropinitial" style="float: left">N </span>'
+    '<span class="sc">ous</span> étions à l’étude, quand le Proviseur entra, '
+    'suivi d’un nouveau habillé en bourgeois.</p>'
+)
+
+
+def test_a_drop_cap_does_not_split_the_first_word():
+    """The most looked-at word in a book is the one it opens with."""
+    _, paragraphs = ws.parse(page(DROP_CAP))
+    assert paragraphs[0].startswith("Nous étions à l’étude")
+
+
+def test_a_drop_cap_leaves_the_rest_of_the_paragraph_alone():
+    _, paragraphs = ws.parse(page(DROP_CAP))
+    assert paragraphs[0].endswith("habillé en bourgeois.")
+    assert "  " not in paragraphs[0]
+
+
+def test_ordinary_spans_keep_the_spaces_around_them():
+    """The fix must not eat the spacing of every other inline span."""
+    body = ('<p>He said <i>bonjour</i> and then <span class="sc">left</span> '
+            'the room without another word.</p>')
+    _, paragraphs = ws.parse(page(body))
+    assert paragraphs[0] == "He said bonjour and then left the room without another word."

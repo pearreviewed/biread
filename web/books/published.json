@@ -11,6 +11,12 @@
       "file": "candide.html",
       "english": "Smollett · 1920",
       "approved": "2026-08-01"
+    },
+    {
+      "slug": "80days",
+      "file": "80days.html",
+      "english": "Towle · 1873",
+      "approved": "2026-08-04"
     }
   ]
 }
