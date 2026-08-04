@@ -34,6 +34,11 @@
     transition: background .3s ease, color .3s ease;
   }
   .wrap { max-width: 1020px; margin: 0 auto; }
+  /* The shelf's cards want the whole page; everything above them wants a
+     reading measure. Measured here so the shelf can break out of that column
+     rather than widen it — the tab strip used to grow under the finger that
+     had just pressed it. */
+  #s-books { container-type: inline-size; }
   button, input, select { font-family: inherit; }
   button { cursor: pointer; }
   ::selection { background: var(--tint); }
@@ -88,15 +93,23 @@
   /* --- step one: route and files --- */
   .step { max-width: 640px; margin: 26px auto 0; display: flex; flex-direction: column; gap: 22px; }
   .hero + .step { margin-top: 36px; }
-  .step h2 { font-size: 29px; line-height: 1.15; }
-  .step.wide { max-width: 1040px; }
-  .seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; padding: 5px; border: 1px solid var(--rule); border-radius: 18px; background: var(--surface); }
-  .seg button { padding: 12px 14px; border: 0; border-radius: 14px; background: none; font: 15.5px/1.3 'Charis SIL', Charter, Georgia, serif; color: var(--muted); }
+  /* The question above the tabs is a prompt, not a second headline: at the
+     hero's weight it read as a rival title and broke over two lines. Sized to
+     sit on one, under the masthead rather than against it. */
+  .step h2 { font-size: 22.5px; line-height: 1.25; }
+  /* Three ways to start a book, and the two you have not chosen were bare text
+     the colour of a caption — nothing said they could be pressed. Roomier, in
+     the body's own colour, and they answer the pointer. */
+  .seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; padding: 6px; border: 1px solid var(--rule); border-radius: 20px; background: var(--surface); }
+  .seg button { padding: 16px 12px; border: 0; border-radius: 15px; background: none; font: 15.5px/1.3 'Charis SIL', Charter, Georgia, serif; color: var(--body); transition: background .18s ease, color .18s ease; }
+  .seg button:hover:not([aria-pressed="true"]) { background: var(--tint); color: var(--ink); }
   .seg button[aria-pressed="true"] { background: var(--page); box-shadow: 0 1px 3px rgba(90,70,40,.1); font-weight: 700; color: var(--ink); }
   :root[data-theme="night"] .seg { border-radius: 14px; }
   :root[data-theme="night"] .seg button { border-radius: 11px; }
   :root[data-theme="night"] .seg button[aria-pressed="true"] { background: rgba(200,184,145,.9); color: #241b12; }
-  .seg-note { margin: -8px 0 0; max-width: 52ch; font-size: 14px; color: var(--muted); }
+  /* Each route explains itself in a different number of lines. Reserving the
+     longest keeps the panel below from stepping up and down as they are tried. */
+  .seg-note { margin: -8px 0 0; max-width: 52ch; font-size: 14px; line-height: 1.55; min-height: calc(4 * 1.55em); color: var(--muted); }
   .files { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
   .files.one { grid-template-columns: 1fr; }
   .file { position: relative; display: flex; flex-direction: column; gap: 6px; padding: 18px 52px 18px 20px; border: 1px solid var(--rule-2); border-radius: 17px; background: var(--surface-2); text-align: left; width: 100%; min-height: 118px; }
@@ -119,7 +132,8 @@
   .step .row.foot > div { font-size: 13px; color: var(--muted); }
 
   /* --- the shelf --- */
-  .shelf { display: flex; flex-direction: column; gap: 22px; }
+  .shelf { display: flex; flex-direction: column; gap: 22px;
+           width: 100cqw; margin-inline: calc((100% - 100cqw) / 2); }
   .find { display: flex; align-items: center; gap: 9px; padding: 9px 16px; border: 1px solid var(--rule); border-radius: 999px; background: var(--surface-3); }
   .find span { font-size: 14px; color: var(--muted); }
   .find input { flex: 1; min-width: 0; padding: 0; border: 0; background: none; font: 15px/1.3 'Charis SIL', Charter, Georgia, serif; color: var(--ink); }
@@ -130,9 +144,21 @@
   .chips button { padding: 7px 15px; border: 1px solid var(--rule); border-radius: 999px; background: none; font-size: 13.5px; color: var(--body); }
   .chips button:hover { border-color: var(--solid); }
   .chips button[aria-pressed="true"] { background: var(--solid); border-color: var(--solid); color: var(--on-solid); }
-  .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; }
-  .card { display: flex; flex-direction: column; gap: 12px; padding: 18px 20px; border: 1px solid var(--rule); border-radius: 17px; background: var(--surface); text-align: left; }
-  .card:hover { border-color: var(--solid); background: var(--surface-2); }
+  /* A card is as tall as the book it describes, not as tall as its neighbour.
+     A row-based grid stretched them level, which made the same book a different
+     height in every category and left a slab of dead space under the short
+     ones; unstretched, it left the gap open between the rows instead. Down
+     three columns there is neither, and the shelf still reads alphabetically —
+     down each column rather than across. */
+  .cards { columns: 3; column-gap: 15px; }
+  .cards > * { break-inside: avoid; margin-bottom: 15px; }
+  /* A card is the target, not a panel with a target on it: it lifts under the
+     pointer and carries its own action at the foot, so it reads as pressable
+     on a touchscreen that will never send one. */
+  .card { display: flex; flex-direction: column; gap: 12px; padding: 18px 20px; border: 1px solid var(--rule); border-radius: 17px; background: var(--surface); text-align: left;
+          transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease, background .16s ease; }
+  .card:hover { border-color: var(--solid); background: var(--surface-2); transform: translateY(-2px); box-shadow: var(--shadow); }
+  .card:active { transform: translateY(0); }
   .card[aria-pressed="true"] { border-color: var(--solid); background: var(--surface-3); box-shadow: var(--shadow); }
   .card.unread { border-style: dashed; }
   .card .name { font-size: 19px; font-weight: 700; line-height: 1.2; color: var(--ink); }
@@ -146,10 +172,17 @@
   .card .took { align-self: flex-start; padding: 7px 18px; border-radius: 999px; background: var(--solid); color: var(--on-solid); font-size: 13.5px; }
   .card .forget { align-self: flex-start; padding: 0; font: 400 13px/1 'Charis SIL', Charter, Georgia, serif; background: none; border: 0; color: var(--muted); text-decoration: underline; text-underline-offset: 3px; }
   .card .forget:hover { color: var(--ink); }
-  .card .ready { display: flex; flex-direction: column; gap: 9px; padding-top: 13px; border-top: 1px solid var(--rule); }
-  .card .ready:not(:last-child) { padding-bottom: 15px; border-bottom: 1px solid var(--rule); }
-  .card .get { align-self: flex-start; padding: 9px 20px; border-radius: 999px; border: 0; background: var(--solid); color: var(--on-solid); font: 400 14px/1 'Charis SIL', Charter, Georgia, serif; cursor: pointer; }
-  .card .get:hover { filter: brightness(1.1); }
+  /* What this card does, said in the card's own voice rather than on a pill
+     inside it. The pill was a second target on a surface that was already one,
+     and a reader had to guess which of the two they were meant to press. */
+  .card .act { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding-top: 12px; border-top: 1px solid var(--rule); font-size: 15px; color: var(--ink); }
+  .card .act .arrow { flex: none; color: var(--solid); transition: transform .16s ease; }
+  .card:hover .act { color: var(--solid); }
+  .card:hover .act .arrow { transform: translateY(2px); }
+  .card:hover .act .arrow.go { transform: translateX(3px); }
+  .card .own { align-self: flex-start; padding: 0; font: 400 13px/1.3 'Charis SIL', Charter, Georgia, serif; background: none; border: 0; color: var(--muted); text-decoration: underline; text-underline-offset: 3px; }
+  .card .own:hover { color: var(--ink); }
+  .card .more { display: flex; flex-direction: column; gap: 10px; padding-top: 12px; border-top: 1px solid var(--rule); }
   .versions { display: flex; flex-direction: column; gap: 7px; padding-top: 11px; border-top: 1px solid var(--rule); }
   .versions .caps { font-size: 9.5px; }
   .versions .pills { gap: 6px; }
@@ -164,7 +197,8 @@
   .fetching .track { height: 2px; background: var(--rule); position: relative; border-radius: 2px; overflow: hidden; }
   .fetching .track > span { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--solid); transition: width .35s ease; }
   .pager { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-top: 14px; border-top: 1px solid var(--rule); font-size: 13.5px; color: var(--muted); }
-  .pager .nums { display: flex; align-items: center; gap: 4px; }
+  /* A page number's height, held whether or not this category runs to two pages. */
+  .pager .nums { display: flex; align-items: center; gap: 4px; min-height: 35px; }
   .pager .nums button { min-width: 32px; padding: 6px 10px; border: 0; border-radius: 999px; background: none; font-size: 14px; color: var(--body); }
   .pager .nums button:disabled { color: var(--rule-2); }
   .pager .nums button[aria-current="true"] { background: var(--solid); color: var(--on-solid); }
@@ -285,7 +319,7 @@
     body { padding: 16px 16px 36px; }
     .hero h1 { font-size: 31px; }
     .who, .files, .two, .tiers, .hits { grid-template-columns: 1fr; }
-    .cards { grid-template-columns: repeat(2, 1fr); }
+    .cards { columns: 2; }
     .seg { grid-template-columns: 1fr; }
     .shelf .row.top, .beyond { flex-direction: column; align-items: stretch; }
     .shelf .row.top .find { width: auto; }
@@ -294,7 +328,7 @@
     .centre .spread { width: 100%; }
   }
   @media (max-width: 560px) {
-    .cards { grid-template-columns: 1fr; }
+    .cards { columns: 1; }
     .spread { grid-template-columns: 1fr; }
     .leaf { min-height: 0; }
     .leaf.r { box-shadow: none; }
@@ -644,7 +678,6 @@ function setRoute(route, keepHash) {
   $("files").hidden = route === "shelf";
   $("pick-pub").hidden = route !== "align";
   $("files").classList.toggle("one", route !== "align");
-  document.querySelector("#s-books .step").classList.toggle("wide", route === "shelf");
   if (route === "shelf") paintShelf();
   if (!keepHash && hashRoute() !== route) history.replaceState(null, "", "#" + route);
   refreshNext();
@@ -741,31 +774,32 @@ function fact(label, value) {
   return row;
 }
 // A book that was built, read and approved is already made, and the card hands
-// it over rather than asking for a key. Every figure in this block was measured
-// off that file when the builder was assembled, so the description cannot drift
-// from the book — and the card stays live underneath, because a reader may want
+// it over rather than asking for a key. Every figure here was measured off that
+// file when the builder was assembled, so the description cannot drift from the
+// book — and building your own stays open underneath, because a reader may want
 // a different English, another language, or glosses this one was built without.
 function weight(bytes) {
   return bytes >= 1e6 ? (bytes / 1e6).toFixed(1) + " MB" : Math.round(bytes / 1e3) + " KB";
 }
+// What is in the finished file, as a line to be scanned rather than a sentence
+// to be read. It sits directly under the card's own action, where it is the
+// answer to "what am I taking?" and nothing else.
 function madeOf(book) {
   const made = book.prebuilt;
   // Name the edition only where there is more than one to confuse it with.
-  const named = made.english && book.translations.length > 1 ? " (" + made.english + ")" : "";
+  const named = made.english && book.translations.length > 1 ? " · " + made.english : "";
   const parts = [made.solo
-    ? "the French beside the published translation" + named
+    ? "French + published translation" + named
     : made.published
-      ? "the French, a translation, and the published one" + named
-      : "the French and a translation"];
+      ? "French + translation + published" + named
+      : "French + translation"];
   if (made.glossed) {
     parts.push(made.glossed >= made.paragraphs
-      ? "hover glosses throughout"
-      : "hover glosses on " + made.glossed + " paragraphs");
+      ? "glosses throughout"
+      : "glosses on " + made.glossed + " paragraphs");
   }
-  if (made.formats.length) {
-    parts.push(made.formats.map((f) => f.toUpperCase()).join(" and ") + " inside");
-  }
-  return "Made already: " + parts.join(", ") + ".";
+  if (made.formats.length) parts.push(made.formats.map((f) => f.toUpperCase()).join(" + "));
+  return parts.join(" · ");
 }
 // A book that went out without glosses can still have them, and the price is
 // said here because the builder is the one place allowed to name one — the
@@ -773,25 +807,44 @@ function madeOf(book) {
 // a chapter.
 function glossOffer(book) {
   if (book.prebuilt.glossed) return null;
-  return "No hover glosses in this one. You can add them as you read, a page at "
-    + "a time, on your own key — around a penny for a chapter.";
+  return "No hover glosses — add them as you read, on your own key, "
+    + "around a penny for a chapter.";
 }
-function readyBlock(book) {
-  const box = el("div", "ready");
-  const get = el("button", "get", "Ready to read · " + weight(book.prebuilt.bytes));
-  get.addEventListener("click", (e) => {
-    e.stopPropagation();
-    const link = el("a");
-    link.href = book.prebuilt.href;
-    link.download = book.prebuilt.filename;
-    link.click();
-  });
-  box.appendChild(get);
-  box.appendChild(el("div", "say", madeOf(book)));
-  const offer = glossOffer(book);
-  if (offer) box.appendChild(el("div", "say", offer));
-  box.appendChild(el("div", "say", "Or build your own — tap the card."));
-  return box;
+function unreadNote(book) {
+  if (book.readThrough) return null;
+  // A finished book was read before it was approved; what nobody has read is the
+  // build this card would make, which is a different thing from a different pair
+  // of files. Said plainly, or the two sit and contradict.
+  return book.prebuilt
+    ? "Nobody has read the edition you would build here through, so we cannot say how "
+      + "closely those two keep pace."
+    : "Nobody has read this one through, so we cannot say how closely the two keep pace.";
+}
+// The one line a card may spend on a caveat. The rest waits until the book is
+// chosen, where it is about a build that is actually being made. A card left
+// with four of these was taller than the three books it sat beside.
+function caveat(book) {
+  // A book's note is about the pair of editions a build would put together —
+  // which English, how loosely they pair — so where a finished file is being
+  // handed over it waits for the reader who asks to build one.
+  if (book.prebuilt) return glossOffer(book);
+  return unreadNote(book) || book.note || null;
+}
+// Every card ends with the thing it does, named and arrowed, so a card reads as
+// pressable without waiting for a pointer that a touchscreen never sends.
+function actionLine(book) {
+  const row = el("div", book.prebuilt ? "act ready" : "act");
+  row.appendChild(el("span", null, book.prebuilt
+    ? "Ready to read · " + weight(book.prebuilt.bytes)
+    : "Build it yourself" + (book.minutes ? " · about " + book.minutes + " min" : "")));
+  row.appendChild(el("span", book.prebuilt ? "arrow" : "arrow go", book.prebuilt ? "↓" : "→"));
+  return row;
+}
+function takeBook(book) {
+  const link = el("a");
+  link.href = book.prebuilt.href;
+  link.download = book.prebuilt.filename;
+  link.click();
 }
 
 function bookCard(book) {
@@ -810,13 +863,11 @@ function bookCard(book) {
   const version = book.translations[index] || book.translations[0];
   facts.appendChild(fact("English", version.label));
   facts.appendChild(fact("Chapters", String(book.chapters)));
-  if (book.minutes) facts.appendChild(fact("Build", "about " + book.minutes + " min"));
+  // How long a build takes belongs to the card whose one action is to build.
+  // Where a finished book is being handed over, the figure beside it is its
+  // weight, and a second one only asks to be mistaken for it.
+  if (book.minutes && !book.prebuilt) facts.appendChild(fact("Build", "about " + book.minutes + " min"));
   card.appendChild(facts);
-
-  // The book in hand comes before anything about the book you could make: what
-  // follows — which English, how the two are shaped, what nobody has checked —
-  // is all about building your own, and reads as that once this sits above it.
-  if (book.prebuilt) card.appendChild(readyBlock(book));
 
   const marks = el("div", "marks");
   if (book.abridged) marks.appendChild(el("span", "mark", "Abridged"));
@@ -829,23 +880,41 @@ function bookCard(book) {
   }
   if (marks.children.length) card.appendChild(marks);
 
-  if (book.note) card.appendChild(el("div", "say", book.note));
-  if (!book.readThrough) {
-    // A finished book was read before it was approved; what nobody has read is
-    // the build this card would make, which is a different thing from a
-    // different pair of files. Said plainly, or the two sit and contradict.
-    card.appendChild(el("div", "say", book.prebuilt
-      ? "Nobody has read the edition you would build here through, so we cannot say how "
-        + "closely those two keep pace."
-      : "Nobody has read this one through, so we cannot say how closely the two keep pace."));
+  card.appendChild(actionLine(book));
+  if (book.prebuilt) card.appendChild(el("div", "say", madeOf(book)));
+  const said = caveat(book);
+  if (said) card.appendChild(el("div", "say", said));
+
+  // Building your own is the second thing a finished book's card does, so it is
+  // a line of type rather than a second target competing with the card itself.
+  if (book.prebuilt) {
+    const own = el("button", "own", "Or build it yourself →");
+    own.addEventListener("click", (e) => { e.stopPropagation(); pickBook(book.slug, index); });
+    card.appendChild(own);
   }
-  if (picked) card.appendChild(el("div", "took", S.pick.loaded ? "Chosen" : "Fetching…"));
+  // Chosen, the card stops selling the book and starts describing the build:
+  // everything the face had no room for, said where it is about to matter.
+  if (picked) {
+    const more = el("div", "more");
+    // A book with two Englishes says what it has to say under the picker, where
+    // the choice is; saying it twice on one card is how it read at first.
+    for (const line of [book.prebuilt ? unreadNote(book) : null,
+                        said === book.note || book.translations.length > 1 ? null : book.note]) {
+      if (line) more.appendChild(el("div", "say", line));
+    }
+    more.appendChild(el("div", "took", S.pick.loaded ? "Chosen" : "Fetching…"));
+    card.appendChild(more);
+  }
   if (book.kept) {
     const drop = el("button", "forget", "Take it off my shelf");
     drop.addEventListener("click", (e) => { e.stopPropagation(); forget(book.slug); });
     card.appendChild(drop);
   }
-  card.addEventListener("click", () => pickBook(book.slug, picked ? S.pick.index : 0));
+  // A card that has a finished book behind it hands it over; a card that has
+  // none builds one. Either way the whole card is the thing you press.
+  card.addEventListener("click", () => (book.prebuilt
+    ? takeBook(book)
+    : pickBook(book.slug, picked ? S.pick.index : 0)));
   return card;
 }
 function versionPicker(book) {
@@ -859,8 +928,11 @@ function versionPicker(book) {
     pills.appendChild(b);
   });
   box.appendChild(pills);
-  box.appendChild(el("div", "say", "Two editions of the same book, translated at different "
-    + "times. Either reads beside the French; they are shaped differently."));
+  // What this book's two Englishes are, where the book itself has been read and
+  // can say; the general truth about any two editions where it has not.
+  box.appendChild(el("div", "say", book.note
+    || "Two editions of the same book, translated at different times. Either reads "
+       + "beside the French; they are shaped differently."));
   return box;
 }
 function paintShelf() {
@@ -895,17 +967,22 @@ function paintShelf() {
   if (!shown.length) {
     const empty = el("div", "say", "Nothing on the shelf answers to that. "
       + "Any book out of copyright can still be looked up on Wikisource.");
-    empty.style.gridColumn = "1 / -1";
+    empty.style.columnSpan = "all";
     cards.appendChild(empty);
   }
 
-  $("shelf-pager").hidden = pages < 2;
+  // The row below the cards stays whichever category is chosen. It used to be
+  // dropped whenever a filter left one page, which took the rule, the count and
+  // 30px of height out from under the cards along with the numbers.
+  $("shelf-pager").hidden = !books.length;
+  $("shelf-count").textContent = pages > 1
+    ? (from + 1) + "–" + Math.min(from + PER_PAGE, books.length) + " of " + books.length
+      + " · alphabetical"
+    : books.length + (books.length === 1 ? " book" : " books") + " · alphabetical";
+  $("shelf-per").textContent = pages > 1 ? PER_PAGE + " to a page" : "";
+  $("shelf-nums").innerHTML = "";
   if (pages > 1) {
-    $("shelf-count").textContent = (from + 1) + "–" + Math.min(from + PER_PAGE, books.length)
-      + " of " + books.length + " · alphabetical";
-    $("shelf-per").textContent = PER_PAGE + " to a page";
     const nums = $("shelf-nums");
-    nums.innerHTML = "";
     const step = (label, to, off) => {
       const b = el("button", null, label);
       b.disabled = off;

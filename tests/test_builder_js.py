@@ -365,9 +365,15 @@ def test_the_time_left_is_not_guessed_from_a_clock_that_never_started(page):
 # ---- the shelf -----------------------------------------------------------
 
 def to_shelf(page, slug="candide"):
-    """Through the fork onto the shelf, with a book picked and fetched."""
+    """Through the fork onto the shelf, with a book picked and fetched.
+
+    A card with a finished book behind it hands that file over when pressed;
+    building the same book yourself is the small line under it.
+    """
     page.click("[data-route=shelf]")
-    page.click(f".card[data-slug={slug!r}]")
+    card = f".card[data-slug={slug!r}]"
+    own = page.locator(f"{card} .own")
+    page.click(f"{card} .own" if own.count() else card)
     page.wait_for_function("!document.getElementById('to-settings').disabled")
 
 
@@ -384,7 +390,10 @@ def test_a_card_shows_the_translator_the_wiki_names_and_nothing_more(page):
     assert "Voltaire" in text(page, card)
     assert "Smollett · 1920" in text(page, card)
     assert "30" in text(page, f"{card} .facts")
-    assert "about 3 min" in text(page, card)
+    # How long a build takes is on the card whose one action is to build. Where
+    # a finished file is being handed over, the figure beside it is its weight.
+    assert "about 3 min" not in text(page, card)
+    assert "about 9 min" in text(page, ".card[data-slug='80days'] .act")
 
 
 def test_a_book_nobody_has_read_says_so_instead_of_claiming_coverage(page):
@@ -423,7 +432,7 @@ def test_the_shelf_route_prices_the_reading_not_a_translation(page):
 def test_a_book_with_two_translations_lets_the_reader_choose(page):
     page.click("[data-route=shelf]")
     assert page.eval_on_selector_all(".versions", "n => n.length") == 0
-    page.click(".card[data-slug=micromegas]")
+    page.click(".card[data-slug=micromegas] .own")
     page.wait_for_selector(".versions")
     labels = page.eval_on_selector_all(".versions .pills button", "n => n.map(b => b.textContent)")
     assert labels == ["Phalen", "Fleming · 1906"]
@@ -449,9 +458,48 @@ def test_a_filter_narrows_the_shelf_and_lets_go(page):
     assert page.eval_on_selector_all(".card", "n => n.length") == 3
 
 
-def test_the_pager_stays_away_while_the_shelf_fits_on_one_page(page):
+def test_the_row_below_the_cards_keeps_its_place_across_categories(page):
+    """It used to be dropped whenever a filter left one page, which took the
+    rule and 50px of height out from under the cards as the reader switched."""
     page.click("[data-route=shelf]")
-    assert hidden(page, "#shelf-pager")
+    tall = page.eval_on_selector("#shelf-pager", "n => n.getBoundingClientRect().height")
+    assert not hidden(page, "#shelf-pager")
+    assert "3 books" in text(page, "#shelf-count")
+    page.click("#shelf-filters button:nth-child(2)")
+    assert page.eval_on_selector("#shelf-pager", "n => n.getBoundingClientRect().height") == tall
+    assert "1 book" in text(page, "#shelf-count")
+
+
+def test_a_card_is_the_same_height_in_every_category(page):
+    """Cards used to stretch level with their row, so the same book stood 633px
+    tall beside a long one and 484px beside a short one — it changed size under
+    a reader who had only pressed a filter."""
+    page.click("[data-route=shelf]")
+    heights = lambda: page.eval_on_selector_all(
+        ".card", "n => Object.fromEntries(n.map(c => [c.dataset.slug, "
+                 "Math.round(c.getBoundingClientRect().height)]))")
+    everything = heights()
+    for nth in (2, 3):
+        page.click(f"#shelf-filters button:nth-child({nth})")
+        for slug, tall in heights().items():
+            assert tall == everything[slug], f"{slug} changed height under a filter"
+        page.click(f"#shelf-filters button:nth-child({nth})")
+
+
+def test_the_tab_strip_is_the_same_size_on_every_route(page):
+    """The shelf used to widen the whole step, so the three tabs grew under the
+    finger that had just pressed one, and the note below them stood at a
+    different height on each route."""
+    boxes = []
+    for route in ("translate", "align", "shelf"):
+        page.click(f"[data-route={route}]")
+        page.wait_for_timeout(80)
+        boxes.append(page.evaluate(
+            "() => ['#route', '#route-note'].map(s => {"
+            "  const r = document.querySelector(s).getBoundingClientRect();"
+            "  return [Math.round(r.left), Math.round(r.width), Math.round(r.height)];"
+            "})"))
+    assert boxes[0] == boxes[1] == boxes[2], boxes
 
 
 # ---- books already made --------------------------------------------------
@@ -459,54 +507,58 @@ def test_the_pager_stays_away_while_the_shelf_fits_on_one_page(page):
 def test_only_an_approved_book_is_offered_ready_to_read(page):
     page.click("[data-route=shelf]")
     offered = page.eval_on_selector_all(
-        ".card .get", "n => n.map(b => b.closest('.card').dataset.slug)")
+        ".card .act.ready", "n => n.map(b => b.closest('.card').dataset.slug)")
     assert offered == ["candide", "micromegas"], (
         "a card may hand over a book only where one was approved")
-    assert "1.1 MB" in text(page, ".card[data-slug=micromegas] .get")
+    assert "1.1 MB" in text(page, ".card[data-slug=micromegas] .act")
+    # Every other card still says what it does, so no card is a dead panel.
+    assert "Build it yourself" in text(page, ".card[data-slug='80days'] .act")
 
 
 def test_the_ready_line_says_what_is_in_the_book_and_names_the_edition(page):
     page.click("[data-route=shelf]")
-    said = text(page, ".card[data-slug=micromegas] .ready .say")
+    said = text(page, ".card[data-slug=micromegas] .say")
     # Two English editions are on offer, so the one inside is named; every other
     # clause is measured off the file rather than written by hand.
-    assert "the French, a translation, and the published one (Phalen)" in said
-    assert "hover glosses throughout" in said
-    assert "EPUB and PDF inside" in said
-    assert "Or build your own" in text(page, ".card[data-slug=micromegas] .ready")
+    assert "French + translation + published · Phalen" in said
+    assert "glosses throughout" in said
+    assert "EPUB + PDF" in said
+    assert "Or build it yourself" in text(page, ".card[data-slug=micromegas]")
 
 
 def test_the_finished_book_does_not_sit_under_a_note_denying_it(page):
+    """Nobody has read the wiki pair this card would build. That is not a claim
+    about the book already made, so it waits for the reader who asks to build
+    one — and never reads as a warning about the file being handed over."""
     page.click("[data-route=shelf]")
-    card = text(page, ".card[data-slug=micromegas]")
-    # Nobody has read the wiki pair this card would build. That is not a claim
-    # about the book already made, and must not read as one.
-    assert "Nobody has read the edition you would build here" in card
-    assert "Nobody has read this one through" not in card
+    card = ".card[data-slug=micromegas]"
+    assert "Nobody has read" not in text(page, card)
+    page.click(f"{card} .own")
+    page.wait_for_selector(f"{card} .more")
+    assert "Nobody has read the edition you would build here" in text(page, f"{card} .more")
+    assert "Nobody has read this one through" not in text(page, card)
     order = page.eval_on_selector(
-        ".card[data-slug=micromegas]",
-        "c => [...c.children].findIndex(n => n.classList.contains('ready'))")
-    marks = page.eval_on_selector(
-        ".card[data-slug=micromegas]",
-        "c => [...c.children].findIndex(n => n.classList.contains('say'))")
-    assert order < marks, "the book in hand comes before anything about building one"
+        card, "c => [...c.children].findIndex(n => n.classList.contains('act'))")
+    later = page.eval_on_selector(
+        card, "c => [...c.children].findIndex(n => n.classList.contains('more'))")
+    assert order < later, "the book in hand comes before anything about building one"
 
 
 def test_taking_the_finished_book_neither_builds_it_nor_costs_a_key(page):
     page.click("[data-route=shelf]")
     with page.expect_download() as caught:
-        page.click(".card[data-slug=micromegas] .get")
+        page.click(".card[data-slug=micromegas] .name")
     assert caught.value.suggested_filename == "Micromégas - bilingual reader.html"
-    # The download must not fall through to the card and start a build behind it.
+    # Taking the file is not choosing the book: no build starts behind it.
     assert page.eval_on_selector_all(".card[aria-pressed=true]", "n => n.length") == 0
     assert not hidden(page, "#s-books")
 
 
-def test_the_card_underneath_still_builds_the_book_yourself(page):
+def test_the_line_underneath_still_builds_the_book_yourself(page):
     page.click("[data-route=shelf]")
-    page.click(".card[data-slug=micromegas] .name")
+    page.click(".card[data-slug=micromegas] .own")
     page.wait_for_selector(".card[data-slug=micromegas][aria-pressed=true]")
-    assert not hidden(page, ".card[data-slug=micromegas] .get"), (
+    assert not hidden(page, ".card[data-slug=micromegas] .act.ready"), (
         "a book already made must still be buildable — another English, another language"
     )
 
@@ -707,9 +759,9 @@ def test_a_book_divided_differently_says_so_rather_than_shrugging(page):
 
 def test_a_book_without_glosses_offers_them_rather_than_passing_over_it(page):
     page.click("[data-route=shelf]")
-    said = text(page, ".card[data-slug=candide] .ready")
-    assert "the French beside the published translation" in said
-    assert "No hover glosses in this one" in said
+    said = text(page, ".card[data-slug=candide]")
+    assert "French + published translation" in said
+    assert "No hover glosses" in said
     assert "on your own key" in said
     # The builder is the one place allowed to name a figure.
     assert "penny" in said
@@ -717,4 +769,4 @@ def test_a_book_without_glosses_offers_them_rather_than_passing_over_it(page):
 
 def test_a_book_that_has_glosses_is_not_offered_them_again(page):
     page.click("[data-route=shelf]")
-    assert "No hover glosses" not in text(page, ".card[data-slug=micromegas] .ready")
+    assert "No hover glosses" not in text(page, ".card[data-slug=micromegas]")
