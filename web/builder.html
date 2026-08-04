@@ -72,10 +72,14 @@
   .chip code { font: 12.5px/1 ui-monospace, Menlo, monospace; }
 
   /* --- the fork --- */
-  .hero { display: flex; flex-direction: column; align-items: center; gap: 7px; text-align: center; margin-top: 30px; }
+  /* Centred, the two grey lines under the headings broke into short ragged
+     rows with no edge to come back to. The hero sits in step one's own column
+     now, so masthead, headline, subtitle and everything below share one left
+     edge and read down it. */
+  .hero { display: flex; flex-direction: column; align-items: flex-start; gap: 7px; max-width: 640px; margin: 30px auto 0; }
   .hero .caps { letter-spacing: .24em; font-size: 11px; }
   .hero h1 { margin-top: 6px; font-size: 41px; line-height: 1.1; letter-spacing: -.015em; }
-  .hero p { margin: 8px 0 0; max-width: 41ch; font-size: 17px; color: var(--muted); }
+  .hero p { margin: 8px 0 0; max-width: 60ch; font-size: 17px; color: var(--muted); }
   .row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
   .tag { flex: none; font: 500 10.5px/1 system-ui, sans-serif; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--rule-2); border-radius: 999px; padding: 5px 9px; white-space: nowrap; }
   .assure { display: flex; justify-content: center; align-items: center; gap: 11px; margin-top: 24px; font-size: 14px; color: var(--muted); flex-wrap: wrap; }
@@ -92,7 +96,7 @@
   :root[data-theme="night"] .seg { border-radius: 14px; }
   :root[data-theme="night"] .seg button { border-radius: 11px; }
   :root[data-theme="night"] .seg button[aria-pressed="true"] { background: rgba(200,184,145,.9); color: #241b12; }
-  .seg-note { margin: -8px auto 0; max-width: 52ch; text-align: center; font-size: 14px; color: var(--muted); }
+  .seg-note { margin: -8px 0 0; max-width: 52ch; font-size: 14px; color: var(--muted); }
   .files { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
   .files.one { grid-template-columns: 1fr; }
   .file { position: relative; display: flex; flex-direction: column; gap: 6px; padding: 18px 52px 18px 20px; border: 1px solid var(--rule-2); border-radius: 17px; background: var(--surface-2); text-align: left; width: 100%; min-height: 118px; }
