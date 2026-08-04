@@ -174,6 +174,17 @@ def test_the_aligned_route_will_not_go_on_without_the_edition(page):
     page.wait_for_function("!document.getElementById('to-settings').disabled")
 
 
+def test_a_file_card_says_it_takes_a_file_before_one_is_given(page):
+    """Nothing on the card said it could be uploaded to but the words."""
+    mask = lambda: page.eval_on_selector(
+        "#pick-orig .sign", "n => getComputedStyle(n).maskImage")
+    assert "svg" in mask()
+    empty = mask()
+    upload(page, "#f-orig", "livre.txt")
+    page.wait_for_function("document.getElementById('pick-orig').classList.contains('has')")
+    assert mask() != empty
+
+
 def test_a_file_card_shows_what_the_file_says_about_itself(page):
     upload(page, "#f-orig", "livre.txt")
     page.wait_for_function(
