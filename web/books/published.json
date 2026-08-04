@@ -17,6 +17,12 @@
       "file": "80days.html",
       "english": "Towle · 1873",
       "approved": "2026-08-04"
+    },
+    {
+      "slug": "bovary",
+      "file": "bovary.html",
+      "english": "Marx-Aveling · 1886",
+      "approved": "2026-08-04"
     }
   ]
 }
