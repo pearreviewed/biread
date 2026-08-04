@@ -69,3 +69,22 @@ already keyed to the paragraph it belongs to.
 
 A `PUT` may carry only part of a shelf entry; missing fields are left alone,
 which is what lets a reader who only turned a page send only a position.
+
+## Backups
+
+`deploy/backup.sh` dumps the database nightly (systemd `biread-backup.timer`) to
+`/srv/backups/biread`, gzipped, fourteen kept. The dump is kilobytes, because the
+database holds bookmarks rather than books.
+
+It guards against a bad migration or a mistaken DELETE. It does **not** guard
+against losing the machine — the copies sit on the same disk. Moving them
+off-box needs somewhere to put them and is a separate decision.
+
+Restore, and prove it still works, into a scratch database first:
+
+```sh
+createdb restore_check
+gunzip -c /srv/backups/biread/love-<stamp>.sql.gz | psql -q -d restore_check
+psql -d restore_check -c 'select count(*) from shelf_entry'
+dropdb restore_check
+```

@@ -1,0 +1,11 @@
+[Unit]
+Description=biread — dump the bookmarks nightly
+
+[Timer]
+OnCalendar=daily
+# The box may be asleep or the unit added late; a missed night still runs.
+Persistent=true
+RandomizedDelaySec=15m
+
+[Install]
+WantedBy=timers.target

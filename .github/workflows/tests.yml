@@ -39,3 +39,34 @@ jobs:
       - run: pip install -e ".[browser]"
       - run: python -m playwright install --with-deps chromium
       - run: pytest tests/test_reader_js.py tests/test_reader_sync_js.py tests/test_export.py tests/test_cli.py -q
+
+  # The bookmark-sync service, against a real Postgres. Its own job because it is
+  # its own program: not installed with the package, not collected by the root
+  # suite (testpaths is `tests`), and previously run nowhere but the server — 26
+  # tests guarding other people's reading positions, checked by nobody.
+  server:
+    name: server
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: biread_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r server/requirements.txt pytest httpx
+      # The merge rule lives in `on conflict … where`, so a fake database would
+      # only reimplement it wrongly. This is the one suite that needs a service.
+      - run: pytest -q server/tests
+        env:
+          BIREAD_DATABASE_URL: "host=localhost port=5432 user=postgres password=postgres dbname=biread_test"
