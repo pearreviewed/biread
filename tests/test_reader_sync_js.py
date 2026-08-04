@@ -13,7 +13,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 
-from tests.test_reader_js import build_reader, sync_playwright
+from test_reader_js import build_reader, sync_playwright
 
 
 class Stub:
