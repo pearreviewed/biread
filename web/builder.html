@@ -13,6 +13,10 @@
     --solid: #3a2f20; --solid-hover: #4d3f2b; --on-solid: #fdf8ec;
     --page: #fffdf6; --page-edge: rgba(120,95,55,.26); --page-ink: #332a1c; --page-muted: #a8926e;
     --num: #4a3d2b; --shadow: 0 18px 44px rgba(90,70,40,.14); --tint: rgba(58,47,32,.07);
+    /* Every surface here is translucent, which is right for a panel sitting on
+       the paper and wrong for one standing over another card. Opaque, and mixed
+       to the paper it stands on. */
+    --over: #fbf6ea;
   }
   :root[data-theme="night"] {
     --paper: radial-gradient(120% 90% at 50% 6%, #2f2619 0%, #1c160f 58%, #100c07 100%);
@@ -22,6 +26,7 @@
     --solid: #c8b891; --solid-hover: #dccdaa; --on-solid: #1f1810;
     --page: #f2e9d6; --page-edge: rgba(120,95,55,.5); --page-ink: #332a1c; --page-muted: #a8926e;
     --num: #b9c99a; --shadow: 0 20px 44px rgba(0,0,0,.5); --tint: rgba(120,95,55,.2);
+    --over: #241d13;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; }
@@ -171,7 +176,7 @@
   /* A card is the target, not a panel with a target on it: it lifts under the
      pointer and carries its own action at the foot, so it reads as pressable
      on a touchscreen that will never send one. */
-  .card { display: flex; flex-direction: column; gap: 12px; padding: 18px 20px; border: 1px solid var(--rule); border-radius: 17px; background: var(--surface); text-align: left;
+  .card { position: relative; display: flex; flex-direction: column; gap: 12px; padding: 18px 20px; border: 1px solid var(--rule); border-radius: 17px; background: var(--surface); text-align: left;
           transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease, background .16s ease; }
   .card:hover { border-color: var(--solid); background: var(--surface-2); transform: translateY(-2px); box-shadow: var(--shadow); }
   .card:active { transform: translateY(0); }
@@ -199,6 +204,26 @@
   .card .own { align-self: flex-start; padding: 0; font: 400 13px/1.3 'Charis SIL', Charter, Georgia, serif; background: none; border: 0; color: var(--muted); text-decoration: underline; text-underline-offset: 3px; }
   .card .own:hover { color: var(--ink); }
   .card .more { display: flex; flex-direction: column; gap: 10px; padding-top: 12px; border-top: 1px solid var(--rule); }
+  /* What the book is about, which a card has no room for and a reader wants
+     before anything else. It opens downward out of the card under the pointer
+     and over whatever is beneath, so the shelf itself does not move — a row
+     that shifts as you read across it is the fault this shelf has already been
+     fixed for twice. Only where a pointer exists: a touchscreen would leave it
+     stuck open on the card last tapped. */
+  .card .brief { position: absolute; left: -1px; right: -1px; top: 100%;
+    padding: 13px 20px 17px; border: 1px solid var(--solid); border-top: 0;
+    border-radius: 0 0 17px 17px; background: var(--over);
+    box-shadow: var(--shadow); font-size: 13.5px; line-height: 1.5;
+    color: var(--body); text-wrap: pretty; text-align: left;
+    opacity: 0; visibility: hidden; transition: opacity .16s ease; }
+  .card.unread .brief { border-style: dashed; border-top: 0; }
+  @media (hover: hover) {
+    /* The card is opaque while it is open, or the card underneath reads through
+       its own drawer. */
+    .card:hover { z-index: 3; background: var(--over);
+      border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+    .card:hover .brief { opacity: 1; visibility: visible; }
+  }
   .versions { display: flex; flex-direction: column; gap: 7px; padding-top: 11px; border-top: 1px solid var(--rule); }
   .versions .caps { font-size: 9.5px; }
   .versions .pills { gap: 6px; }
@@ -811,31 +836,30 @@ function weight(bytes) {
 // What is in the finished file, as a line to be scanned rather than a sentence
 // to be read. It sits directly under the card's own action, where it is the
 // answer to "what am I taking?" and nothing else.
+// One line, always: what is in the file, whether it is glossed, what else it
+// came out as. Glosses used to have a sentence of their own offering to sell
+// them, which ran to two lines on seven cards of eight and left the rule inside
+// each card at a different height from its neighbours'. A book without them
+// says so in two words; the offer itself is met in the reader, whose header
+// carries it, and where the reader is the one about to want it.
 function madeOf(book) {
   const made = book.prebuilt;
   // Name the edition only where there is more than one to confuse it with.
-  const named = made.english && book.translations.length > 1 ? " · " + made.english : "";
-  const parts = [made.solo
-    ? "French + published translation" + named
-    : made.published
-      ? "French + translation + published" + named
-      : "French + translation"];
-  if (made.glossed) {
-    parts.push(made.glossed >= made.paragraphs
-      ? "glosses throughout"
+  const named = made.english && book.translations.length > 1;
+  const parts = [named
+    ? "French + " + made.english
+    : made.solo
+      ? "French + published translation"
+      : made.published
+        ? "French + translation + published"
+        : "French + translation"];
+  parts.push(!made.glossed
+    ? "no glosses"
+    : made.glossed >= made.paragraphs
+      ? "glosses"
       : "glosses on " + made.glossed + " paragraphs");
-  }
   if (made.formats.length) parts.push(made.formats.map((f) => f.toUpperCase()).join(" + "));
   return parts.join(" · ");
-}
-// A book that went out without glosses can still have them, and the price is
-// said here because the builder is the one place allowed to name one — the
-// reader shows no figure, ever. A page at a time, so nobody buys a book to read
-// a chapter.
-function glossOffer(book) {
-  if (book.prebuilt.glossed) return null;
-  return "No hover glosses — add them as you read, on your own key, "
-    + "around a penny for a chapter.";
 }
 function unreadNote(book) {
   if (book.readThrough) return null;
@@ -853,8 +877,9 @@ function unreadNote(book) {
 function caveat(book) {
   // A book's note is about the pair of editions a build would put together —
   // which English, how loosely they pair — so where a finished file is being
-  // handed over it waits for the reader who asks to build one.
-  if (book.prebuilt) return glossOffer(book);
+  // handed over it waits for the reader who asks to build one. A finished book
+  // has nothing left to caveat: its one line above says what it is.
+  if (book.prebuilt) return null;
   return unreadNote(book) || book.note || null;
 }
 // How long a build takes, said wherever building is the thing being offered —
@@ -940,6 +965,10 @@ function bookCard(book) {
     drop.addEventListener("click", (e) => { e.stopPropagation(); forget(book.slug); });
     card.appendChild(drop);
   }
+  // What the book is about, opening under the pointer. Only the curated shelf
+  // has one written; a book a reader looked up carries none and its card stays
+  // shut rather than opening on an empty panel.
+  if (book.summary) card.appendChild(el("div", "brief", book.summary));
   // A card that has a finished book behind it hands it over; a card that has
   // none builds one. Either way the whole card is the thing you press.
   card.addEventListener("click", () => (book.prebuilt

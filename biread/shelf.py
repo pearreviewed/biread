@@ -60,6 +60,12 @@ class Book:
     chars: int
     translations: tuple[Translation, ...]
     note: str
+    #: What the book is about, in a sentence or two, for the card that opens
+    #: under the pointer. Written here rather than fetched: a curated shelf is
+    #: one somebody has read, and an encyclopaedia's opening line is as often
+    #: about an edition's publication history as about the story. A book a
+    #: reader looked up carries none, and its card simply does not open.
+    summary: str = ""
     read_through: bool = False
     coverage: float | None = None   # measured, where anyone has measured it
     lang: str = "fr"
@@ -92,7 +98,8 @@ class Book:
             "page": self.page, "lang": self.lang, "other": self.other,
             "chapters": self.chapters, "paragraphs": self.paragraphs,
             "minutes": self.minutes, "tokens": self.tokens,
-            "note": self.note, "readThrough": self.read_through,
+            "note": self.note, "summary": self.summary,
+            "readThrough": self.read_through,
             "coverage": self.coverage, "added": self.added,
             "english": t.label, "abridged": t.abridged, "chaptered": t.chaptered,
             "counts": [self.chapters, t.chapters], "source": t.source,
@@ -116,6 +123,10 @@ SHELF: tuple[Book, ...] = (
         ),
         note="Smollett put this into English in Voltaire’s own century, and it "
              "still reads of that century — much of the pleasure of the facing page.",
+        summary="A young man raised to believe this the best of all possible "
+                "worlds is thrown out of the castle and around the earth — the "
+                "Lisbon earthquake, the Inquisition, Eldorado, one calamity a "
+                "chapter — and comes home with a garden to tend.",
         read_through=True, coverage=0.989,
     ),
     Book(
@@ -130,6 +141,10 @@ SHELF: tuple[Book, ...] = (
         ),
         note="The two editions break their dialogue differently, so a few hundred "
              "short retorts face an empty space. The book itself is whole.",
+        summary="A country doctor’s wife in Normandy, married to a decent dull "
+                "man and ruined by the life she was promised in novels: lovers, "
+                "debts kept from her husband, and the moneylender at the end of "
+                "them.",
         read_through=True, coverage=0.874,
     ),
     Book(
@@ -146,6 +161,10 @@ SHELF: tuple[Book, ...] = (
         ),
         note="Towle cut as he went, so some of the French will face an empty page. "
              "A second English edition of 1911 is here too, its translator unnamed.",
+        summary="Phileas Fogg wagers half his fortune that he can go round the "
+                "world in eighty days, and leaves that same evening with a new "
+                "servant, no luggage, and a detective behind him who is certain "
+                "he has robbed a bank.",
     ),
     Book(
         slug="micromegas",
@@ -161,6 +180,10 @@ SHELF: tuple[Book, ...] = (
         note="Two English versions, and they are shaped differently: Phalen’s "
              "follows the French chapter for chapter, Fleming’s 1906 runs as one "
              "piece, which pairs more loosely.",
+        summary="A traveller from a star of Sirius, eight leagues tall, picks up "
+                "a Saturnian on the way past and finds the Earth — where the "
+                "inhabitants are too small to see and quite sure they are the "
+                "point of it all. Thirty-four paragraphs.",
     ),
     Book(
         slug="20000",
@@ -174,6 +197,10 @@ SHELF: tuple[Book, ...] = (
         ),
         note="The two editions count their chapters differently, 47 against 46. "
              "That is two editions, not an error, and the matching takes it in stride.",
+        summary="A professor, his servant and a harpooner go hunting a sea "
+                "monster and are taken prisoner by it: the Nautilus, and a "
+                "captain who shows them the whole ocean floor and will not say "
+                "what he is running from.",
     ),
     Book(
         slug="lesmis",
@@ -189,6 +216,10 @@ SHELF: tuple[Book, ...] = (
         note="Three hundred and sixty-five chapters over five volumes, and the "
              "two editions agree on all but two of them. The longest book here "
              "by some way — set it going and come back to it.",
+        summary="Nineteen years in the bagne for a stolen loaf, and Jean Valjean "
+                "spends the rest of his life outrunning it — a bishop’s "
+                "candlesticks, a factory, a child bought back from an inn, and a "
+                "policeman who cannot let a pardoned man be pardoned.",
         read_through=True, coverage=0.921,
     ),
     Book(
@@ -205,6 +236,10 @@ SHELF: tuple[Book, ...] = (
         note="The wiki puts each of Hugo’s eleven books on one page where this "
              "translation gives the fifty-nine chapters inside them, so the two "
              "are read at the grain they agree on: eleven against eleven.",
+        summary="Paris in 1482, told from the cathedral down: a deaf bellringer, "
+                "an archdeacon who can no longer pray, a captain who means "
+                "nothing by it, and the dancer all three of them destroy between "
+                "them.",
         read_through=True, coverage=0.861,
     ),
     Book(
@@ -220,6 +255,10 @@ SHELF: tuple[Book, ...] = (
         ),
         note="Carthage after the mercenaries’ revolt, and Flaubert at his most "
              "pitiless. The wiki has no English copy of this one at all.",
+        summary="Carthage has won its war with Rome and cannot pay the army that "
+                "won it. The mercenaries turn on the city, and Hamilcar’s "
+                "daughter walks into their camp after the veil of the goddess. "
+                "Flaubert at his most pitiless.",
         read_through=True, coverage=0.903,
         # The wiki's Salammbô is the novel plus an edition's apparatus: 829
         # paragraphs of notice, sources, textual variants and the letters

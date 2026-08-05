@@ -40,8 +40,10 @@ const SHELF = {
       page: "Candide, ou l’Optimisme", lang: "fr", other: "en",
       chapters: 30, paragraphs: 469, minutes: 3, tokens: 95916,
       note: "Smollett put this into English in Voltaire’s own century.",
+      summary: "A young man raised to believe this the best of all possible "
+        + "worlds is thrown out of the castle and around the earth.",
       // The other published book: approved and handed over, but without glosses,
-      // which the card must offer rather than pass over in silence.
+      // which the card says in two words and does not sell.
       prebuilt: {
         href: "books/candide.html", filename: "Candide - bilingual reader.html",
         english: "Smollett · 1920", approved: "2026-08-01", bytes: 614583,
@@ -57,6 +59,8 @@ const SHELF = {
       page: "Micromégas", lang: "fr", other: "en",
       chapters: 7, paragraphs: 74, minutes: 1, tokens: 19812,
       note: "Two English versions, and they are shaped differently.",
+      summary: "A traveller from a star of Sirius picks up a Saturnian on the "
+        + "way past and finds the Earth.",
       readThrough: false, coverage: null, added: false,
       english: "Phalen", abridged: false, chaptered: true, counts: [7, 7],
       translations: [
@@ -77,6 +81,8 @@ const SHELF = {
       slug: "80days", title: "Le Tour du monde en quatre-vingts jours", author: "Verne",
       page: "Le Tour du monde en quatre-vingts jours", lang: "fr", other: "en",
       chapters: 37, paragraphs: 1892, minutes: 9, tokens: 191742,
+      // No summary: the shape of a book somebody looked up rather than curated,
+      // whose card has nothing to open on.
       note: "Towle cut as he went, so some of the French will face an empty page.",
       readThrough: false, coverage: null, added: false,
       english: "Towle · 1873", abridged: true, chaptered: true, counts: [37, 37],

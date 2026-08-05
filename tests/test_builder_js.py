@@ -551,10 +551,10 @@ def test_the_ready_line_says_what_is_in_the_book_and_names_the_edition(page):
     page.click("[data-route=shelf]")
     said = text(page, ".card[data-slug=micromegas] .say")
     # Two English editions are on offer, so the one inside is named; every other
-    # clause is measured off the file rather than written by hand.
-    assert "French + translation + published · Phalen" in said
-    assert "glosses throughout" in said
-    assert "EPUB + PDF" in said
+    # clause is measured off the file rather than written by hand. One line, and
+    # one only — the rule beneath it stands level with its neighbours' or the
+    # row reads as out of true.
+    assert said == "French + Phalen · glosses · EPUB + PDF"
     assert "Or build it yourself" in text(page, ".card[data-slug=micromegas]")
 
 
@@ -849,16 +849,47 @@ def test_a_book_divided_differently_says_so_rather_than_shrugging(page):
     assert page.evaluate("agreement(1, 22)").startswith("1 chapter against 22")
 
 
-def test_a_book_without_glosses_offers_them_rather_than_passing_over_it(page):
+def test_a_book_without_glosses_says_so_in_two_words(page):
+    """The offer used to be made here, in a sentence with a price in it, and it
+    ran to two lines on seven cards of eight. A card states the fact; the offer
+    is met in the reader, whose header carries it."""
     page.click("[data-route=shelf]")
-    said = text(page, ".card[data-slug=candide]")
-    assert "French + published translation" in said
-    assert "No hover glosses" in said
-    assert "on your own key" in said
-    # The builder is the one place allowed to name a figure.
-    assert "penny" in said
+    assert text(page, ".card[data-slug=candide] .say") == \
+        "French + published translation · no glosses"
+    assert "penny" not in text(page, ".card[data-slug=candide]")
 
 
-def test_a_book_that_has_glosses_is_not_offered_them_again(page):
+def test_a_book_that_has_glosses_is_not_said_to_be_missing_them(page):
     page.click("[data-route=shelf]")
-    assert "No hover glosses" not in text(page, ".card[data-slug=micromegas]")
+    assert "no glosses" not in text(page, ".card[data-slug=micromegas]")
+
+
+def test_a_card_opens_on_what_the_book_is_about_without_moving_the_shelf(page):
+    """A summary is the thing a reader wants first and the card has no room for,
+    so it opens downward under the pointer — over the row beneath, never
+    displacing it, because a shelf that shifts as you read across it is the
+    fault this one has been fixed for twice."""
+    page.click("[data-route=shelf]")
+    # Every card but the one under the pointer, which lifts 2px as it always has.
+    where = lambda: page.eval_on_selector_all(
+        ".card:not([data-slug=candide])",
+        "n => n.map(c => Math.round(c.getBoundingClientRect().bottom))")
+    shut = where()
+    assert page.eval_on_selector(
+        ".card[data-slug=candide] .brief", "e => getComputedStyle(e).visibility") == "hidden"
+    page.hover(".card[data-slug=candide]")
+    page.wait_for_timeout(250)
+    open_ = page.eval_on_selector(
+        ".card[data-slug=candide] .brief",
+        "e => ({seen: getComputedStyle(e).visibility, paint: getComputedStyle(e).backgroundColor,"
+        "       said: e.textContent, over: Math.round(e.getBoundingClientRect().height)})")
+    assert open_["seen"] == "visible"
+    assert "best of all possible worlds" in open_["said"]
+    assert open_["over"] > 40
+    # Opaque, or the card underneath reads straight through it — every other
+    # surface on this page is deliberately translucent.
+    assert "rgba" not in open_["paint"], open_["paint"]
+    assert where() == shut, "the shelf moved under the pointer"
+    # A book somebody looked up carries no summary, and its card stays shut
+    # rather than opening on an empty panel.
+    assert page.locator(".card[data-slug='80days'] .brief").count() == 0
