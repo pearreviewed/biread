@@ -331,21 +331,30 @@ def test_corner_tags_name_each_page_language(reader):
 
 
 def test_blur_hides_the_translation_side_tag_and_folio(reader):
-    def opacity(side, part):
-        return reader.eval_on_selector(
-            f"#stage-wrap .page-{side} .{part}", "e => getComputedStyle(e).opacity")
+    def opacity(side, part, want=None):
+        """The settled opacity. Polled rather than slept past: a fixed 600ms read
+        0.55 mid-fade on a loaded CI runner, where the .34s transition had barely
+        started. Whatever it settles on is returned, so a real failure still
+        names the number it saw."""
+        selector = f"#stage-wrap .page-{side} .{part}"
+        for _ in range(40):
+            got = reader.eval_on_selector(selector, "e => getComputedStyle(e).opacity")
+            if want is None or got == want:
+                return got
+            reader.wait_for_timeout(100)
+        return got
 
     rewind(reader)
     reader.click("#blur-toggle")
-    reader.wait_for_timeout(600)  # let the fade finish
     # On the hidden translation side, both the language tag and the folio fade
     # away so the page gives nothing away; the French source side keeps its marks.
-    assert opacity("right", "page-corner") == "0" and opacity("right", "page-num") == "0"
+    assert opacity("right", "page-corner", "0") == "0"
+    assert opacity("right", "page-num", "0") == "0"
     assert opacity("left", "page-corner") == "1" and opacity("left", "page-num") == "1"
     # Stays hidden across a page turn (each spread is repainted)...
-    reader.keyboard.press("ArrowRight")
-    reader.wait_for_timeout(700)
-    assert opacity("right", "page-corner") == "0" and opacity("right", "page-num") == "0"
+    advance(reader, 1)
+    assert opacity("right", "page-corner", "0") == "0"
+    assert opacity("right", "page-num", "0") == "0"
     # ...and comes back when blur is switched off, leaving the fixture clean.
     reader.click("#blur-toggle")
     reader.wait_for_timeout(600)
