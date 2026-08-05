@@ -53,3 +53,17 @@ def test_every_book_on_the_shelf_today_still_reads_exactly(short_total):
     """Abbreviation must not reach the books people are actually reading."""
     for spreads in (44, 236, 518, 818):
         assert "k" not in short_total(spreads)
+
+
+def test_the_counter_also_carries_the_number_it_abbreviates():
+    """The label is for the reader; anything reading the page wants the number.
+
+    The publication check parsed the label, so the first book long enough to be
+    abbreviated — 20,000 Leagues, at 1,076 spreads — stopped it dead with
+    int(' 1.1k'). Asserted against the shipped source rather than a rendering,
+    for the same reason the rest of this file is.
+    """
+    source = (TEMPLATES / "reader.js").read_text(encoding="utf-8")
+    body = source[source.index("  function updateCounter("):]
+    body = body[:body.index("\n  }")]
+    assert "el.dataset.total = spreads.length;" in body

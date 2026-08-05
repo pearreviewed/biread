@@ -186,6 +186,19 @@ def build_book_data(
                 ]
             pairs.append(pair)
 
+    # A whole chapter with nothing facing it happens when the edition beside the
+    # French simply does not contain it — the 1911 Twenty Thousand Leagues drops
+    # the French chapter XI outright. That is 48 blank right-hand pages, and the
+    # reader is owed the reason rather than left to wonder. Read off the finished
+    # pairs, so it cannot disagree with what is on the page, and per column,
+    # because a chapter absent from a published edition may still be translated.
+    for meta, end in zip(chapter_meta, [c["pair"] for c in chapter_meta[1:]] + [len(pairs)]):
+        body = pairs[meta["pair"]:end]
+        if body and not any(p["en"] for p in body):
+            meta["enBlank"] = True
+        if body and not any(p.get("pub") or p["en"] for p in body):
+            meta["pubBlank"] = True
+
     data = {
         "titleFr": title,
         "slug": slugify(title),

@@ -111,7 +111,7 @@ def spot_check(book: Path, shots_dir: Path | None = None) -> Look:
                     "return c && c.textContent && !c.textContent.includes('+'); }",
                     timeout=60000)
 
-                look.total = int(page.inner_text("#counter").split("/")[1])
+                look.total = int(page.get_attribute("#counter", "data-total"))
                 places = [("opening", 1), ("middle", max(1, look.total // 2)),
                           ("end", look.total)]
                 for name, target in places:

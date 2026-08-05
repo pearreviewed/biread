@@ -23,6 +23,12 @@
       "file": "bovary.html",
       "english": "Marx-Aveling · 1886",
       "approved": "2026-08-04"
+    },
+    {
+      "slug": "20000",
+      "file": "20000.html",
+      "english": "1911",
+      "approved": "2026-08-05"
     }
   ]
 }

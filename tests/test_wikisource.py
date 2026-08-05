@@ -364,6 +364,64 @@ def test_a_drop_cap_leaves_the_rest_of_the_paragraph_alone():
     assert "  " not in paragraphs[0]
 
 
+# Twenty Thousand Leagues sets its drop cap as a scan of the printed initial.
+# The letter is in the image's alt text and nowhere else, so a parser that drops
+# images beheads the first word of every chapter: "HE year 1866".
+DROP_CAP_IMAGE = (
+    '<p><span class="dropinitial drop-initial-image"><span class="dropinitial-mid">'
+    '<span class="dropinitial-initial"><span typeof="mw:File"><a href="./File:Initial_T.png">'
+    '<img alt="T" resource="./File:Initial_T.png" height="64" width="60"/></a>'
+    '</span></span></span></span>HE year 1866 was signalized by a remarkable incident.</p>'
+)
+
+# The same edition's heading, which it sets as an ordinary centred paragraph
+# with no header to name it. The <br> is what puts the space in "XIII THE".
+HEADING_PARA = (
+    '<div class="wst-center"><p>CHAPTER XIII<br/>'
+    '<span style="font-size:69%;">THE BLACK RIVER</span></p></div>'
+    '<p>The part of the terrestrial globe which we were crossing was vast indeed.</p>'
+)
+
+
+def test_a_drop_cap_drawn_as_a_picture_still_reads_as_its_letter():
+    """The alt text is the wiki naming the letter, not us guessing it."""
+    _, paragraphs = ws.parse(page(DROP_CAP_IMAGE))
+    assert paragraphs[0].startswith("THE year 1866")
+
+
+def test_a_picture_that_is_not_a_drop_cap_contributes_nothing():
+    """Elsewhere an alt describes an illustration and is not part of the prose."""
+    _, paragraphs = ws.parse(page(
+        '<p>The Nautilus lay still.<img alt="The Nautilus at rest"/> Nobody spoke '
+        'for a long while, and the lamps burned low.</p>'))
+    assert "The Nautilus at rest" not in paragraphs[0]
+
+
+def test_a_centred_heading_paragraph_becomes_the_chapter_title():
+    title, paragraphs = ws.parse(page(HEADING_PARA))
+    assert title == "THE BLACK RIVER"
+    assert paragraphs[0].startswith("The part of the terrestrial globe")
+
+
+def test_a_heading_shaped_first_line_that_is_not_centred_is_left_as_prose():
+    """Shape alone is not enough — a first sentence may open this way."""
+    title, paragraphs = ws.parse(page(
+        "<p>Chapter XI was the best of them, and he read it twice over.</p>"
+        "<p>Then he put the book down and went out into the rain.</p>"))
+    assert title is None
+    assert paragraphs[0].startswith("Chapter XI was the best")
+
+
+def test_the_heading_is_found_under_a_volume_title_standing_above_it():
+    """Chapter one prints the book's name over the heading — the one chapter
+    everybody opens, and the only one a top-of-page rule would have missed."""
+    title, paragraphs = ws.parse(page(
+        '<div class="wst-center"><p>Twenty Thousand Leagues Under the Sea.</p></div>'
+        + HEADING_PARA))
+    assert title == "THE BLACK RIVER"
+    assert paragraphs[0] == "Twenty Thousand Leagues Under the Sea."
+
+
 def test_ordinary_spans_keep_the_spaces_around_them():
     """The fix must not eat the spacing of every other inline span."""
     body = ('<p>He said <i>bonjour</i> and then <span class="sc">left</span> '
@@ -374,11 +432,16 @@ def test_ordinary_spans_keep_the_spaces_around_them():
 
 def test_a_line_break_separates_words():
     """<br> is whitespace. Dropped outright it ran headings together — the 1911
-    Twenty Thousand Leagues gave "CHAPTER VIIIMOBILIS IN MOBILI"."""
+    Twenty Thousand Leagues gave "CHAPTER VIIIMOBILIS IN MOBILI".
+
+    Read off the title now that such a heading is lifted into one, which tests
+    the break just as sharply: run together, the numeral swallows the M and the
+    title comes out "OBILIS IN MOBILI".
+    """
     body = ('<div class="wst-center"><p><span style="font-size:120%;">CHAPTER VIII</span>'
             '<br/><span style="font-size:83%;">MOBILIS IN MOBILI</span></p></div>')
-    _, paragraphs = ws.parse(page(body))
-    assert paragraphs[0] == "CHAPTER VIII MOBILIS IN MOBILI"
+    title, _ = ws.parse(page(body))
+    assert title == "MOBILIS IN MOBILI"
 
 
 def test_verse_set_with_breaks_keeps_its_words_apart():

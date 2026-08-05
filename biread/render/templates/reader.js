@@ -281,6 +281,13 @@
     head.appendChild(eyebrow);
     head.appendChild(title);
     head.appendChild(rule);
+    // Where the edition beside the French does not contain this chapter at all,
+    // say so once under its heading. Otherwise the reason for forty-eight blank
+    // pages is something the reader has to infer, and the likeliest inference is
+    // that the book is broken.
+    if (lang === 'en' && (S.source === 'published' ? chapter.pubBlank : chapter.enBlank)) {
+      head.appendChild(line('ch-missing', i18n('chapterMissing')));
+    }
     return head;
   }
 
@@ -1879,6 +1886,10 @@
     fitCounter(el, spreads.length);
     el.textContent = S.spreadIndex + 1 + ' / ' + shortTotal(spreads.length)
       + (fullyPaginated() ? '' : '+');
+    // The label is abbreviated for the reader; anything reading the page rather
+    // than looking at it wants the number itself. The publication check parsed
+    // the label and broke on the first book long enough to be abbreviated.
+    el.dataset.total = spreads.length;
   }
 
   // The counter is the page finder: the thing that says where you are is the

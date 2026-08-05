@@ -187,6 +187,9 @@ button:focus-visible { outline: 2px solid rgba(200,175,130,.85); outline-offset:
 .ch-eyebrow { font-size: calc(var(--fpx) * 0.6); letter-spacing: .32em; text-transform: uppercase; color: #8a7551; font-weight: 600; }
 .ch-title { font-size: calc(var(--fpx) * 1.32); line-height: 1.12; margin: 7px 0 0; color: #2a1f12; font-weight: 600; }
 .ch-rule { height: 1px; background: linear-gradient(90deg,#b7a67f,transparent); margin: 16px 0 0; }
+/* Said once under the heading, in the apparatus's voice rather than the book's:
+   italic and quiet, so it cannot be mistaken for the translation it replaces. */
+.ch-missing { font-size: calc(var(--fpx) * 0.82); font-style: italic; color: #8a7551; margin: 14px 0 0; }
 
 p.pair { margin: 0 -12px 0.5em; padding: 2px 12px; font-size: var(--fpx); line-height: 1.5; text-align: justify; text-indent: 1.4em; hyphens: auto; border-radius: 4px; background: transparent; transition: filter .34s ease; }
 /* Hover targets. Only the unit highlights — no paragraph tint; that was

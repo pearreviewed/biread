@@ -126,7 +126,8 @@ def reader_with_both_editions(browser, tmp_path_factory):
 
 
 def spread_count(page):
-    return int(page.inner_text("#counter").split("/")[1].strip())
+    # The label abbreviates past a thousand ("1 / 1.1k"); the attribute does not.
+    return int(page.get_attribute("#counter", "data-total"))
 
 
 def current_spread(page):
@@ -786,6 +787,51 @@ def test_spanish_reader_localizes_controls_and_hyphenation(spanish_reader):
 def test_the_masthead_stays_french_whatever_the_target(spanish_reader):
     # text_content, not inner_text: CSS uppercases the eyebrow for display.
     assert spanish_reader.text_content(".header-left .eyebrow") == "Lecteur bilingue"
+
+
+# ---- a chapter the translation does not have ----
+
+def build_half_reader(tmp_path_factory):
+    """A book whose second chapter the translator left out entirely."""
+    chapters = [
+        Chapter("I", "Le Départ", [f"{SHORT_FR} ({n})" for n in range(6)]),
+        Chapter("II", "L'Arrivée", [f"{SHORT_FR} (II-{n})" for n in range(6)]),
+    ]
+    translations = {hash_text(c.title): f"[{c.title}]" for c in chapters}
+    for paragraph in chapters[0].paragraphs:
+        translations[hash_text(paragraph)] = f"{SHORT_EN} ({len(paragraph)})"
+
+    out = tmp_path_factory.mktemp("half") / "book.html"
+    render_book("Livre à Moitié", chapters, translations, out, None, "", None)
+    return out
+
+
+@pytest.fixture(scope="module")
+def half(browser, tmp_path_factory):
+    page = open_reader(browser, build_half_reader(tmp_path_factory))
+    yield page
+    page.close()
+
+
+def test_a_chapter_the_translation_lacks_says_so_under_its_heading(half):
+    """Forty-eight blank pages with no reason given read as a broken book."""
+    half.click("#counter")
+    half.fill("#counter-input", "1")
+    half.press("#counter-input", "Enter")
+    assert half.locator("#stage-wrap .page-right .ch-missing").count() == 0
+    # Walk to the chapter the translator dropped.
+    for _ in range(12):
+        if half.locator("#stage-wrap .page-right .ch-missing").count():
+            break
+        half.keyboard.press("ArrowRight")
+    note = half.locator("#stage-wrap .page-right .ch-missing")
+    assert note.count() == 1
+    assert note.inner_text() == "The translator did not include this chapter."
+
+
+def test_the_note_is_not_repeated_on_the_original(half):
+    """It is about the edition facing the French, not about the French."""
+    assert half.locator("#stage-wrap .page-left .ch-missing").count() == 0
 
 
 # ---- gloss hover ----

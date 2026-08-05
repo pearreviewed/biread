@@ -83,9 +83,13 @@ class _Body(HTMLParser):
         super().__init__(convert_charrefs=True)
         self.paragraphs: list[str] = []
         self.title: str | None = None
-        self._stack: list[tuple[bool, bool]] = []  # per open element: (skips, drop cap)
+        #: Indices of paragraphs the edition set centred — display matter by the
+        #: wiki's own account, which is what tells a heading from a first line.
+        self.centred: set[int] = set()
+        self._stack: list[tuple[bool, bool, bool]] = []   # skips, drop cap, centred
         self._skip = 0
         self._drop = 0
+        self._centre = 0
         self._buf: list[str] | None = None
         self._title_buf: list[str] | None = None
 
@@ -99,6 +103,15 @@ class _Body(HTMLParser):
                 for buf in (self._buf, self._title_buf):
                     if buf is not None:
                         buf.append(" ")
+            # Some editions set the drop cap as a scan of the printed initial
+            # rather than as a letter. Twenty Thousand Leagues opens every one of
+            # its 46 chapters that way, and each opened on a beheaded word —
+            # "HE year 1866", "E now come to the second part". The alt text is
+            # the wiki naming the letter itself, so it is read, not guessed; and
+            # only inside a drop cap, because elsewhere an alt describes a
+            # picture and is not part of the prose.
+            elif tag == "img" and self._drop and self._buf is not None:
+                self._buf.append(dict(attrs).get("alt", ""))
             return
         classes = dict(attrs).get("class", "")
         skips = tag in _SKIP_TAGS or any(c in classes for c in _SKIP_CLASSES)
@@ -111,12 +124,15 @@ class _Body(HTMLParser):
         # it splits the first word of a chapter, which is the most looked-at
         # word in the book. Madame Bovary opened on "N ous étions à l'étude".
         drop = "dropinitial" in classes
-        self._stack.append((skips, drop))
+        centre = "wst-center" in classes
+        self._stack.append((skips, drop, centre))
         if skips:
             self._skip += 1
         else:
             if drop:
                 self._drop += 1
+            if centre:
+                self._centre += 1
             if tag == "p" and self._buf is None:
                 self._buf = []
 
@@ -126,6 +142,8 @@ class _Body(HTMLParser):
         if tag == "p" and self._buf is not None:
             text = re.sub(r"\s+", " ", "".join(self._buf)).strip()
             if len(text) > 20:
+                if self._centre:
+                    self.centred.add(len(self.paragraphs))
                 self.paragraphs.append(text)
             self._buf = None
         if self._title_buf is not None and not self.title:
@@ -133,11 +151,14 @@ class _Body(HTMLParser):
             if text:
                 self.title = text
                 self._title_buf = None
-        skipped, drop = self._stack.pop()
+        skipped, drop, centre = self._stack.pop()
         if skipped:
             self._skip -= 1
-        elif drop:
-            self._drop -= 1
+        else:
+            if drop:
+                self._drop -= 1
+            if centre:
+                self._centre -= 1
 
     def handle_data(self, data: str) -> None:
         if self._title_buf is not None:
@@ -208,6 +229,21 @@ def _plain(wikitext: str) -> str:
     text = re.sub(r"\[\[(?:[^|\]]*\|)?([^\]]*)\]\]", r"\1", text)
     text = re.sub(r"<[^>]*>", "", text).replace("\\", "").replace("'''", "")
     return re.sub(r"\s+", " ", text).strip(" .,")
+
+
+# A heading set as an ordinary paragraph, with the chapter's title on the same
+# line: "CHAPTER XIII THE BLACK RIVER". Roman and arabic numbers only, unlike
+# cleanup.CHAPTER_RE — an edition that spells the number out sets it on a line of
+# its own, and allowing a bare word here would read the first word of a title as
+# the number.
+_HEADING_PARA = re.compile(
+    r"^(?:CHAPITRE|CHAPTER)\s+(?:[IVXLCDM]+|\d+)\s*[.—–-]?\s*(?P<title>.{0,160})$",
+    re.IGNORECASE,
+)
+
+#: How far into a chapter the heading may be looked for, counted in centred
+#: paragraphs. Enough for a volume title and a part number standing above it.
+_LEADING_CENTRED = 3
 
 
 def _norm(s: str) -> str:
@@ -302,6 +338,28 @@ def parse(page_html: str, split_dialogue: bool = False) -> tuple[str | None, lis
     # Some editions print the chapter title again at the top of the body.
     if title and paras and _same_heading(paras[0], title):
         paras = paras[1:]
+    # And some set the heading as an ordinary centred paragraph, with no header
+    # to name it: every chapter of Twenty Thousand Leagues opened on a body
+    # paragraph reading "CHAPTER XIII THE BLACK RIVER". Lifted out and kept as
+    # the title, so it reads as a heading and stops being matched as prose.
+    #
+    # Centred *and* heading-shaped, never shape alone. The edition setting it
+    # centred is the wiki saying this is display matter; without that, a first
+    # sentence opening "Chapter XI was the best of them" would be read as a
+    # title, and a heading is not worth guessing at.
+    elif not title and paras:
+        # Anywhere in the leading run of centred matter, not only at the top:
+        # chapter one of Twenty Thousand Leagues prints the volume's title above
+        # its heading, and requiring the very first paragraph left that one
+        # chapter — the one everybody opens — with its heading still in the body.
+        for i, para in enumerate(paras[:_LEADING_CENTRED]):
+            if i not in p.centred:
+                break
+            heading = _HEADING_PARA.match(para)
+            if heading:
+                title = heading.group("title").strip() or None
+                paras = paras[:i] + paras[i + 1:]
+                break
     if split_dialogue:
         paras = [s for para in paras for s in split_speeches(para)]
     return title, paras
@@ -464,6 +522,14 @@ def load(lang: str, work: str, fetch: Fetch = default_fetch, on_progress=None) -
     chapters, dropped = fetch_pages(lang, r.pages, fetch, on_progress)
     if not chapters:
         raise LookupError(f"{work!r} resolved to {len(r.pages)} pages, none of them text")
+    # A volume that prints its own title over chapter one — Twenty Thousand
+    # Leagues opened on "Twenty Thousand Leagues Under the Sea." as a paragraph
+    # of the book. Removed only where it repeats the name of the page we asked
+    # for, so it is the edition agreeing with itself rather than a running head
+    # recognised by its shape.
+    first = chapters[0]["paragraphs"]
+    if len(first) > 1 and _same_heading(first[0], work.rsplit("/", 1)[-1]):
+        dropped = [*dropped, first.pop(0)]
     under = r.pages[0].rsplit("/", 1)[0] if r.shape != "single" else r.pages[0]
     return Edition(lang, work, under, r.shape, chapters, credits(r.html), dropped)
 

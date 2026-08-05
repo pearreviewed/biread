@@ -101,6 +101,29 @@ def test_missing_translations_render_as_empty(book):
     assert all(p["en"] == "" for p in data["pairs"])
 
 
+def test_a_chapter_with_nothing_facing_it_is_marked(book):
+    """The 1911 Twenty Thousand Leagues drops the French chapter XI outright —
+    48 blank right-hand pages the reader is owed a reason for."""
+    translations = {hash_text(t): f"[{t}]" for t in
+                    ["Preamble.", "Premier paragraphe.", "Deuxième paragraphe."]}
+    data = build_book_data("Mon Livre", book, translations)
+    first, second = data["chapters"]
+    assert "enBlank" not in first          # both its paragraphs came through
+    assert second["enBlank"] is True       # the third did not, and it is alone
+
+
+def test_a_chapter_is_marked_per_column_not_once(book):
+    """A chapter the published edition omits may still have been translated, so
+    the note follows the column being read rather than the chapter."""
+    paragraphs = [p for c in book for p in c.paragraphs]
+    translations = {hash_text(p): f"[{p}]" for p in paragraphs}
+    data = build_book_data("Mon Livre", book, translations, published={})
+    assert all("enBlank" not in c for c in data["chapters"])
+    # `pub` falls back to `en` in the reader, so a chapter counts as blank only
+    # where neither column has anything — which is not the case here.
+    assert all("pubBlank" not in c for c in data["chapters"])
+
+
 def test_english_default_carries_english_chrome(book):
     data = build_book_data("Mon Livre", book, {})
     assert data["lang"] == "en"

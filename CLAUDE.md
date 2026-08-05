@@ -321,6 +321,8 @@ CI so it stops depending on anyone remembering.
 | A book with more than one English translation? | **Offered on the card, with a default, never a demanded choice.** Wikisource lists them and `resolve` reads that list; the shelf carries each one measured. Micromégas has two — Phalen follows the French chapter for chapter, Fleming's 1906 runs as one piece — which is how the default was picked, by looking. |
 | A book that is not on the shelf? | **Its own screen** (`s-lookup`), not a dead end on the shelf. It searches Wikisource for whole works, asks the wiki itself which have an English counterpart (`langlinks`, never a guessed title), and resolves the pairs it finds. A hit with one side only says which side is missing; a search with nothing behind it says the book is probably still in copyright and why we cannot hold it either. A book taken from there joins the shelf marked *Added by a reader*, with no figures it has not earned. |
 | Lookup — what happens to the results it does not show? | **They are counted, and offered.** Four works at a time, with the line above them saying what was left behind — *4 works shown · at least 3 more* — and a button that fetches the next four beside them. The number is a floor: `wikisource.Results.more` counts whole works among the rows the search actually read, never the wiki's own `totalhits`, which counts forty chapters of Germinal as forty results. Every hit with a counterpart is now probed; the old quota of three drew a card that read *Looking for both editions…* forever, which showed less **and** lied. And when probing ends, any hit still unanswered says it was never checked rather than spinning — the page tells the truth even if the engine goes quiet. |
+| A chapter the translator left out entirely? | **The page says so, once, under the heading.** The 1911 Twenty Thousand Leagues drops the French chapter XI outright, which is 48 blank right-hand pages; blank is the honest thing to show, but blank with no reason reads as a broken book. `build_book_data` marks a chapter whose body has nothing facing it (`enBlank`/`pubBlank`, read off the finished pairs so it cannot disagree with the page) and the reader prints *The translator did not include this chapter.* under that chapter's heading, in the apparatus's italic rather than the book's voice. Per column, because a chapter absent from a published edition may still have been translated. |
+| An edition that sets its headings as ordinary paragraphs? | **Lifted into headings, but only where the wiki corroborates it.** Every chapter of the 1911 Twenty Thousand Leagues opened on a body paragraph reading `CHAPTER XIII THE BLACK RIVER`, and every chapter opened on a beheaded first word — `HE year 1866` — because that edition draws its drop cap as a *picture* and the letter lives only in the image's `alt`. Both are read now, neither is guessed: the alt is the wiki naming the letter, and a heading is lifted only when the edition also set it centred, since shape alone would read "Chapter XI was the best of them" as a title. Blast radius checked page by page against every shelf book with the old parser beside the new — 0 changes to Candide, Bovary, Micromégas, Eighty Days or any French side; the rule fires only on the two Verne volumes that carry the fault. |
 | Two editions counting their chapters differently? | **Said out loud, and sized.** 47 against 46 is two editions; 4 against 22 is the same book divided quite differently and is described that way, because the aligner drops the numbering and matches by meaning. Both are normal; neither is silent. |
 | How are a book's notes found and taken out? | **By corroboration, never by shape.** `notes.py` removes a paragraph only where the prose actually refers to it (`Micromégas[1]` … `[1] De micros`), or where it belongs to the run of notes closing a chapter, numbered in order. A paragraph opening `1.` is a footnote in one book and an ordinary list in another and there is no telling them apart by looking, so an uncorroborated one is left where it is: a note left in is untidy, a deleted sentence is silent and unrecoverable. Every note taken out is reported to the terminal like any other removal. Scanned per chapter, because markers restart at 1 in each. Verified inert across the whole corpus — all six files come out with the same paragraph count and nothing removed, which is right, because none of them was leaking apparatus. |
 | Builder — what does a file card claim about a book? | Only what the file says: `meta.describe` reads an EPUB's OPF for title, author and language, a PDF for its page count, and counts paragraphs from the parsed text. Everything else stays None and is simply not shown — a filename is not an author, and a confident wrong byline is worse than a blank one. |
@@ -378,18 +380,14 @@ Recorded because the reasoning matters more than the outcome.
 
 ## Known open issues
 
-- **The shelf hands over two books, and it should hand over more.** Micromégas
+- **The shelf hands over five books, and it should hand over more.** Micromégas
   (34 paragraphs, all glossed, the published column beside ours, EPUB and PDF
-  inside) and Candide (469 paragraphs, 464 with English, 30 chapters, no glosses
-  — a reader adds those as they read). Bovary, 80 Days and 20,000 Leagues have
-  never been built at all. Every card without a finished book behind it still
-  builds on the reader's own key, so nothing is blocked — the shelf is simply
-  younger than it looks.
-- **The hover tooltip can cover the header.** `showTip` flips a tooltip below its
-  unit only when the viewport leaves no room above, so a unit on a page's first
-  line paints over the masthead and the book title. Pre-existing, on every
-  glossed book, and more visible now that a reader can gloss a first page
-  themselves.
+  inside), Candide (469 paragraphs, 30 chapters), Eighty Days, Bovary, and now
+  20,000 Leagues; none but Micromégas is glossed, and a reader adds those as they
+  read. Three of the eight — Les Misérables, Notre-Dame de Paris, Salammbô —
+  have never been built at all. Every card without a finished book behind it
+  still builds on the reader's own key, so nothing is blocked — the shelf is
+  simply younger than it looks.
 - **Glossing costs roughly four times translating, and that governs the budget.**
   Priced off Candide's real French (469 paragraphs, 184,197 characters) against
   live OpenRouter rates: on DeepSeek v3.1 the translation is $0.077 and the
@@ -399,12 +397,26 @@ Recorded because the reasoning matters more than the outcome.
   money. Both figures are floors: the quote runs ~30% under (see below) and the
   gloss estimate does not count its rescue retries at all. What this changes is
   planning — the hover, not the prose, is what a shelf costs.
-- **Three of the five shelf books have not been read through.** Candide (98.9%)
-  and Madame Bovary (87.4%) were built and read; Around the World in Eighty Days,
-  Micromégas and 20,000 Leagues resolve, fetch and build, but nobody has read one
-  end to end. The cards say so. Reading them is what promotes them, and the four
-  extraction faults that made the shelf curated were each found by reading a
-  rendered page rather than by a test.
+- **Coverage is not a grade, and 20,000 Leagues is the case that proves it.** It
+  sits at 58.8% against Candide's 98.9%, and it is nonetheless matched about as
+  well as it can be: the placed English runs to 68% of the French by characters,
+  which is the whole of the 1911 translation. That edition condenses, and cuts
+  chapter XI outright. What a low figure means is *this translator left things
+  out*, not *the aligner lost its way* — the two are told apart by weighing the
+  English that landed against the English that exists, and nothing on the card or
+  in the check does that arithmetic yet.
+- **`--approve` re-makes the book it is approving.** The flag runs the whole
+  fetch-and-match again before writing the manifest row, so approving the file
+  you just read costs another fourteen minutes and another nickel — and approves
+  a *fresh* build rather than the one that was checked. 20,000 Leagues was put on
+  the shelf by calling `publish.approve` directly for that reason. Approval
+  should act on the artifact, not re-derive it.
+- **The published edition's own chapter titles are extracted and then dropped.**
+  `A SHIFTING REEF` is now lifted off the 1911 Twenty Thousand Leagues, but the
+  reader's English heading is built from the *French* chapter's title translated,
+  so a French chapter with no title shows a bare `CHAPTER XI` beside an English
+  edition that names it. No worse than before — it used to sit in the body as
+  junk — but the title is now in hand and unused.
 - **A shelf card's build time is one measurement extrapolated.** Madame Bovary's
   5,449 paragraphs took about fourteen minutes in the spike, and every other
   figure is that rate scaled. It is the network's pace, not the model's, so a slow
