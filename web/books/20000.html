@@ -2269,12 +2269,21 @@ p.pair-en.revised { position: relative; }
     return n < 1000 ? String(n) : (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
   }
 
-  // Sized once from the widest label this book can produce, so the header cannot
-  // jump as the page number gains a digit — the reason the width was pinned in
-  // the first place.
+  // Sized from the widest label this book can produce, so the header cannot jump
+  // as the page number gains a digit — the reason the width was pinned in the
+  // first place.
+  //
+  // The width only ever grows. Pagination reports a total that climbs, so a
+  // width tracking it exactly is a width that changes throughout — and on a
+  // window where the header is near its wrapping point, that is a loop: the
+  // counter widens, the header wraps to a second line, the stage loses 50px,
+  // pagination restarts, the total drops back to double figures, the counter
+  // narrows, the header unwraps, and it all goes round again. At 1440px wide
+  // 20,000 Leagues never finished opening. At 1600 and at 1280, where the header
+  // does not straddle the boundary, it opened in six seconds either way.
   var counterWidthFor = -1;
   function fitCounter(el, total) {
-    if (total === counterWidthFor) return;
+    if (total <= counterWidthFor) return;
     counterWidthFor = total;
     var was = el.textContent;
     el.style.width = 'auto';
