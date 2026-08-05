@@ -35,8 +35,27 @@ off the other edition must say so.
 """
 from __future__ import annotations
 
+import re
+
 from .align import _sentences
 from .cleanup import Chapter
+
+# Where a novel opens a line of speech, which is a paragraph break as surely as a
+# full stop is and leaves no full stop behind it. Both halves are required, and
+# that is what makes it corroboration rather than shape: a line that *introduces*
+# speech, closing on a colon or a dash or a quotation, and then the mark that
+# opens the speech itself. "…se tournant vers le maître d’études:" then "— Monsieur
+# Roger…"; "…he said to him in a low voice—" then "“Monsieur Roger…". Between them
+# these are 96% of what English Bovary loses and 91% of the French.
+#
+# A dash alone would not do: French sets a parenthesis with the same character
+# ("il était — comment dire — fatigué"), and that one is preceded by a word.
+#
+# The space after the mark is optional and that is not a detail: English sets
+# “Monsieur Roger with no gap and French sets — Monsieur Roger with one, and a
+# pattern that demanded the word immediately fired on every English break and no
+# French one at all — 98% against 79% of the same book in two languages.
+SPEECH_RE = re.compile(r'(?<=[:;—–"”»])\s+(?=[—–«"“]\s*\S)')
 
 #: A paragraph of prose runs to a few hundred characters, occasionally a couple of
 #: thousand. A "paragraph" longer than this is a run of them fused together — the
@@ -51,6 +70,20 @@ def unsegmented(chapters: list[Chapter]) -> bool:
         return False
     lengths = sorted(len(p) for p in paragraphs)
     return lengths[len(lengths) // 2] > BLOCK_LIMIT
+
+
+def _pieces(text: str) -> list[str]:
+    """Every place this text could plausibly have ended a paragraph.
+
+    Sentence ends, and the openings of speech that leave none. Being generous
+    here is close to free: the cut takes the candidate *nearest* the position a
+    paragraph should end at, so an extra candidate is used only where it happens
+    to be the best answer going. What it cannot do is invent a break where there
+    is no mark at all — a chapter heading run into the prose behind it stays run
+    into it.
+    """
+    return [piece for sentence in _sentences(text)
+            for piece in SPEECH_RE.split(sentence) if piece.strip()]
 
 
 def _ends(pieces: list[str]) -> list[int]:
@@ -98,6 +131,99 @@ def _nearest(ends: list[int], position: float) -> int:
     return at if position - before <= ends[at] - position else at + 1
 
 
+#: How much text one break-finding call is shown. Small enough that the model
+#: holds the whole passage in view, large enough that a book is tens of calls and
+#: not thousands.
+WINDOW_CHARS = 6000
+
+#: The numbers come back one per paragraph, so the ceiling only has to clear the
+#: paragraph count of one window.
+MAX_TOKENS = 2000
+
+BREAK_SYSTEM = (
+    "You restore paragraph breaks to a book whose formatting was lost in "
+    "conversion. You never rewrite, translate or comment on the text."
+)
+
+BREAK_PROMPT = (
+    "Below are numbered pieces of a book. Each piece is one sentence or one line "
+    "of speech, in order. The paragraph breaks were lost, so you cannot see them; "
+    "your job is to say where they were.\n\n"
+    "Reply with the numbers of the pieces that BEGIN a new paragraph — nothing "
+    "else, no words, no punctuation but spaces between the numbers. Piece 1 begins "
+    "one by definition; do not include it. A new speaker always begins a "
+    "paragraph. So does a chapter heading, a date line, or a change of scene.\n\n"
+    "{pieces}"
+)
+
+
+def _windows(pieces: list[str]) -> list[tuple[int, list[str]]]:
+    """The pieces in runs of about `WINDOW_CHARS`, with where each run starts."""
+    out, start, chars = [], 0, 0
+    for index, piece in enumerate(pieces):
+        if chars and chars + len(piece) > WINDOW_CHARS:
+            out.append((start, pieces[start:index]))
+            start, chars = index, 0
+        chars += len(piece)
+    if start < len(pieces):
+        out.append((start, pieces[start:]))
+    return out
+
+
+def _openings(reply: str, count: int) -> list[int]:
+    """The piece numbers the model gave back, as offsets into the window.
+
+    Only what is usable survives: a number outside the window, or one that does
+    not move forward, is dropped rather than trusted. The model is proposing
+    positions in text it was shown; it is never quoted, so the worst a bad reply
+    can do is put a break in an odd place, and the words on the page are the
+    book's either way.
+    """
+    out: list[int] = []
+    for token in re.findall(r"\d+", reply):
+        at = int(token) - 1
+        if 0 < at < count and (not out or at > out[-1]):
+            out.append(at)
+    return out
+
+
+def repair_by_model(blob: list[Chapter], client, cfg=None) -> list[Chapter]:
+    """Paragraph breaks for a flattened book with no other edition to take them from.
+
+    The last resort, and only reached when nothing free can work: with a
+    counterpart in hand `segment_like` is better, exact and costs nothing. Here
+    there is no counterpart, so a model is asked to read the text and say where
+    the paragraphs began.
+
+    It is asked in the safest form there is. The text is cut into sentences
+    first, and the model answers with the *numbers* of the pieces that open a
+    paragraph — so it cannot rewrite a word even in principle, and a reply that
+    is nonsense costs a badly placed break rather than a sentence of Voltaire.
+    The same reasoning as glossing, one step further: there, the model's text is
+    thrown away after anchoring; here it never has any.
+
+    A window whose call fails is left unbroken rather than guessed, and the rest
+    of the book still comes back.
+    """
+    pieces = [s for chapter in blob for p in chapter.paragraphs for s in _pieces(p)]
+    if not pieces:
+        return blob
+
+    paragraphs: list[str] = []
+    for start, window in _windows(pieces):
+        numbered = "\n".join(f"{i + 1}. {piece}" for i, piece in enumerate(window))
+        try:
+            reply = client.complete(
+                BREAK_SYSTEM, BREAK_PROMPT.format(pieces=numbered), MAX_TOKENS
+            )
+        except Exception:
+            paragraphs.append(" ".join(window))
+            continue
+        cuts = [0] + _openings(reply.text, len(window)) + [len(window)]
+        paragraphs.extend(" ".join(window[a:b]) for a, b in zip(cuts, cuts[1:]) if b > a)
+    return [Chapter(None, None, paragraphs)] if paragraphs else blob
+
+
 def segment_like(blob: list[Chapter], counterpart: list[Chapter]) -> list[Chapter]:
     """The flattened edition, cut into the paragraphs and chapters of the other.
 
@@ -105,7 +231,7 @@ def segment_like(blob: list[Chapter], counterpart: list[Chapter]) -> list[Chapte
     against, so a caller never has to ask whether it worked — `unsegmented` on the
     result still answers.
     """
-    sentences = [s for chapter in blob for p in chapter.paragraphs for s in _sentences(p)]
+    sentences = [s for chapter in blob for p in chapter.paragraphs for s in _pieces(p)]
     shape = [(index, p) for index, chapter in enumerate(counterpart)
              for p in chapter.paragraphs]
     if not sentences or not shape:

@@ -22,6 +22,7 @@ from .gloss import gloss_book
 from .llm import get_client
 from .export import write_epub, write_pdf
 from .render import download_name, render_book, slugify
+from .segment import unsegmented
 from .targets import DEFAULT_LANG, TARGETS, get_target
 from .translate import estimate, translate_book
 
@@ -311,9 +312,23 @@ def run(args: argparse.Namespace) -> None:
     # and a refusal issued file by file would never find that out.
     published_chapters = load_book(args.published)[0] if args.published else None
     chapters, published_chapters, cut = recut(chapters, published_chapters)
-    check_usable(chapters, "The book", args.input.name)
-    if published_chapters is not None:
-        check_usable(published_chapters, "The published translation", args.published.name)
+    # A side still flat has no other edition to take its breaks from, and the
+    # model can read it for them at build time — so it is refused here only when
+    # no build is going to happen. Refusing a file the next command would repair
+    # is the kind of no a tool should not give.
+    flat = [name for name, book in (
+        (args.input.name, chapters),
+        (args.published.name if args.published else "", published_chapters),
+    ) if book is not None and unsegmented(book)]
+    if flat and args.dry_run:
+        print(f"\n{' and '.join(flat)} arrived with no paragraph breaks and no other "
+              f"edition to take them from. The build reads the text for them on the "
+              f"model, at roughly a third of what translating it costs. Nothing here "
+              f"calls the API; re-run without --dry-run to build it.")
+    elif not flat:
+        check_usable(chapters, "The book", args.input.name)
+        if published_chapters is not None:
+            check_usable(published_chapters, "The published translation", args.published.name)
     if cut:
         recut_chapters = published_chapters if cut == "published" else chapters
         print(f"\nThe {cut} edition arrived with no paragraph breaks. Cut to the other "

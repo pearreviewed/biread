@@ -142,7 +142,12 @@ def _distribute(french: list[str], published: list[str]) -> list[str]:
 # ride on it, then space. Not linguistically perfect — an abbreviation splits a
 # sentence in two — which costs nothing where the pieces are only weighed, and
 # nothing where they are put back together in order.
-_SENTENCE_SPLIT_RE = re.compile(r'[.!?…]["»”’\')\]]*(\s+)')
+# The space before the closing mark is French: it sets « … » with a thin space
+# inside the guillemets, so a sentence ends "…dans ce monde. »" and a pattern
+# demanding the mark immediately after the stop ends it in the wrong place —
+# leaving the guillemet to open the next sentence, where no break can then be
+# found.
+_SENTENCE_SPLIT_RE = re.compile(r'[.!?…](?:[   ]?["»”’\')\]])*(\s+)')
 
 
 def _sentences(text: str) -> list[str]:

@@ -21,7 +21,7 @@ from .errors import ExtractError
 from .gloss import GlossRun, gloss_book
 from .llm import LLMClient
 from .render import render_html
-from .segment import BLOCK_LIMIT, segment_like, unsegmented
+from .segment import BLOCK_LIMIT, repair_by_model, segment_like, unsegmented
 from .targets import ENGLISH, Target
 from .translate import BatchFn, TranslationRun, translate_book
 
@@ -59,6 +59,7 @@ def build_reader(
     # Checked before a single call is paid for: a book that never broke into
     # paragraphs would otherwise be translated in vast blocks, at vast cost.
     chapters, published_chapters, cut = recut(chapters, published_chapters)
+    chapters, published_chapters, _ = repair_flat(chapters, published_chapters, client)
     check_usable(chapters, "The book")
     if published_chapters is not None:
         check_usable(published_chapters, "The published translation")
@@ -139,6 +140,23 @@ def recut(
     return chapters, published_chapters, ""
 
 
+def repair_flat(
+    chapters: list[Chapter], published_chapters: list[Chapter] | None, client: LLMClient
+) -> tuple[list[Chapter], list[Chapter] | None, bool]:
+    """The last resort for a side still flat after `recut`: ask the model.
+
+    Reached only where nothing free could work — no second edition, or both of
+    them flat. With a counterpart in hand `segment_like` is exact and costs
+    nothing, so this never runs in front of it.
+    """
+    repaired = False
+    if unsegmented(chapters):
+        chapters, repaired = repair_by_model(chapters, client), True
+    if published_chapters is not None and unsegmented(published_chapters):
+        published_chapters, repaired = repair_by_model(published_chapters, client), True
+    return chapters, published_chapters, repaired
+
+
 def check_usable(chapters: list[Chapter], label: str, source: str | None = None) -> None:
     """Refuse a book whose text never broke into paragraphs, and name the fix.
 
@@ -216,6 +234,11 @@ def build_aligned(
     same, minus the hover.
     """
     chapters, published_chapters, cut = recut(chapters, published_chapters)
+    # Only a chat model can read a book for its paragraphs, and the align route
+    # has one only when the reader wanted glosses. Without it the refusal stands,
+    # which is the same answer as before and an honest one.
+    if gloss_client is not None:
+        chapters, published_chapters, _ = repair_flat(chapters, published_chapters, gloss_client)
     check_usable(chapters, "The original")
     check_usable(published_chapters, "The published translation")
     aligned, report = align_published(

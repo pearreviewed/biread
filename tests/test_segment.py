@@ -11,11 +11,11 @@ from pathlib import Path
 
 import pytest
 
-from biread.build import cut_note, recut
+from biread.build import cut_note, recut, repair_flat
 from biread.align import AlignmentReport
 from biread.cleanup import Chapter, clean
 from biread.extract import get_extractor
-from biread.segment import segment_like, unsegmented
+from biread.segment import repair_by_model, segment_like, unsegmented
 
 EXAMPLES = Path(__file__).resolve().parent.parent / "examples"
 
@@ -148,7 +148,10 @@ def whole_paragraphs_recovered(path: Path) -> tuple[int, int, int]:
     exactly. The ceiling is below 100% because a paragraph closing without a full
     stop — a heading, a line of verse — leaves no sentence break to find.
     """
-    truth = [c for c in clean(get_extractor(path).extract(path))[0] if c.paragraphs]
+    # Read exactly as the pipeline reads it, PDF repairs and all: measuring a
+    # parse no reader is ever given proves nothing about what a reader gets.
+    raw = get_extractor(path).extract(path)
+    truth = [c for c in clean(raw, from_pdf=path.suffix.lower() == ".pdf")[0] if c.paragraphs]
     real = [p for c in truth for p in c.paragraphs]
     blob = flat(" ".join(real))
 
@@ -164,10 +167,15 @@ def whole_paragraphs_recovered(path: Path) -> tuple[int, int, int]:
     return recovered, len(real), sum(len(c.paragraphs) for c in cut)
 
 
+# Measured over the whole file, front matter included, which is why these sit
+# below the 98–100% the *body* reaches: a title page divides into lines no
+# sentence break can find, and `trim_matter` drops all of it before a reader
+# ever sees a page.
 @pytest.mark.parametrize("name,least", [
-    ("bovary-published.epub", 0.72),
-    ("bovary-french.epub", 0.70),
-    ("candide-published.pdf", 0.62),
+    ("bovary-published.epub", 0.93),
+    ("bovary-french.epub", 0.93),
+    ("candide-published.pdf", 0.85),
+    ("micromegas/french.txt", 0.90),
 ])
 def test_most_of_a_flattened_book_comes_back(name, least):
     path = EXAMPLES / name
@@ -186,3 +194,66 @@ def test_the_cut_book_is_about_as_long_as_the_real_one():
         pytest.skip("bovary-published.epub is not in examples/")
     _, total, cut = whole_paragraphs_recovered(path)
     assert 0.85 <= cut / total <= 1.05
+
+
+# ---- the last resort: no other edition, so the model reads it ----
+
+class Stub:
+    """Answers with piece numbers, as the real model is asked to."""
+
+    def __init__(self, reply="", fail=False):
+        self.reply, self.fail, self.prompts = reply, fail, []
+
+    def complete(self, system, user, max_tokens):
+        self.prompts.append(user)
+        if self.fail:
+            raise RuntimeError("no")
+        from biread.llm.base import Completion
+        return Completion(text=self.reply, truncated=False)
+
+
+def test_the_model_says_where_the_paragraphs_begin():
+    blob = flat("One. Two. Three. Four.")
+    cut = repair_by_model(blob, Stub("3"))
+    assert [p for c in cut for p in c.paragraphs] == ["One. Two.", "Three. Four."]
+
+
+def test_the_model_is_shown_numbered_pieces_and_never_asked_for_text():
+    stub = Stub("2")
+    repair_by_model(flat("One. Two."), stub)
+    assert "1. One." in stub.prompts[0] and "2. Two." in stub.prompts[0]
+
+
+def test_a_reply_that_is_nonsense_costs_a_break_and_not_a_word():
+    # Numbers out of range, out of order and repeated: every one of them is
+    # dropped, and the book still comes back entire.
+    text = "One. Two. Three."
+    cut = repair_by_model(flat(text), Stub("9 9 2 2 1 0 -4 hello"))
+    assert " ".join(p for c in cut for p in c.paragraphs) == text
+
+
+def test_the_model_cannot_put_its_own_words_on_the_page():
+    text = "Le chat dort. Le chien court."
+    cut = repair_by_model(flat(text), Stub("2 THE CAT SLEEPS ON A MAT"))
+    assert " ".join(p for c in cut for p in c.paragraphs) == text
+
+
+def test_a_call_that_fails_leaves_that_stretch_unbroken():
+    text = "One. Two. Three."
+    cut = repair_by_model(flat(text), Stub(fail=True))
+    assert [p for c in cut for p in c.paragraphs] == [text]
+
+
+def test_the_model_is_asked_only_where_nothing_free_could_work():
+    # With a counterpart in hand the free cut is exact; the model must not be
+    # reached at all, because it would cost money to do worse.
+    stub = Stub("2")
+    _, published, which = recut([chapter(FRENCH)], flat(" ".join(ENGLISH)))
+    original, published, repaired = repair_flat([chapter(FRENCH)], published, stub)
+    assert which == "published" and not repaired and not stub.prompts
+
+
+def test_a_book_with_nothing_beside_it_is_repaired():
+    stub = Stub("2")
+    _, _, repaired = repair_flat(flat(" ".join(ENGLISH)), None, stub)
+    assert repaired and stub.prompts
