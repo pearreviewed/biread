@@ -140,3 +140,26 @@ def test_nothing_opens_a_socket_by_itself():
     load("/ebooks/gustave-flaubert/salammbo/j-s-chartres", fetch=fetch)
     assert seen == [text_url("/ebooks/gustave-flaubert/salammbo/j-s-chartres")]
     assert seen[0].endswith("/text/single-page")
+
+
+NOTED = """
+<body>
+<section id="chapter-1" epub:type="bodymatter chapter z3998:fiction">
+  <p>Down with the Pope, the whole pack of them!<a href="endnotes.xhtml#note-1" epub:type="noteref">1</a></p>
+  <p>Comme la nuit se fait lorsque le jour s’en va.<a href="endnotes.xhtml#note-115"
+     epub:type="noteref">115</a></p>
+  <p>It was the year 1815, and he had been bishop since 1806 in that town.</p>
+</section>
+</body>
+"""
+
+
+def test_an_endnote_marker_does_not_end_up_glued_to_the_prose():
+    """Les Misérables ended on "…lorsque le jour s'en va.115" and carried 104 of
+    these; Notre-Dame 37. Dropped on the file's own say-so, never by hunting for
+    digits — which would take the year out of a date."""
+    chapters = parse(NOTED)
+    paragraphs = chapters[0]["paragraphs"]
+    assert paragraphs[0] == "Down with the Pope, the whole pack of them!"
+    assert paragraphs[1].endswith("lorsque le jour s’en va.")
+    assert "1815" in paragraphs[2] and "1806" in paragraphs[2]

@@ -153,7 +153,12 @@ class _Body(HTMLParser):
                  "id": attributes.get("id"), "division": self._division,
                  "paragraphs": []})
             self._depth += 1
-        skips = tag in _SKIP_TAGS
+        # A note's marker is a reference to an endnote this book does not carry,
+        # and it arrives glued to the word before it — Les Misérables ended on
+        # "Comme la nuit se fait lorsque le jour s'en va.115", and carried 104 of
+        # them; Notre-Dame 37. Dropped on the file's own say-so (`epub:type`),
+        # not by hunting for digits, which would take the year out of a date.
+        skips = tag in _SKIP_TAGS or "noteref" in kind
         self._stack.append((skips, opened))
         if skips:
             self._skip += 1

@@ -479,3 +479,56 @@ def test_a_skip_list_that_matches_nothing_is_an_error_not_a_shrug():
         pages[f"Salammbô/{name}"] = page(body)
     with pytest.raises(LookupError, match="none of the sections named"):
         ws.load("fr", "Salammbô", fetcher(pages), skip=("Variantes",))
+
+
+# --- the network, when it says no -------------------------------------------
+
+class _Reply:
+    def __init__(self, status, text="ok", retry_after=None):
+        self.status_code, self.text = status, text
+        self.headers = {"Retry-After": str(retry_after)} if retry_after else {}
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise RuntimeError(f"HTTP {self.status_code}")
+
+
+def _patched(monkeypatch, replies, slept):
+    import types
+    monkeypatch.setattr(ws, "_BACKOFF", (0, 0, 0))
+    monkeypatch.setattr(ws.time, "sleep", lambda s: slept.append(s))
+    fake = types.SimpleNamespace(get=lambda *a, **k: replies.pop(0))
+    monkeypatch.setitem(__import__("sys").modules, "requests", fake)
+
+
+def test_a_busy_wiki_is_waited_for_rather_than_giving_up(monkeypatch):
+    """Les Misérables is 411 requests. One 429 three quarters of the way through
+    threw away an hour of fetching and the matching that went with it."""
+    slept = []
+    _patched(monkeypatch, [_Reply(429), _Reply(503), _Reply(200, "the chapter")], slept)
+    assert ws.default_fetch("http://x") == "the chapter"
+    assert len(slept) == 2
+
+
+def test_the_wikis_own_waiting_time_is_honoured(monkeypatch):
+    slept = []
+    _patched(monkeypatch, [_Reply(429, retry_after=17), _Reply(200)], slept)
+    ws.default_fetch("http://x")
+    assert slept == [17]
+
+
+def test_a_page_that_is_not_there_is_not_asked_for_twice(monkeypatch):
+    """A 404 is an answer; repeating the question will not change it."""
+    slept = []
+    _patched(monkeypatch, [_Reply(404)], slept)
+    with pytest.raises(RuntimeError, match="404"):
+        ws.default_fetch("http://x")
+    assert slept == []
+
+
+def test_a_wiki_that_stays_busy_eventually_fails(monkeypatch):
+    slept = []
+    _patched(monkeypatch, [_Reply(429) for _ in range(4)], slept)
+    with pytest.raises(RuntimeError, match="429"):
+        ws.default_fetch("http://x")
+    assert len(slept) == 3, "bounded — a book that cannot be fetched should fail"

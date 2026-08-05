@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import html
 import re
+import time
 import urllib.parse
 from dataclasses import dataclass, field
 from html.parser import HTMLParser
@@ -44,11 +45,34 @@ def query_url(lang: str, **params: str) -> str:
     return API.format(lang=lang) + "?" + urllib.parse.urlencode(params)
 
 
+#: How long to wait between attempts when the wiki asks us to slow down. Bounded:
+#: a book that cannot be fetched should fail rather than retry all afternoon.
+_BACKOFF = (2, 8, 30)
+
+
 def default_fetch(url: str) -> str:
-    """Read a URL over the network. Not used in the browser, which brings its own."""
+    """Read a URL over the network. Not used in the browser, which brings its own.
+
+    Waits and tries again when the wiki says it is busy. A long book is hundreds
+    of requests — Les Misérables is 411 — and one 429 three quarters of the way
+    through threw away an hour of fetching and the matching that went with it.
+    Only 429 and 5xx are retried, because those are the wiki asking for patience;
+    a 404 is an answer and repeating the question will not change it.
+    """
     import requests  # not installed in Pyodide, where fetch is injected instead
 
-    r = requests.get(url, headers={"User-Agent": UA}, timeout=30)
+    for wait in (*_BACKOFF, None):
+        r = requests.get(url, headers={"User-Agent": UA}, timeout=30)
+        if r.status_code != 429 and r.status_code < 500:
+            break
+        if wait is None:
+            break
+        # The server's own number where it gives one, since it knows better.
+        try:
+            wait = max(wait, min(60, int(r.headers.get("Retry-After", 0))))
+        except ValueError:
+            pass
+        time.sleep(wait)
     r.raise_for_status()
     return r.text
 
