@@ -482,20 +482,20 @@ def test_the_row_below_the_cards_keeps_its_place_across_categories(page):
     assert "1 book" in text(page, "#shelf-count")
 
 
-def test_a_card_is_the_same_height_in_every_category(page):
-    """Cards used to stretch level with their row, so the same book stood 633px
-    tall beside a long one and 484px beside a short one — it changed size under
-    a reader who had only pressed a filter."""
+def test_the_cards_in_a_row_end_level(page):
+    """Left to their own heights they ended wherever their prose ran out, and a
+    row of three finished on three different lines. The trade is deliberate: a
+    card is now a little taller in one category than in another, which a filter
+    can be seen doing — the ragged row was the worse of the two."""
     page.click("[data-route=shelf]")
-    heights = lambda: page.eval_on_selector_all(
-        ".card", "n => Object.fromEntries(n.map(c => [c.dataset.slug, "
-                 "Math.round(c.getBoundingClientRect().height)]))")
-    everything = heights()
-    for nth in (2, 3):
-        page.click(f"#shelf-filters button:nth-child({nth})")
-        for slug, tall in heights().items():
-            assert tall == everything[slug], f"{slug} changed height under a filter"
-        page.click(f"#shelf-filters button:nth-child({nth})")
+    rows = {}
+    for top, bottom in page.eval_on_selector_all(
+            ".card", "n => n.map(c => { const r = c.getBoundingClientRect();"
+                     "  return [Math.round(r.top), Math.round(r.bottom)]; })"):
+        rows.setdefault(top, set()).add(bottom)
+    assert rows, "no cards on the shelf"
+    for top, bottoms in rows.items():
+        assert len(bottoms) == 1, f"the row at {top} ends on {sorted(bottoms)}"
 
 
 def test_the_tab_strip_is_the_same_size_on_every_route(page):

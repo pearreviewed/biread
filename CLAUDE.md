@@ -377,6 +377,14 @@ Recorded because the reasoning matters more than the outcome.
   column, not the book. Replaced by a fixed-layout spread with no glosses. The
   cost is that `--epub` now needs the browser engine (it paginates by measuring)
   and is best on a tablet or desktop — accepted, because the spread is the point.
+- **"A card is as tall as the book it describes"** was reasoned, built, and
+  overruled by looking at it. Each card kept its own height so a filter could
+  not resize it — but a row of three then ended on three different lines, and
+  the shelf read as out of true twice over, once in a multicol flow and once in
+  a grid. Cards in a row now end level, with the action line pushed to the foot
+  so the slack falls above the divider rather than under the last word. The cost
+  stands as it was described: the same book is a little taller in one category
+  than in another. The ragged row is the worse of the two.
 
 ---
 

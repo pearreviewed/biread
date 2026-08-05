@@ -156,14 +156,18 @@
   .chips button { padding: 7px 15px; border: 1px solid var(--rule); border-radius: 999px; background: none; font-size: 13.5px; color: var(--body); }
   .chips button:hover { border-color: var(--solid); }
   .chips button[aria-pressed="true"] { background: var(--solid); border-color: var(--solid); color: var(--on-solid); }
-  /* A card is as tall as the book it describes, not as tall as its neighbour —
-     a row-based grid stretched them level, which made the same book a different
-     height in every category. `align-items: start` keeps each card its own
-     height without that. Columns rather than a multicol flow because balancing
-     is the browser's business there: six cards came out three, three and an
-     empty third column, which read as a shelf pushed to the left of its page. */
-  .cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
-           align-items: start; gap: 15px; }
+  /* Cards in a row end level. Left to their own heights they ended wherever
+     their prose ran out, and a row of three finished on three different lines —
+     read as a shelf out of true, whatever the reasoning. The cost is that the
+     same book stands a little taller in one category than in another; the ragged
+     row was the worse of the two, so this is the side the fault falls on.
+     Columns rather than a multicol flow because balancing is the browser's
+     business there: six cards came out three, three and an empty third column. */
+  .cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 15px; }
+  /* The slack goes above the divider, where it reads as air, rather than under
+     the last line, where it reads as a hole — so the action lines of a row sit
+     on one baseline and the cards close together. */
+  .card > .act { margin-top: auto; }
   /* A card is the target, not a panel with a target on it: it lifts under the
      pointer and carries its own action at the foot, so it reads as pressable
      on a touchscreen that will never send one. */
