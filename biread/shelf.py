@@ -65,6 +65,11 @@ class Book:
     lang: str = "fr"
     other: str = "en"
     added: bool = False             # brought in from the lookup screen, unchecked
+    #: Sections of the work's own wiki page that are not the work — an editor's
+    #: notice, a list of sources, textual variants. Named because nothing on the
+    #: page distinguishes them: they sit among the chapters, under names of their
+    #: own, and every one of them calls itself "book" in its header.
+    skip: tuple[str, ...] = ()
 
     @property
     def translation(self) -> Translation:
@@ -216,6 +221,12 @@ SHELF: tuple[Book, ...] = (
         note="Carthage after the mercenaries’ revolt, and Flaubert at his most "
              "pitiless. The wiki has no English copy of this one at all.",
         read_through=True, coverage=0.903,
+        # The wiki's Salammbô is the novel plus an edition's apparatus: 829
+        # paragraphs of notice, sources, textual variants and the letters
+        # Flaubert was sent about it. Nothing in the book's own English, so all
+        # of it faced a blank page and the last spread came out empty.
+        skip=("Notice", "Source principale", "Sources accessoires", "Variantes",
+              "Salammbô et les auteurs contemporains"),
     ),
 )
 
@@ -318,7 +329,7 @@ def _english_side(chapters: list[dict], path: str, translator: str | None) -> di
 
 def load_pages(lang: str, page: str, other: str, other_page: str,
                fetch=None, on_progress=None, titles: tuple = (None, None, None),
-               translation: Translation | None = None):
+               translation: Translation | None = None, skip: tuple[str, ...] = ()):
     """Both editions named by page, fetched and read into chapters.
 
     Returns the two chapter lists and what each edition says about itself. Only
@@ -332,7 +343,8 @@ def load_pages(lang: str, page: str, other: str, other_page: str,
     step = on_progress or (lambda *a: None)
     title, author, translator = titles
 
-    original = ws.load(lang, page, fetch, lambda i, t: step("fetch-orig", i, t))
+    original = ws.load(lang, page, fetch, lambda i, t: step("fetch-orig", i, t),
+                       skip=skip)
     if translation is not None and translation.source == "standardebooks":
         from biread import standardebooks as se
 
@@ -362,7 +374,8 @@ def load_pair(book: Book, index: int = 0, fetch=None, on_progress=None):
     """Both editions of a shelf book, in the translation the reader chose."""
     t = book.translations[index]
     return load_pages(book.lang, book.page, book.other, t.page, fetch, on_progress,
-                      (book.title, book.author, t.translator), translation=t)
+                      (book.title, book.author, t.translator), translation=t,
+                      skip=book.skip)
 
 
 def probe(lang: str, page: str, other: str, other_page: str, fetch=None) -> dict:

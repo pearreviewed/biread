@@ -514,14 +514,30 @@ def fetch_pages(lang: str, pages: list[str], fetch: Fetch = default_fetch,
     return trim_apparatus(out)
 
 
-def load(lang: str, work: str, fetch: Fetch = default_fetch, on_progress=None) -> Edition:
-    """A whole edition, found and fetched, with nothing said about the book."""
+def load(lang: str, work: str, fetch: Fetch = default_fetch, on_progress=None,
+         skip: tuple[str, ...] = ()) -> Edition:
+    """A whole edition, found and fetched, with nothing said about the book.
+
+    `skip` names sections of the work's own page that are not the work — the
+    wiki's Salammbô carries a Notice, its sources, 626 paragraphs of Variantes
+    and the letters Flaubert received, all under names of their own and all
+    calling themselves "book" in the header, so nothing on the page tells them
+    from a chapter. Named by hand on the shelf record, because on a curated
+    shelf a person has looked; a rule that dropped a trailing run of unmatched
+    sections would also drop the last chapters of a translation that stops
+    early, and losing those silently is the worse failure.
+    """
     r = resolve(lang, work, fetch)
     if not r.pages:
         raise LookupError(f"no chapters found under {work!r} on {lang}.wikisource.org")
-    chapters, dropped = fetch_pages(lang, r.pages, fetch, on_progress)
+    pages = [p for p in r.pages if p.rsplit("/", 1)[-1] not in skip]
+    if skip and len(pages) == len(r.pages):
+        raise LookupError(
+            f"{work!r}: none of the sections named in `skip` is there — "
+            f"{skip}. The wiki has been renamed under us, or the list is stale.")
+    chapters, dropped = fetch_pages(lang, pages, fetch, on_progress)
     if not chapters:
-        raise LookupError(f"{work!r} resolved to {len(r.pages)} pages, none of them text")
+        raise LookupError(f"{work!r} resolved to {len(pages)} pages, none of them text")
     # A volume that prints its own title over chapter one — Twenty Thousand
     # Leagues opened on "Twenty Thousand Leagues Under the Sea." as a paragraph
     # of the book. Removed only where it repeats the name of the page we asked

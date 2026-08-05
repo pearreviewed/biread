@@ -450,3 +450,32 @@ def test_verse_set_with_breaks_keeps_its_words_apart():
     _, paragraphs = ws.parse(page(body))
     assert paragraphs[0] == ("Roses are red violets are blue and every line of this "
                              "little verse is set with a break.")
+
+
+def test_named_sections_can_be_left_out_of_a_work():
+    """The wiki's Salammbô is the novel plus an edition's apparatus — a notice,
+    its sources, 626 paragraphs of variants — sitting among the chapters under
+    names of their own, with nothing on the page to tell them apart."""
+    body = "<p>" + "Une phrase de ce chapitre. " * 3 + "</p>"
+    pages = {"Salammbô": page(links("Salammbô/Le Festin", "Salammbô/À Sicca",
+                                    "Salammbô/Tanit", "Salammbô/Variantes"))}
+    for name in ("Le Festin", "À Sicca", "Tanit", "Variantes"):
+        pages[f"Salammbô/{name}"] = page(body)
+
+    whole = ws.load("fr", "Salammbô", fetcher(pages))
+    assert len(whole.chapters) == 4
+
+    novel = ws.load("fr", "Salammbô", fetcher(pages), skip=("Variantes",))
+    assert [c["page"] for c in novel.chapters] == [
+        "Salammbô/Le Festin", "Salammbô/À Sicca", "Salammbô/Tanit"]
+
+
+def test_a_skip_list_that_matches_nothing_is_an_error_not_a_shrug():
+    """A stale name would quietly stop skipping and put the apparatus back."""
+    body = "<p>" + "Une phrase de ce chapitre. " * 3 + "</p>"
+    pages = {"Salammbô": page(links("Salammbô/Le Festin", "Salammbô/À Sicca",
+                                    "Salammbô/Tanit"))}
+    for name in ("Le Festin", "À Sicca", "Tanit"):
+        pages[f"Salammbô/{name}"] = page(body)
+    with pytest.raises(LookupError, match="none of the sections named"):
+        ws.load("fr", "Salammbô", fetcher(pages), skip=("Variantes",))
