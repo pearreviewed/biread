@@ -252,7 +252,7 @@ FILTERS: dict[str, str] = {
     "read": "Read through",
     "whole": "Nothing abridged",
     "several": "More than one translation",
-    "quick": "Under ten minutes",
+    "quick": "Builds in under ten minutes",
 }
 
 

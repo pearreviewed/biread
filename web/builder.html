@@ -141,8 +141,11 @@
   .step .row.foot > div { font-size: 13px; color: var(--muted); }
 
   /* --- the shelf --- */
-  .shelf { display: flex; flex-direction: column; gap: 22px;
-           width: 100cqw; margin-inline: calc((100% - 100cqw) / 2); }
+  /* The cards want more than the reading measure the rest of the screen wants,
+     so the shelf breaks out of it — as far as the page allows, and no further. */
+  .shelf { --shelf: min(1180px, calc(100vw - 76px));
+           display: flex; flex-direction: column; gap: 22px;
+           width: var(--shelf); margin-inline: calc((100% - var(--shelf)) / 2); }
   .find { display: flex; align-items: center; gap: 9px; padding: 9px 16px; border: 1px solid var(--rule); border-radius: 999px; background: var(--surface-3); }
   .find span { font-size: 14px; color: var(--muted); }
   .find input { flex: 1; min-width: 0; padding: 0; border: 0; background: none; font: 15px/1.3 'Charis SIL', Charter, Georgia, serif; color: var(--ink); }
@@ -153,14 +156,14 @@
   .chips button { padding: 7px 15px; border: 1px solid var(--rule); border-radius: 999px; background: none; font-size: 13.5px; color: var(--body); }
   .chips button:hover { border-color: var(--solid); }
   .chips button[aria-pressed="true"] { background: var(--solid); border-color: var(--solid); color: var(--on-solid); }
-  /* A card is as tall as the book it describes, not as tall as its neighbour.
-     A row-based grid stretched them level, which made the same book a different
-     height in every category and left a slab of dead space under the short
-     ones; unstretched, it left the gap open between the rows instead. Down
-     three columns there is neither, and the shelf still reads alphabetically —
-     down each column rather than across. */
-  .cards { columns: 3; column-gap: 15px; }
-  .cards > * { break-inside: avoid; margin-bottom: 15px; }
+  /* A card is as tall as the book it describes, not as tall as its neighbour —
+     a row-based grid stretched them level, which made the same book a different
+     height in every category. `align-items: start` keeps each card its own
+     height without that. Columns rather than a multicol flow because balancing
+     is the browser's business there: six cards came out three, three and an
+     empty third column, which read as a shelf pushed to the left of its page. */
+  .cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+           align-items: start; gap: 15px; }
   /* A card is the target, not a panel with a target on it: it lifts under the
      pointer and carries its own action at the foot, so it reads as pressable
      on a touchscreen that will never send one. */
@@ -328,7 +331,7 @@
     body { padding: 16px 16px 36px; }
     .hero h1 { font-size: 31px; }
     .who, .files, .two, .tiers, .hits { grid-template-columns: 1fr; }
-    .cards { columns: 2; }
+    .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .seg { grid-template-columns: 1fr; }
     .shelf .row.top, .beyond { flex-direction: column; align-items: stretch; }
     .shelf .row.top .find { width: auto; }
@@ -337,7 +340,7 @@
     .centre .spread { width: 100%; }
   }
   @media (max-width: 560px) {
-    .cards { columns: 1; }
+    .cards { grid-template-columns: minmax(0, 1fr); }
     .spread { grid-template-columns: 1fr; }
     .leaf { min-height: 0; }
     .leaf.r { box-shadow: none; }
@@ -703,7 +706,10 @@ window.addEventListener("hashchange", () => {
 });
 
 /* --- the shelf ----------------------------------------------------------- */
-const PER_PAGE = 6;
+// Three full rows of the three-column grid. Six left the eighth book alone on a
+// second page beside an empty column, which is a worse thing to send a reader to
+// than one page a little longer.
+const PER_PAGE = 9;
 
 // A book found by looking is gone when the tab closes, unless the reader asks to
 // keep it. Kept in this browser and nowhere else — what is stored is the card:
@@ -754,6 +760,14 @@ fetch("shelf.json")
   .then((shelf) => { if (!S.shelf && shelf && (shelf.books || []).length) tookShelf(shelf); })
   .catch(() => {});
 
+// Alphabetical by the title on the card, which is what the line under the cards
+// says and what the shelf was not: the books came out in the order they were
+// added. Sorted here rather than in the catalogue because a book a reader kept
+// is only ever known to this browser, and it takes its place among the rest —
+// the card already says whose it is, so its position need not.
+function byTitle(a, b) {
+  return a.title.localeCompare(b.title, undefined, { sensitivity: "base" });
+}
 function shelfBooks() {
   if (!S.shelf) return [];
   const q = S.query.trim().toLowerCase();
@@ -762,7 +776,7 @@ function shelfBooks() {
     if (chosen && !chosen.slugs.includes(b.slug)) return false;
     if (!q) return true;
     return (b.title + " " + b.author + " " + b.english).toLowerCase().includes(q);
-  });
+  }).sort(byTitle);
 }
 // Two editions rarely count their chapters alike, and that is not a fault — but
 // a book divided into four parts facing one divided into twenty-two is a
@@ -839,13 +853,20 @@ function caveat(book) {
   if (book.prebuilt) return glossOffer(book);
   return unreadNote(book) || book.note || null;
 }
+// How long a build takes, said wherever building is the thing being offered —
+// on the card's own action where there is no finished file, on the line under
+// one where there is. It is what the "under ten minutes" shelf is counting, so
+// a reader narrowing by it can see the figure they narrowed on.
+function minutesOf(book) {
+  return book.minutes ? " · about " + book.minutes + " min" : "";
+}
 // Every card ends with the thing it does, named and arrowed, so a card reads as
 // pressable without waiting for a pointer that a touchscreen never sends.
 function actionLine(book) {
   const row = el("div", book.prebuilt ? "act ready" : "act");
   row.appendChild(el("span", null, book.prebuilt
     ? "Ready to read · " + weight(book.prebuilt.bytes)
-    : "Build it yourself" + (book.minutes ? " · about " + book.minutes + " min" : "")));
+    : "Build it yourself" + minutesOf(book)));
   row.appendChild(el("span", book.prebuilt ? "arrow" : "arrow go", book.prebuilt ? "↓" : "→"));
   return row;
 }
@@ -872,10 +893,6 @@ function bookCard(book) {
   const version = book.translations[index] || book.translations[0];
   facts.appendChild(fact("English", version.label));
   facts.appendChild(fact("Chapters", String(book.chapters)));
-  // How long a build takes belongs to the card whose one action is to build.
-  // Where a finished book is being handed over, the figure beside it is its
-  // weight, and a second one only asks to be mistaken for it.
-  if (book.minutes && !book.prebuilt) facts.appendChild(fact("Build", "about " + book.minutes + " min"));
   card.appendChild(facts);
 
   const marks = el("div", "marks");
@@ -897,7 +914,7 @@ function bookCard(book) {
   // Building your own is the second thing a finished book's card does, so it is
   // a line of type rather than a second target competing with the card itself.
   if (book.prebuilt) {
-    const own = el("button", "own", "Or build it yourself →");
+    const own = el("button", "own", "Or build it yourself" + minutesOf(book) + " →");
     own.addEventListener("click", (e) => { e.stopPropagation(); pickBook(book.slug, index); });
     card.appendChild(own);
   }
@@ -976,7 +993,7 @@ function paintShelf() {
   if (!shown.length) {
     const empty = el("div", "say", "Nothing on the shelf answers to that. "
       + "Any book out of copyright can still be looked up on Wikisource.");
-    empty.style.columnSpan = "all";
+    empty.style.gridColumn = "1 / -1";
     cards.appendChild(empty);
   }
 
@@ -1270,7 +1287,8 @@ function takeFound(hit, keepIt, other) {
   S.shelf.books = S.shelf.books.filter((b) => b.slug !== slug).concat([book]);
   if (book.kept) keep(book);
   S.filter = null; S.query = ""; $("shelf-find").value = "";
-  S.page = Math.floor((S.shelf.books.length - 1) / PER_PAGE);
+  // Wherever the book's own title puts it, which on a sorted shelf is not the end.
+  S.page = Math.max(0, Math.floor(shelfBooks().findIndex((b) => b.slug === slug) / PER_PAGE));
   setRoute("shelf");
   show("books");
   pickBook(slug, 0);

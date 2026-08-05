@@ -390,9 +390,12 @@ def test_a_card_shows_the_translator_the_wiki_names_and_nothing_more(page):
     assert "Voltaire" in text(page, card)
     assert "Smollett · 1920" in text(page, card)
     assert "30" in text(page, f"{card} .facts")
-    # How long a build takes is on the card whose one action is to build. Where
-    # a finished file is being handed over, the figure beside it is its weight.
-    assert "about 3 min" not in text(page, card)
+    # How long a build takes is said wherever building is what is offered: on
+    # the card's own action where no finished file exists, on the line under one
+    # where it does — never beside the weight, which it would be mistaken for.
+    # It is the figure the "under ten minutes" shelf is counting.
+    assert "about 3 min" not in text(page, f"{card} .facts")
+    assert "about 3 min" in text(page, f"{card} .own")
     assert "about 9 min" in text(page, ".card[data-slug='80days'] .act")
 
 
@@ -439,6 +442,15 @@ def test_a_book_with_two_translations_lets_the_reader_choose(page):
     page.click(".versions .pills button:nth-child(2)")
     page.wait_for_function("!document.getElementById('to-settings').disabled")
     assert "Fleming · 1906" in text(page, ".card[data-slug=micromegas] .facts")
+
+
+def test_the_shelf_reads_alphabetically_as_the_line_beneath_it_says(page):
+    """The books used to come out in the order they were added, under a line
+    that called them alphabetical."""
+    page.click("[data-route=shelf]")
+    titles = page.eval_on_selector_all("#shelf-cards .card .name", "n => n.map(e => e.textContent)")
+    assert titles == sorted(titles, key=str.lower)
+    assert "alphabetical" in text(page, "#shelf-count")
 
 
 def test_searching_the_shelf_narrows_it_and_says_so_when_it_empties(page):
