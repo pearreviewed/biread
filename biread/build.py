@@ -10,6 +10,7 @@ download.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Callable
 
 from .align import AlignmentReport, Embed, align_published, trim_matter
@@ -100,24 +101,49 @@ def build_reader(
 # cause, and no alignment can rescue it.
 BLOCK_LIMIT = 6000
 
+# What to bring instead, by the format that lost the breaks. A word processor is
+# named separately from a PDF because it is almost always the *second* format a
+# book has been through — a PDF saved as .docx keeps every word and none of the
+# paragraph marks — and the fix is the file it was made from, which the reader
+# still has. Anything else is asked for an edition that sets its paragraphs apart.
+CONVERSION_ADVICE = {
+    ".docx": "A Word file converted from a PDF keeps every word and loses every "
+             "paragraph mark. The PDF or EPUB it was made from will read properly.",
+    ".doc": "A Word file converted from a PDF keeps every word and loses every "
+            "paragraph mark. The PDF or EPUB it was made from will read properly.",
+    ".rtf": "A word-processor file converted from a PDF keeps every word and loses "
+            "every paragraph mark. The PDF or EPUB it was made from will read properly.",
+    ".pdf": "A PDF sometimes carries no paragraph breaks at all. An EPUB or "
+            "plain-text edition of the same book will read properly.",
+}
+DEFAULT_ADVICE = ("An EPUB, or a plain-text edition with a blank line between its "
+                  "paragraphs, will read properly.")
 
-def check_usable(chapters: list[Chapter], label: str) -> None:
+
+def check_usable(chapters: list[Chapter], label: str, source: str | None = None) -> None:
     """Refuse a book whose text never broke into paragraphs, and name the fix.
 
     Building anyway yields a reader of a few enormous "paragraphs" running to
     hundreds of pages, set against nothing — worse than an honest refusal.
+
+    `source` is the file's own name where the caller knows it, which is what the
+    reader needs when two files are in play and only one of them is at fault; the
+    advice is picked from its format rather than blamed on PDFs whatever arrived.
     """
     paragraphs = [p for chapter in chapters for p in chapter.paragraphs]
     if not paragraphs:
-        raise ExtractError(f"{label} has no readable text.")
+        raise ExtractError(f"{source or label} has no readable text.")
     lengths = sorted(len(p) for p in paragraphs)
     median = lengths[len(lengths) // 2]
     if median > BLOCK_LIMIT:
+        suffix = Path(source).suffix.lower() if source else ""
+        shape = (f"as one unbroken block of about {median:,} characters"
+                 if len(paragraphs) == 1 else
+                 f"in blocks of about {median:,} characters")
         raise ExtractError(
-            f"{label} did not come apart into paragraphs: its text arrives in blocks of "
-            f"about {median:,} characters, so there is nothing to set beside the other "
-            f"book. PDFs often carry no paragraph breaks. An EPUB or plain-text edition "
-            f"of the same book will read properly."
+            f"{source or label} did not come apart into paragraphs: it arrives {shape}, "
+            f"so there is nothing to translate a paragraph at a time or to set beside "
+            f"another book. {CONVERSION_ADVICE.get(suffix, DEFAULT_ADVICE)}"
         )
 
 

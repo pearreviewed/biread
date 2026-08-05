@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 
 from .align import align_published, trim_matter
-from .build import published_note
+from .build import check_usable, published_note
 from .cache import Cache
 from .cleanup import Chapter, Removal, clean
 from .config import Config, load_config
@@ -113,7 +113,14 @@ def truncate(text: str, limit: int) -> str:
 def load_book(path: Path) -> tuple[list[Chapter], list[Removal]]:
     if not path.exists():
         raise BireadError(f"input file not found: {path}")
-    return clean(get_extractor(path).extract(path), from_pdf=path.suffix.lower() == ".pdf")
+    chapters, removals = clean(
+        get_extractor(path).extract(path), from_pdf=path.suffix.lower() == ".pdf"
+    )
+    # Checked here as well as in the build, because only here is the file's own
+    # name known — and with two files in play, which one is at fault is the whole
+    # of what the reader needs to be told.
+    check_usable(chapters, "The book", path.name)
+    return chapters, removals
 
 
 def report_removals(removals: list[Removal]) -> None:

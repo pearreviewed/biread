@@ -16,11 +16,22 @@ const SETUP = [
   "from biread.extract import get_extractor",
   "from biread.cleanup import clean",
   "_BOOKS = {}",
-  "def read_book(path, stage):",
+  "def read_book(path, stage, name):",
+  // Imported here rather than at startup: the build engine pulls in the
+  // templates and every provider behind it, and nothing is read until a reader
+  // has actually chosen a file.
+  "    from biread.build import check_usable",
   "    if path and path not in _BOOKS:",
   "        ext = get_extractor(Path(path))",
   "        raw = ext.extract(Path(path), on_page=lambda d, t: js_progress(stage, d, t))",
-  "        _BOOKS[path] = clean(raw, from_pdf=Path(path).suffix.lower() == '.pdf')[0]",
+  "        chapters = clean(raw, from_pdf=Path(path).suffix.lower() == '.pdf')[0]",
+  // Refused here rather than at build time, because only here is the file's own
+  // name known — with two files in play, which one is at fault is the whole of
+  // what the reader needs to be told. The name is the reader's, not the one on
+  // disk, which carries a prefix of ours.
+  "        which = 'The published translation' if stage == 'read-pub' else 'The book'",
+  "        check_usable(chapters, which, name or Path(path).name)",
+  "        _BOOKS[path] = chapters",
   "    return _BOOKS.get(path)",
   // A book off the shelf arrives over the network instead of off the disk. The
   // reader's own browser fetches it — nothing here is ours to hold — and the two
@@ -56,8 +67,8 @@ const READ = [
   "if shelf_key:",
   "    orig_chapters, pub_chapters = _SHELF[shelf_key]",
   "else:",
-  "    orig_chapters = read_book(orig_path, 'read-orig')",
-  "    pub_chapters = read_book(pub_path, 'read-pub')",
+  "    orig_chapters = read_book(orig_path, 'read-orig', orig_name)",
+  "    pub_chapters = read_book(pub_path, 'read-pub', pub_name)",
 ].join("\n");
 
 // Shared setup: turn the uploaded files into chapters and a Config.
@@ -261,6 +272,10 @@ self.onmessage = async (e) => {
     const pubPath = m.pub ? write("pub_" + m.pubName, m.pub) : null;
     pyodide.globals.set("orig_path", origPath);
     pyodide.globals.set("pub_path", pubPath);
+    // The names the reader chose, kept apart from the paths, which prefix them
+    // so two uploads cannot collide on disk.
+    pyodide.globals.set("orig_name", m.origName || "");
+    pyodide.globals.set("pub_name", m.pubName || "");
     pyodide.globals.set("lang_key", m.lang || "en");
     pyodide.globals.set("want_gloss", !!m.gloss);
     pyodide.globals.set("api_key", m.key || "");

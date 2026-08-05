@@ -101,6 +101,32 @@ def _measure(lines: list[str]) -> int:
     return lengths[int(len(lengths) * 0.9)] if lengths else 0
 
 
+#: A file whose blank-line blocks run longer than a page of prose never separated
+#: its paragraphs at all. Whatever its format, that information was lost before it
+#: reached us — see `_never_broke`.
+UNBROKEN_BLOCK = 2000
+
+
+def _never_broke(text: str) -> bool:
+    """Did this file separate its paragraphs at all?
+
+    The repair below is safe on a PDF because a PDF has no way to say whether it
+    means the blank lines it omits. Every other format does mean it, which is why
+    the repair is not simply run on all of them — an EPUB that puts one blank line
+    where a printer put an indent is describing its own house style.
+
+    But a file arriving in blocks the length of a chapter is not describing
+    anything: nothing sets its prose in blocks of two thousand characters. That is
+    a conversion that dropped the marks — a PDF flattened into Word loses every
+    one of them — and the repair is a rescue rather than a guess.
+    """
+    blocks = [b for b in re.split(r"\n\s*\n+", text.strip()) if b.strip()]
+    if not blocks:
+        return False
+    lengths = sorted(len(b) for b in blocks)
+    return lengths[len(lengths) // 2] > UNBROKEN_BLOCK
+
+
 def _unfuse_paragraphs(lines: list[str]) -> tuple[list[str], int]:
     """Put back the blank lines a PDF never had.
 
@@ -113,9 +139,10 @@ def _unfuse_paragraphs(lines: list[str]) -> tuple[list[str], int]:
     edition came out as 120 paragraphs, one of them four pages long, against the
     French's 630 — and nothing can be aligned against that.
 
-    PDFs only. A text or EPUB file that omits blank lines between paragraphs is
-    saying something about itself; a PDF has no way to say it either way, which is
-    what makes the guess safe here and presumptuous anywhere else.
+    Run on every PDF, and on any other format only where the file never came
+    apart at all (`_never_broke`) — a text or EPUB that omits the odd blank line
+    is saying something about itself, and one that omits all of them has lost
+    them.
     """
     measure = _measure(lines)
     if not measure:
@@ -139,8 +166,9 @@ def _unfuse_paragraphs(lines: list[str]) -> tuple[list[str], int]:
 def repair(raw: str, from_pdf: bool = False) -> tuple[str, list[Removal]]:
     """Raw extractor text -> (repaired text, what was repaired).
 
-    `from_pdf` turns on the repairs that are only safe where the format itself
-    lost the information — see `_unfuse_paragraphs`.
+    `from_pdf` admits the repairs that only a PDF always needs; a file of any
+    format that never came apart into paragraphs gets them too — see
+    `_unfuse_paragraphs` and `_never_broke`.
     """
     removed: list[Removal] = []
 
@@ -163,7 +191,7 @@ def repair(raw: str, from_pdf: bool = False) -> tuple[str, list[Removal]]:
     if healed:
         removed.append(Removal("Line-broken word rejoined", f"{healed} hyphenated word(s) made whole"))
 
-    if from_pdf:
+    if from_pdf or _never_broke(text):
         lines, split = _unfuse_paragraphs(lines)
         if split:
             removed.append(Removal(

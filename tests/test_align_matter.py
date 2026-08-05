@@ -160,6 +160,24 @@ def test_text_that_never_broke_into_paragraphs_is_refused():
         check_usable(blob, "The published translation")
 
 
+def test_the_refusal_names_the_file_and_the_format_that_lost_the_breaks():
+    # Two files are in play on the align route and only one of them is at fault;
+    # naming it, and the file it was converted from, is the whole of what a
+    # reader needs. Blaming PDFs for a Word file's damage is what it used to do.
+    blob = [Chapter("1", None, ["word " * 4000])]
+    with pytest.raises(ExtractError) as e:
+        check_usable(blob, "The book", "book.docx")
+    assert "book.docx did not come apart" in str(e.value)
+    assert "Word file converted from a PDF" in str(e.value)
+    assert "PDF or EPUB it was made from" in str(e.value)
+
+
+def test_a_pdf_is_pointed_somewhere_a_word_file_is_not():
+    blob = [Chapter("1", None, ["word " * 4000])]
+    with pytest.raises(ExtractError, match="EPUB or plain-text edition"):
+        check_usable(blob, "The book", "candide.pdf")
+
+
 def test_ordinary_prose_is_accepted():
     check_usable([Chapter("1", None, ["A paragraph of ordinary length. " * 10])], "The book")
 

@@ -77,6 +77,35 @@ def test_a_format_that_can_mark_its_own_paragraphs_is_left_alone():
     assert repair(FUSED, from_pdf=False)[0] == FUSED
 
 
+# A hard-wrapped paragraph whose last line stops short, repeated until the whole
+# stands as one block far longer than any prose is set in: a PDF flattened into
+# Word or text, which keeps every line and no paragraph mark.
+FLATTENED = "".join([
+    "Le mieux serait d'ecrire les evenements au jour le jour. Tenir un journal\n",
+    "pour y voir clair, ne pas laisser echapper les nuances, les petits faits,\n",
+    "meme s'ils n'ont l'air de rien, et surtout les classer.\n",
+]) * 40
+
+
+def test_a_file_that_never_broke_at_all_is_repaired_whatever_its_format():
+    # Not a PDF, and repaired all the same: a file arriving as one block the
+    # length of a chapter is not describing its house style, it has lost the
+    # marks, and refusing it would send a reader back to a file they no longer
+    # have.
+    text, removed = repair(FLATTENED, from_pdf=False)
+    assert len(text.split("\n\n")) == 40
+    assert any(r.kind == "Paragraph break restored" for r in removed)
+
+
+def test_a_long_file_that_did_break_is_still_left_alone():
+    # The guard on the rescue above: the same passage set out as paragraphs is
+    # untouched however long the file runs, because now it *is* saying what it
+    # means. This is what keeps every verified EPUB and text in the corpus as it
+    # was.
+    broken = "\n\n".join([FUSED] * 40)
+    assert repair(broken, from_pdf=False)[0] == broken
+
+
 def test_nothing_is_split_where_the_next_line_continues_the_sentence():
     wrapped = "\n".join([
         "Il ne fut que médiocrement affligé d'être banni d'une cour qui",

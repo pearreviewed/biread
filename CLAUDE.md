@@ -86,7 +86,10 @@ reason. Today it can fail **silently**.
 > line. **Gated to PDFs**, because a text or EPUB file that omits blank lines is
 > saying something about itself and a PDF cannot; that gate is what keeps the
 > verified Micromégas corpus untouched, which three ungated versions of the rule
-> did not. Ligature glyphs (`ﬁnd`, `ﬂurried` — 323 of them) are expanded too,
+> did not. *(Since widened by one case — a file of any format that never came
+> apart **at all** gets the same repair; see the decision row on a book with no
+> paragraph breaks. The corpus is still untouched, and that is measured.)*
+> Ligature glyphs (`ﬁnd`, `ﬂurried` — 323 of them) are expanded too,
 > ungated, because a ligature codepoint is a shape and never a meaning.
 >
 > **Built end to end, and it reads.** `build_aligned` on the two PDFs, matched by
@@ -340,6 +343,7 @@ CI so it stops depending on anyone remembering.
 | What is the book *about*? | **The card opens on it under the pointer.** A summary is the first thing a reader wants and the last thing the card had room for, so it lives in a drawer that slides out of the card's foot and over the row beneath — the shelf itself never moves, which is the whole point of the two fixes above it. Written per book in `shelf.py` beside the rest of the record, not fetched: a curated shelf is one somebody has read, and an encyclopaedia's opening line is as often about an edition's publication history as about the story. A book taken from the lookup screen carries none and its card simply does not open. Pointer only (`hover: hover`) — on a touchscreen a drawer would stay open on whatever was last tapped. |
 | Does hosting those books make biread a host? | **No — it is the opposite question.** "Not a host" is about *readers' own editions*, where someone else owns the text and a takedown would follow. The books on the shelf are out of copyright on the original side and carry either the wiki's public-domain translation or one biread generated itself, so nobody else has a claim on either half. Holding a reader's uploaded PDF is still refused; publishing a book we made from public-domain sources is simply publishing. |
 | Can a reader put a book of their own on the shelf? | **A book they *found*, yes; a book they *own*, no.** A find on the lookup screen is two Wikisource page names — the shelf's whole currency — so a checkbox, **off by default**, keeps it: saved in this browser, shown among the cards next visit under *Kept by you*, and taken off again from the card. The align route gets no such control, because an uploaded PDF has nothing shareable in it: passing it on would mean holding the text, which is the one thing biread does not do. "Shared with other readers" in the literal sense — one list everyone sees — waits on the parked server and on someone to moderate it. |
+| A book that arrives with no paragraph breaks? | **Repaired where anything is left to read, refused by name where nothing is.** A reader's Word file — a PDF saved as .docx — came in as **one** paragraph of 411,928 characters, and biread blamed PDFs for it and pointed at an EPUB the reader did not have. Two fixes, both about telling the truth. The break-rescue in `normalize.py` was gated to PDFs on the grounds that any other format means what it omits; that holds for a file that omits *some* blank lines and not for one that came apart nowhere, so it now also runs wherever the median block is longer than any prose is set in (`_never_broke`, 2,000 characters). Verified inert on the corpus — every example EPUB and text reports `never_broke=False`, so not one of them parses differently — and it recovers a flattened `.txt` in full. Where even the lines are gone, as in that .docx, the refusal names **the reader's own file**, says it arrived as one unbroken block, and names the format that lost the marks and the file to bring instead. The card that had sat on *Reading…* under the refusal now says *Couldn't be read*, because a page must not contradict itself. Deliberately **not** built: reconstructing paragraphs out of a blob by sentence and dialogue shape. It would make any file build, and the paragraphing on the page would be ours rather than the author's. |
 
 ## Reversals
 
@@ -483,6 +487,8 @@ Recorded because the reasoning matters more than the outcome.
 biread/
   cli.py          argument parsing and everything the user sees printed
   extract/        source file -> raw text
+  normalize.py    raw text -> repaired: the injuries an extractor inflicts, and
+                  the paragraph breaks a conversion dropped, undone first
   cleanup.py      raw text -> chapters of clean paragraphs
   wikisource.py   two page names -> two editions, resolved and fetched; no I/O
                   of its own, so the CLI reads through requests and the browser

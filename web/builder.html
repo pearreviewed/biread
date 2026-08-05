@@ -318,10 +318,14 @@
   /* An invitation laid across the open blank spread, so the book keeps its shape
      while there is nothing on its pages yet. */
   .empty { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; text-align: center; padding: 22px 26px; }
-  .empty p { margin: 0; font-size: 12.5px; color: var(--page-muted); max-width: 34ch; }
+  .empty p { margin: 0; font-size: 12.5px; color: var(--page-muted); max-width: 46ch; }
   .empty .ghost { color: var(--page-ink); border-color: var(--page-edge); background: rgba(255,255,255,.5); }
   .empty .ghost:hover:not(:disabled) { background: #fff; border-color: var(--page-ink); }
   .empty .ghost:disabled { opacity: .4; cursor: default; }
+  /* Lines the page itself bends: each one is rebuilt a glyph at a time so it can
+     sag into the gutter the way type does on paper. See bend(). */
+  .bent .ln { display: block; white-space: pre; }
+  .bent .ln > span { display: inline-block; }
   .gate { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; margin-top: 8px; padding-top: 18px; border-top: 1px solid var(--rule); }
   .gate .fig { display: flex; align-items: baseline; gap: 9px; }
   .gate .fig b { font-size: 26px; color: var(--ink); font-variant-numeric: tabular-nums; }
@@ -371,6 +375,7 @@
   @media (max-width: 560px) {
     .cards { grid-template-columns: minmax(0, 1fr); }
     .spread { grid-template-columns: 1fr; }
+    .empty p { max-width: 34ch; }   /* no fold to reach across once the pages stack */
     .leaf { min-height: 0; }
     .leaf.r { box-shadow: none; }
     .gate { flex-direction: column; align-items: stretch; }
@@ -1333,6 +1338,10 @@ function describeFile(which) {
   const info = S.info[which];
   const file = S[which];
   if (!file) return which === "orig" ? ".txt · .epub · .pdf · .html · .docx" : "An EPUB or plain text lines up closest";
+  // Told apart on purpose: null is still being read, false was read and would
+  // not come apart. A card left saying "Reading…" under a refusal is the page
+  // contradicting itself.
+  if (info === false) return "Couldn't be read";
   if (!info) return "Reading…";
   const bits = [info.author, info.language, info.pages && info.pages.toLocaleString() + " pp",
                 info.paragraphs && info.paragraphs.toLocaleString() + " ¶"].filter(Boolean);
@@ -1543,7 +1552,74 @@ function paintProofEmpty() {
   if (!S.local) box.appendChild(el("p", null, "A fraction of a cent, on your key."));
   $("proof-spread").appendChild(box);
   leafTitles();
+  bendEmpty(box);
   $("proof-note").textContent = "";
+}
+/* --- the bend -----------------------------------------------------------
+   Nothing here can sit on the fold and stay flat: on paper the sheet turns
+   into the gutter, and the type turns with it. The invitation keeps its
+   width across the spread and is laid on that curve instead — sagging at
+   the fold, flat again by the outer thirds, each glyph on the tangent. */
+const SAG = 12, REACH = .75;                // px at the fold, over what share of a page
+function sagAt(dx, half) {
+  const t = 1 - Math.abs(dx) / (half * REACH);
+  // Eased at both ends: a valley with a point in it steps between the words
+  // that sit either side of the fold.
+  return t <= 0 ? 0 : SAG * t * t * (3 - 2 * t);
+}
+// The curve is measured, so a resized spread has to be laid on it again.
+let reBend;
+addEventListener("resize", () => {
+  clearTimeout(reBend);
+  reBend = setTimeout(() => { if (!S.sample && $("proof-spread").querySelector(".empty")) paintProofEmpty(); }, 120);
+});
+function bendEmpty(box) {
+  if (matchMedia("(max-width: 560px)").matches) return;   // stacked pages have no fold
+  const spread = $("proof-spread").getBoundingClientRect();
+  const fold = spread.left + spread.width / 2, half = spread.width / 2;
+  if (!half) return;
+  for (const node of box.children) {
+    if (node.tagName === "P") bend(node, fold, half);
+    else node.style.transform = "translateY(" + sagAt(0, half).toFixed(2) + "px)";
+  }
+}
+// The lines the browser chose, read back off the text node before it is replaced.
+function lines(host) {
+  const node = host.firstChild;
+  if (!node || node.nodeType !== 3) return [];
+  const s = node.data, r = document.createRange(), out = [];
+  let start = 0, top = null;
+  for (let i = 0; i < s.length; i++) {
+    r.setStart(node, i); r.setEnd(node, i + 1);
+    const b = r.getBoundingClientRect();
+    if (!b.width && !b.height) continue;
+    if (top === null) top = b.top;
+    else if (b.top > top + 1) { out.push(s.slice(start, i)); start = i; top = b.top; }
+  }
+  out.push(s.slice(start));
+  return out.map(t => t.trim()).filter(Boolean);
+}
+function bend(host, fold, half) {
+  const rows = lines(host);
+  if (!rows.length) return;
+  host.textContent = "";
+  host.classList.add("bent");
+  rows.forEach((row, i) => {
+    if (i) host.appendChild(document.createTextNode(" "));
+    const line = el("span", "ln");
+    // A word at a time, never a letter at a time: a letter of its own loses the
+    // pair-kerning the face is cut with, and the line reads loose before it
+    // reads bent.
+    row.split(" ").forEach((word, w, all) => line.appendChild(el("span", null, w < all.length - 1 ? word + " " : word)));
+    host.appendChild(line);
+  });
+  const words = [...host.querySelectorAll(".ln > span")];
+  const mid = words.map(g => { const b = g.getBoundingClientRect(); return b.left + b.width / 2 - fold; });
+  words.forEach((g, i) => {
+    const slope = (sagAt(mid[i] + 3, half) - sagAt(mid[i] - 3, half)) / 6;
+    g.style.transform = "translateY(" + sagAt(mid[i], half).toFixed(2) + "px) rotate("
+      + (Math.atan(slope) * 180 / Math.PI).toFixed(2) + "deg)";
+  });
 }
 function paintProof() {
   leafTitles();
@@ -1837,7 +1913,7 @@ worker.onmessage = (e) => {
       alert_("books-alert", "<b>Couldn't fetch that book.</b> " + m.error
         + " Wikisource may be busy; try it again, or pick another.");
     }
-    else if (m.during === "inspect") { alert_("books-alert", message); S.info = { orig: null, pub: null }; paintFiles(); }
+    else if (m.during === "inspect") { alert_("books-alert", message); S.info = { orig: false, pub: false }; paintFiles(); }
     else if (m.during === "build" || m.during === "align") { show("settings"); alert_("settings-alert", message); }
     else { alert_("settings-alert", message); paintProof(); }
   }
