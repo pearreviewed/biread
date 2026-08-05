@@ -101,15 +101,24 @@
      the colour of a caption — nothing said they could be pressed. Roomier, in
      the body's own colour, and they answer the pointer. */
   .seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; padding: 6px; border: 1px solid var(--rule); border-radius: 20px; background: var(--surface); }
-  .seg button { padding: 16px 12px; border: 0; border-radius: 15px; background: none; font: 15.5px/1.3 'Charis SIL', Charter, Georgia, serif; color: var(--body); transition: background .18s ease, color .18s ease; }
+  /* Pressed sets the label in bold, which is wider — in a fallback face wide
+     enough to break "Have a model translate it" over two lines, so the tab grew
+     under the finger and stepped the whole panel down. Every label is laid out
+     at the bold width in both states: the ghost holds the room, colour moves. */
+  .seg button { display: grid; place-items: center; padding: 16px 6px; border: 0; border-radius: 15px; background: none; font: 15.5px/1.3 'Charis SIL', Charter, Georgia, serif; color: var(--body); transition: background .18s ease, color .18s ease; }
+  .seg button > span, .seg button::after { grid-area: 1 / 1; }
+  .seg button::after { content: attr(data-label); font-weight: 700; visibility: hidden; }
   .seg button:hover:not([aria-pressed="true"]) { background: var(--tint); color: var(--ink); }
   .seg button[aria-pressed="true"] { background: var(--page); box-shadow: 0 1px 3px rgba(90,70,40,.1); font-weight: 700; color: var(--ink); }
   :root[data-theme="night"] .seg { border-radius: 14px; }
   :root[data-theme="night"] .seg button { border-radius: 11px; }
   :root[data-theme="night"] .seg button[aria-pressed="true"] { background: rgba(200,184,145,.9); color: #241b12; }
-  /* Each route explains itself in a different number of lines. Reserving the
-     longest keeps the panel below from stepping up and down as they are tried. */
-  .seg-note { margin: -8px 0 0; max-width: 52ch; font-size: 14px; line-height: 1.55; min-height: calc(4 * 1.55em); color: var(--muted); }
+  /* The note explains the tabs above it and is set to their width, not to a
+     measure of its own: a narrower one broke every note mid-sentence with a
+     third of the panel standing empty beside it. Each route explains itself in
+     a different number of lines, so the longest is reserved and the panel below
+     does not step up and down as they are tried. */
+  .seg-note { margin: -8px 0 0; font-size: 14px; line-height: 1.55; min-height: calc(3 * 1.55em); color: var(--muted); }
   .files { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
   .files.one { grid-template-columns: 1fr; }
   .file { position: relative; display: flex; flex-direction: column; gap: 6px; padding: 18px 52px 18px 20px; border: 1px solid var(--rule-2); border-radius: 17px; background: var(--surface-2); text-align: left; width: 100%; min-height: 118px; }
@@ -357,9 +366,9 @@
       <h2>Which book, and where does the translation come from?</h2>
     </div>
     <div class="seg" id="route">
-      <button data-route="align" aria-pressed="false">Align an edition I own</button>
-      <button data-route="translate" aria-pressed="true">Have a model translate it</button>
-      <button data-route="shelf" aria-pressed="false" hidden>Pick from the shelf</button>
+      <button data-route="align" aria-pressed="false" data-label="Align an edition I own"><span>Align an edition I own</span></button>
+      <button data-route="translate" aria-pressed="true" data-label="Have a model translate it"><span>Have a model translate it</span></button>
+      <button data-route="shelf" aria-pressed="false" hidden data-label="Pick from the shelf"><span>Pick from the shelf</span></button>
     </div>
     <div class="seg-note" id="route-note"></div>
 

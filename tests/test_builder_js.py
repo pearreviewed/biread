@@ -502,6 +502,31 @@ def test_the_tab_strip_is_the_same_size_on_every_route(page):
     assert boxes[0] == boxes[1] == boxes[2], boxes
 
 
+def test_the_tab_strip_holds_its_height_in_a_face_it_was_not_drawn_in(page):
+    """Pressing a tab sets its label in bold, and bold is wider — in the face the
+    page falls back to before Charis SIL arrives, wide enough to break "Have a
+    model translate it" over two lines, so the tab grew under the finger that had
+    just pressed it. Every label is laid out at its bold width in both states,
+    which is what has to hold in a face nobody chose."""
+    page.add_style_tag(content="* { font-family: Georgia, 'Times New Roman', serif !important }")
+    tall = []
+    for route in ("translate", "align", "shelf"):
+        page.click(f"[data-route={route}]")
+        page.wait_for_timeout(80)
+        tall.append(page.evaluate(
+            "() => Math.round(document.getElementById('route').getBoundingClientRect().height)"))
+    assert tall[0] == tall[1] == tall[2], tall
+
+
+def test_the_route_note_is_set_to_the_width_of_the_tabs_it_explains(page):
+    """At a measure of its own it broke mid-sentence with a third of the panel
+    standing empty beside it."""
+    seg, note = page.evaluate(
+        "() => ['#route', '#route-note'].map(s =>"
+        "  Math.round(document.querySelector(s).getBoundingClientRect().width))")
+    assert seg == note, (seg, note)
+
+
 # ---- books already made --------------------------------------------------
 
 def test_only_an_approved_book_is_offered_ready_to_read(page):
