@@ -51,6 +51,9 @@ class Made:
     paragraphs: int
     blank: int
     glossed: int
+    #: How much of the English that exists ended up on the page. None where the
+    #: alignment could not say.
+    placed_share: float | None = None
 
     @property
     def coverage(self) -> float:
@@ -118,6 +121,7 @@ def make(slug: str, *, translation: int = 0, gloss: bool = False,
         paragraphs=report.total if report else 0,
         blank=report.unmatched if report else 0,
         glossed=result.gloss.glossed if result.gloss else 0,
+        placed_share=report.placed_share if report else None,
     )
 
 
@@ -234,6 +238,19 @@ def report_made(made: Made) -> None:
           f"English counterpart")
     if made.blank:
         print(f"  {made.blank:,} left blank — the French has no counterpart there")
+    # The figure above says how much of the *French* is faced. On its own it
+    # cannot tell a translator who condensed from an aligner that lost its way,
+    # and those want opposite responses: ship it, or fix it.
+    if made.placed_share is not None:
+        placed = round(made.placed_share * 100)
+        print(f"  {placed}% of the English that exists is on the page", end="")
+        if placed >= 95:
+            print(" — all of it; this translation is simply shorter")
+        elif placed >= 80:
+            print(" — most of it")
+        else:
+            print(f", and {100 - placed}% went nowhere. Look before believing the "
+                  "blanks are the translator's doing")
     print(f"  {made.glossed:,} glossed" if made.glossed
           else "  no glosses — a reader adds them as they read, on their own key")
 

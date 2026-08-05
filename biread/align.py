@@ -59,7 +59,19 @@ class AlignmentReport:
     grouped: int = 0
     dropped: int = 0  # published paragraphs matching nothing (notes, front matter)
     unmatched: int = 0  # French paragraphs left without published text
+    #: Characters of the published edition as it arrived, and as it ended up on
+    #: the page. Their ratio is what tells a condensed translation from a failed
+    #: match — see `align_published` and `placed_share`.
+    published_chars: int = 0
+    placed_chars: int = 0
     notes: list[str] = field(default_factory=list)
+
+    @property
+    def placed_share(self) -> float | None:
+        """How much of the English that exists actually landed. None if unknown."""
+        if not self.published_chars:
+            return None
+        return self.placed_chars / self.published_chars
 
     @property
     def approximate(self) -> bool:
@@ -886,6 +898,31 @@ def _by_embeddings(
 
 
 def align_published(
+    french: list[Chapter],
+    published: list[Chapter],
+    translations: dict[str, str] | None = None,
+    embed: Embed | None = None,
+    on_progress: Callable[[int, int], None] | None = None,
+) -> tuple[dict[str, str], AlignmentReport]:
+    """Map French paragraph hash -> published English text.
+
+    Wraps the matching to weigh what landed against what there was. A coverage
+    figure alone cannot tell a translator who condensed from an aligner that lost
+    its way: 20,000 Leagues leaves 41% of the French facing nothing and is
+    matched about as well as it can be, because the 1911 English *is* two-thirds
+    of the French. The same 59% with a tenth of the English placed would be a
+    fault. Only this ratio separates them.
+    """
+    aligned, report = _align_published(french, published, translations, embed, on_progress)
+    report.published_chars = sum(len(p) for c in published for p in c.paragraphs)
+    # Distinct text: where one English paragraph faces several French ones it is
+    # the same English twice, and summing it twice would report more of the
+    # edition on the page than the edition contains.
+    report.placed_chars = sum(len(text) for text in set(aligned.values()))
+    return aligned, report
+
+
+def _align_published(
     french: list[Chapter],
     published: list[Chapter],
     translations: dict[str, str] | None = None,

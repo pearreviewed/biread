@@ -1,7 +1,9 @@
 import re
 import pytest
 
-from biread.align import _flow_anchored, _shape_spread, align_published
+from biread.align import (
+    AlignmentReport, _flow_anchored, _shape_spread, align_published,
+)
 from biread.anchor import agreements
 from biread.cleanup import Chapter
 from biread.errors import AlignmentError
@@ -380,3 +382,31 @@ def test_the_dropped_chapter_is_left_blank_not_filled_with_the_next_one():
     for n in (1, 2, 4, 5, 6):
         opening = french[n - 1].paragraphs[0]
         assert f"topic-{n}" in texts[hash_text(opening)]
+
+
+def test_the_report_weighs_the_english_that_landed_against_what_there_was():
+    """Coverage alone cannot tell a condensed translation from a failed match.
+
+    20,000 Leagues leaves 41% of the French facing nothing and is matched about
+    as well as it can be, because the 1911 English *is* two-thirds of the French.
+    The same 59% with a tenth of the English placed would be a fault, and only
+    this ratio separates them.
+    """
+    french = [chapter("I", ["Un.", "Deux.", "Trois."])]
+    published = [chapter("I", ["One.", "Two.", "Three."])]
+    _, report = align_published(french, published)
+    assert report.published_chars == len("One.") + len("Two.") + len("Three.")
+    assert report.placed_share == 1.0
+
+
+def test_english_spread_over_several_french_paragraphs_is_counted_once():
+    """Six French against two English: the same English lands more than once, and
+    summing every landing would report three times the edition on the page."""
+    french = [chapter("I", ["Un.", "Deux.", "Trois.", "Quatre.", "Cinq.", "Six."])]
+    published = [chapter("I", ["One.", "Two."])]
+    _, report = align_published(french, published)
+    assert report.placed_share == 1.0, "all of it, and no more than all of it"
+
+
+def test_a_report_with_no_published_side_measured_says_nothing_rather_than_zero():
+    assert AlignmentReport(method="pivot", chapters_matched=True).placed_share is None
