@@ -336,6 +336,14 @@ def test_a_file_that_cannot_be_read_says_so_on_the_step_that_asked_for_it(page):
     assert "not a readable EPUB" in text(page, "#books-alert")
 
 
+def test_replacing_a_refused_file_clears_the_complaint_about_it(page):
+    upload(page, "#f-orig", "livre.txt", scenario(failOn="inspect", error="not readable"))
+    page.wait_for_function("!document.getElementById('books-alert').hidden")
+    upload(page, "#f-orig", "better.txt")
+    page.wait_for_function("document.getElementById('books-alert').hidden")
+    assert text(page, "#orig-about") != "Couldn't be read"
+
+
 def test_the_card_of_an_unreadable_file_stops_saying_it_is_reading(page):
     # The alert and the card were contradicting each other: one said the file had
     # been refused, the other sat on "Reading…" for the rest of the session.

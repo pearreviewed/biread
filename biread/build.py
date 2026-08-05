@@ -21,6 +21,7 @@ from .errors import ExtractError
 from .gloss import GlossRun, gloss_book
 from .llm import LLMClient
 from .render import render_html
+from .segment import BLOCK_LIMIT, segment_like, unsegmented
 from .targets import ENGLISH, Target
 from .translate import BatchFn, TranslationRun, translate_book
 
@@ -57,6 +58,7 @@ def build_reader(
 ) -> BuildResult:
     # Checked before a single call is paid for: a book that never broke into
     # paragraphs would otherwise be translated in vast blocks, at vast cost.
+    chapters, published_chapters, cut = recut(chapters, published_chapters)
     check_usable(chapters, "The book")
     if published_chapters is not None:
         check_usable(published_chapters, "The published translation")
@@ -75,6 +77,7 @@ def build_reader(
     note = ""
     if published_chapters is not None:
         published, alignment = align_published(chapters, published_chapters, run.translations)
+        alignment.cut = cut
         note = published_note(alignment)
 
     gloss_run = glosses = None
@@ -95,12 +98,6 @@ def build_reader(
     )
 
 
-# A paragraph of prose runs to a few hundred characters, occasionally a couple of
-# thousand. Text arriving in blocks far larger than that never came apart into
-# paragraphs at all — a PDF whose lines carry no paragraph breaks is the usual
-# cause, and no alignment can rescue it.
-BLOCK_LIMIT = 6000
-
 # What to bring instead, by the format that lost the breaks. A word processor is
 # named separately from a PDF because it is almost always the *second* format a
 # book has been through — a PDF saved as .docx keeps every word and none of the
@@ -118,6 +115,28 @@ CONVERSION_ADVICE = {
 }
 DEFAULT_ADVICE = ("An EPUB, or a plain-text edition with a blank line between its "
                   "paragraphs, will read properly.")
+
+
+def recut(
+    chapters: list[Chapter], published_chapters: list[Chapter] | None
+) -> tuple[list[Chapter], list[Chapter] | None, str]:
+    """Where one edition lost its paragraph breaks and the other kept them, cut it
+    to the other's shape rather than refusing the book.
+
+    Only where exactly one side is flat: two flat editions have nothing to cut
+    against, and refusing is then the honest answer. Which side was cut comes back
+    out, because a book whose paragraphing on one side came off the other edition
+    has to say so.
+    """
+    if published_chapters is None:
+        return chapters, None, ""
+    flat_original = unsegmented(chapters)
+    flat_published = unsegmented(published_chapters)
+    if flat_published and not flat_original:
+        return chapters, segment_like(published_chapters, chapters), "published"
+    if flat_original and not flat_published:
+        return segment_like(chapters, published_chapters), published_chapters, "original"
+    return chapters, published_chapters, ""
 
 
 def check_usable(chapters: list[Chapter], label: str, source: str | None = None) -> None:
@@ -156,9 +175,11 @@ def build_positional(
 ) -> tuple[str, AlignmentReport]:
     """The free path: no AI, no key. Set a brought published translation beside
     the French by position and render it as the single reading column."""
+    chapters, published_chapters, cut = recut(chapters, published_chapters)
     check_usable(chapters, "The original")
     check_usable(published_chapters, "The published translation")
     aligned, report = align_published(chapters, published_chapters, None)
+    report.cut = cut
     # Render the body only — the same trim the aligner used — so the reader opens
     # on chapter one instead of a title page set beside a blank column.
     body = [c for c in trim_matter(chapters) if c.paragraphs] or chapters
@@ -194,11 +215,13 @@ def build_aligned(
     its own; the embedding key usually reaches one. Without them the book reads the
     same, minus the hover.
     """
+    chapters, published_chapters, cut = recut(chapters, published_chapters)
     check_usable(chapters, "The original")
     check_usable(published_chapters, "The published translation")
     aligned, report = align_published(
         chapters, published_chapters, embed=embed, on_progress=_stage(on_progress, "align")
     )
+    report.cut = cut
     # Render the body only — the same trim the aligner used — and gloss exactly what
     # is rendered, so no call is paid for on a paragraph the reader never sees.
     body = [c for c in trim_matter(chapters) if c.paragraphs] or chapters
@@ -225,6 +248,10 @@ def build_aligned(
 def published_note(report: AlignmentReport) -> str:
     """Reader-facing note on how the published edition was placed, in the ⓘ
     panel's laconic voice."""
+    return _placement_note(report) + cut_note(report)
+
+
+def _placement_note(report: AlignmentReport) -> str:
     if report.degraded:
         # Honest before reassuring: when most of the page would be blank, say so
         # and why, rather than promise a column that mostly is not there.
@@ -253,6 +280,21 @@ def published_note(report: AlignmentReport) -> str:
     if report.unmatched:
         note += " A few passages have no counterpart here."
     return note
+
+
+def cut_note(report: AlignmentReport) -> str:
+    """Said whenever one side's paragraphing is not its own.
+
+    The reader is looking at breaks that came off the other edition, and there is
+    no way to see that from the page. Worth a sentence of the ⓘ panel's room.
+    """
+    if report.cut == "published":
+        return (" The edition you brought arrived with its paragraph breaks lost, so it "
+                "is divided here to follow the original's paragraphs.")
+    if report.cut == "original":
+        return (" The original arrived with its paragraph breaks lost, so it is divided "
+                "here to follow the translation's paragraphs.")
+    return ""
 
 
 def _stage(on_progress: ProgressFn | None, stage: str) -> Callable[[int, int], None] | None:

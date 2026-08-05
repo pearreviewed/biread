@@ -1874,6 +1874,9 @@ worker.onmessage = (e) => {
   S.busy = null;
   if (m.type === "inspected") {
     S.info = m.data;
+    // A refusal left over from the file before this one: the reader has replaced
+    // it and the page must not still be complaining about it.
+    alert_("books-alert", "");
     if (S.pick) { S.pick.loaded = true; measurePick(); paintShelf(); }
     paintFiles();
     if (!$("s-settings").hidden) { leafTitles(); priceIt(); }

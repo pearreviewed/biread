@@ -343,7 +343,8 @@ CI so it stops depending on anyone remembering.
 | What is the book *about*? | **The card opens on it under the pointer.** A summary is the first thing a reader wants and the last thing the card had room for, so it lives in a drawer that slides out of the card's foot and over the row beneath — the shelf itself never moves, which is the whole point of the two fixes above it. Written per book in `shelf.py` beside the rest of the record, not fetched: a curated shelf is one somebody has read, and an encyclopaedia's opening line is as often about an edition's publication history as about the story. A book taken from the lookup screen carries none and its card simply does not open. Pointer only (`hover: hover`) — on a touchscreen a drawer would stay open on whatever was last tapped. |
 | Does hosting those books make biread a host? | **No — it is the opposite question.** "Not a host" is about *readers' own editions*, where someone else owns the text and a takedown would follow. The books on the shelf are out of copyright on the original side and carry either the wiki's public-domain translation or one biread generated itself, so nobody else has a claim on either half. Holding a reader's uploaded PDF is still refused; publishing a book we made from public-domain sources is simply publishing. |
 | Can a reader put a book of their own on the shelf? | **A book they *found*, yes; a book they *own*, no.** A find on the lookup screen is two Wikisource page names — the shelf's whole currency — so a checkbox, **off by default**, keeps it: saved in this browser, shown among the cards next visit under *Kept by you*, and taken off again from the card. The align route gets no such control, because an uploaded PDF has nothing shareable in it: passing it on would mean holding the text, which is the one thing biread does not do. "Shared with other readers" in the literal sense — one list everyone sees — waits on the parked server and on someone to moderate it. |
-| A book that arrives with no paragraph breaks? | **Repaired where anything is left to read, refused by name where nothing is.** A reader's Word file — a PDF saved as .docx — came in as **one** paragraph of 411,928 characters, and biread blamed PDFs for it and pointed at an EPUB the reader did not have. Two fixes, both about telling the truth. The break-rescue in `normalize.py` was gated to PDFs on the grounds that any other format means what it omits; that holds for a file that omits *some* blank lines and not for one that came apart nowhere, so it now also runs wherever the median block is longer than any prose is set in (`_never_broke`, 2,000 characters). Verified inert on the corpus — every example EPUB and text reports `never_broke=False`, so not one of them parses differently — and it recovers a flattened `.txt` in full. Where even the lines are gone, as in that .docx, the refusal names **the reader's own file**, says it arrived as one unbroken block, and names the format that lost the marks and the file to bring instead. The card that had sat on *Reading…* under the refusal now says *Couldn't be read*, because a page must not contradict itself. Deliberately **not** built: reconstructing paragraphs out of a blob by sentence and dialogue shape. It would make any file build, and the paragraphing on the page would be ours rather than the author's. |
+| A book that arrives with no paragraph breaks? | **Repaired where anything is left to read, refused by name where nothing is.** A reader's Word file — a PDF saved as .docx — came in as **one** paragraph of 411,928 characters, and biread blamed PDFs for it and pointed at an EPUB the reader did not have. Two fixes, both about telling the truth. The break-rescue in `normalize.py` was gated to PDFs on the grounds that any other format means what it omits; that holds for a file that omits *some* blank lines and not for one that came apart nowhere, so it now also runs wherever the median block is longer than any prose is set in (`_never_broke`, 2,000 characters). Verified inert on the corpus — every example EPUB and text reports `never_broke=False`, so not one of them parses differently — and it recovers a flattened `.txt` in full. Where even the lines are gone, as in that .docx, the refusal names **the reader's own file**, says it arrived as one unbroken block, and names the format that lost the marks and the file to bring instead. The card that had sat on *Reading…* under the refusal now says *Couldn't be read*, because a page must not contradict itself. Deliberately **not** built: reconstructing paragraphs out of a blob by sentence and dialogue shape. It would make any file build, and the paragraphing on the page would be ours rather than the author's. *(Superseded in one case, and only one — where a second edition is in play, its paragraphing can be borrowed. See the row below.)* |
+| One edition has its paragraph breaks and the other has none? | **The flat one is cut to the other's shape.** This is the case the refusal above could not see, because it judged each file alone: a reader bringing two editions has, in the good one, a real publisher's account of how the book divides — how many paragraphs the passage runs to and how long each is. That is not ours and not a guess, so borrowing it is not the invention the row above refuses. `segment.py` splits the flat side into sentences and places each break at the sentence nearest where the counterpart's own paragraph ends, as a share of the whole. **Free, instant, no model.** Measured by flattening real books and cutting them back: **80%** of Bovary's 2,829 paragraphs come back whole, 78% of the French, 72% of Candide's published PDF — **90% of what is recoverable at all**, the ceiling being 89% because a paragraph closing without a full stop leaves no sentence break to find. Three arithmetic bugs cost two thirds of the book each and passed every small example — breaks poured rather than placed absolutely (3%), positions counted without the joining space (21%), a break landing exactly on a sentence end counted as inside it (40%) — which is why the test measures a whole book and not a fixture. Runs on every route, refuses only when **both** sides are flat, and says so: on the terminal, and in the ⓘ panel, because a page whose paragraphing came off the other edition must admit it. |
 
 ## Reversals
 
@@ -382,6 +383,23 @@ Recorded because the reasoning matters more than the outcome.
   column, not the book. Replaced by a fixed-layout spread with no glosses. The
   cost is that `--epub` now needs the browser engine (it paginates by measuring)
   and is best on a tablet or desktop — accepted, because the spread is the point.
+- **Anchoring the cut by embedding** was built, measured, and removed. Cutting a
+  flattened edition purely by length must drift where two editions differ, so the
+  good edition was taken in runs of forty paragraphs and each run *found* in the
+  flat text by embedding — coarse pass over a window as long as the run, fine pass
+  over its opening — before the lengths shared out the sentences inside it. It
+  worked, and it lost: on a book whose two sides correspond, proportional alone
+  recovered **69%** of the paragraphs and the anchored version **40%**, because a
+  wrongly moved anchor takes all forty of its paragraphs with it and there are more
+  of those than of anchors that save a run. It won only where four chapters had been
+  cut out of the counterpart — 5% against 17% — and 17% is not a book either.
+  Two lessons. The acceptance threshold could not be calibrated: the codebase's
+  existing margin is in cosines, these scores are means over eighty sentences, and
+  every scale I could measure came from a fake embedder, which is the one thing
+  known not to stand in for a real one. And the arithmetic underneath mattered far
+  more than the model on top — three off-by-one and unit bugs each cost more than
+  the entire anchoring mechanism could add. Worth revisiting only with a real
+  multilingual model on two real editions, and only for the drifted case.
 - **"A card is as tall as the book it describes"** was reasoned, built, and
   overruled by looking at it. Each card kept its own height so a filter could
   not resize it — but a row of three then ended on three different lines, and
@@ -411,6 +429,16 @@ Recorded because the reasoning matters more than the outcome.
   money. Both figures are floors: the quote runs ~30% under (see below) and the
   gloss estimate does not count its rescue retries at all. What this changes is
   planning — the hover, not the prose, is what a shelf costs.
+- **A cut edition holds only while the two editions keep step.** `segment.py`
+  places every break by proportion, which is right to 90% of the ceiling where
+  the editions correspond and collapses to **5%** where they do not: measured by
+  dropping four chapters out of the counterpart, after which everything past the
+  gap is shifted and no paragraph lands whole again. The text is all there and in
+  order — it is the boundaries that go wrong — and the aligner still matches by
+  meaning on top of it, so the book reads. The obvious next rung is free and not
+  built: a flattened file usually still carries its chapter *headings* as words in
+  the text ("CHAPTER XIV"), and matching those against the counterpart's numbered
+  chapters would re-anchor the cut exactly, where an embedding could not.
 - **Coverage is not a grade, and 20,000 Leagues is the case that proves it.** It
   sits at 58.8% against Candide's 98.9%, and it is nonetheless matched about as
   well as it can be: the placed English runs to 68% of the French by characters,
@@ -490,6 +518,8 @@ biread/
   normalize.py    raw text -> repaired: the injuries an extractor inflicts, and
                   the paragraph breaks a conversion dropped, undone first
   cleanup.py      raw text -> chapters of clean paragraphs
+  segment.py      an edition that lost its paragraph breaks -> cut to the shape
+                  of the other edition, where there is one
   wikisource.py   two page names -> two editions, resolved and fetched; no I/O
                   of its own, so the CLI reads through requests and the browser
                   through its own fetch

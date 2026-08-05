@@ -64,6 +64,10 @@ class AlignmentReport:
     #: match — see `align_published` and `placed_share`.
     published_chars: int = 0
     placed_chars: int = 0
+    #: Which side, if either, arrived with no paragraph breaks and was cut to the
+    #: other edition's shape: "published", "original", or "". Never silent — the
+    #: reader is told, because that side's paragraphing is the other book's.
+    cut: str = ""
     notes: list[str] = field(default_factory=list)
 
     @property
@@ -135,13 +139,28 @@ def _distribute(french: list[str], published: list[str]) -> list[str]:
 
 
 # One sentence ends and the next begins: closing punctuation, any quotes that
-# ride on it, then space. Good enough to chop a run of prose into pieces to share
-# out; it need not be linguistically perfect, only roughly even.
-_SENTENCE_SPLIT_RE = re.compile(r'(?<=[.!?…])["»”’\')\]]*\s+')
+# ride on it, then space. Not linguistically perfect — an abbreviation splits a
+# sentence in two — which costs nothing where the pieces are only weighed, and
+# nothing where they are put back together in order.
+_SENTENCE_SPLIT_RE = re.compile(r'[.!?…]["»”’\')\]]*(\s+)')
 
 
 def _sentences(text: str) -> list[str]:
-    parts = [s.strip() for s in _SENTENCE_SPLIT_RE.split(text) if s.strip()]
+    """Prose in sentence-sized pieces, losing only the space between them.
+
+    Every other character is kept, closing quotes included: `segment.py` hands
+    these pieces to a reader as the text of the book, and a splitter that ate the
+    quotation mark off the end of every line of dialogue would mangle the page.
+    """
+    parts, at = [], 0
+    for match in _SENTENCE_SPLIT_RE.finditer(text):
+        piece = text[at:match.start(1)].strip()
+        if piece:
+            parts.append(piece)
+        at = match.end(1)
+    tail = text[at:].strip()
+    if tail:
+        parts.append(tail)
     return parts or ([text.strip()] if text.strip() else [])
 
 

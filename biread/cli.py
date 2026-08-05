@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 
 from .align import align_published, trim_matter
-from .build import check_usable, published_note
+from .build import check_usable, published_note, recut
 from .cache import Cache
 from .cleanup import Chapter, Removal, clean
 from .config import Config, load_config
@@ -113,14 +113,7 @@ def truncate(text: str, limit: int) -> str:
 def load_book(path: Path) -> tuple[list[Chapter], list[Removal]]:
     if not path.exists():
         raise BireadError(f"input file not found: {path}")
-    chapters, removals = clean(
-        get_extractor(path).extract(path), from_pdf=path.suffix.lower() == ".pdf"
-    )
-    # Checked here as well as in the build, because only here is the file's own
-    # name known — and with two files in play, which one is at fault is the whole
-    # of what the reader needs to be told.
-    check_usable(chapters, "The book", path.name)
-    return chapters, removals
+    return clean(get_extractor(path).extract(path), from_pdf=path.suffix.lower() == ".pdf")
 
 
 def report_removals(removals: list[Removal]) -> None:
@@ -178,10 +171,10 @@ def cache_file(cache_dir: Path, slug: str, base: str, target) -> Path:
 
 
 def resolve_published(
-    path: Path, chapters: list[Chapter], translations: dict[str, str]
+    path: Path, published_chapters: list[Chapter], chapters: list[Chapter],
+    translations: dict[str, str]
 ) -> tuple[dict[str, str], str]:
     print(f"\nAligning published translation '{path.name}':")
-    published_chapters, _ = load_book(path)
     aligned, report = align_published(chapters, published_chapters, translations)
 
     for note in report.notes:
@@ -313,6 +306,18 @@ def run_translation(chapters: list[Chapter], cache: Cache, cfg: Config, target_n
 
 def run(args: argparse.Namespace) -> None:
     chapters, removals = load_book(args.input)
+    # Both files are read before either is judged: where one lost its paragraph
+    # breaks and the other kept them, the other's shape is what puts them back,
+    # and a refusal issued file by file would never find that out.
+    published_chapters = load_book(args.published)[0] if args.published else None
+    chapters, published_chapters, cut = recut(chapters, published_chapters)
+    check_usable(chapters, "The book", args.input.name)
+    if published_chapters is not None:
+        check_usable(published_chapters, "The published translation", args.published.name)
+    if cut:
+        recut_chapters = published_chapters if cut == "published" else chapters
+        print(f"\nThe {cut} edition arrived with no paragraph breaks. Cut to the other "
+              f"edition's shape: {sum(len(c.paragraphs) for c in recut_chapters):,} paragraphs.")
 
     print(f"Cleaned '{args.input.name}':\n")
     report_removals(removals)
@@ -356,7 +361,7 @@ def run(args: argparse.Namespace) -> None:
     published, published_note = None, ""
     if args.published:
         published, published_note = resolve_published(
-            args.published, chapters, run_result.translations
+            args.published, published_chapters, chapters, run_result.translations
         )
 
     glosses = None
