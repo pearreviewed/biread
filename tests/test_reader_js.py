@@ -866,6 +866,29 @@ def test_the_tooltip_stays_on_screen(glossed):
     assert box["right"] <= 1280 and box["bottom"] <= 900
 
 
+def test_the_tooltip_keeps_off_the_header(browser, tmp_path_factory):
+    """Staying inside the window is not enough: a unit on a page's first line
+    has room above it by the window's reckoning, and used to be given it.
+
+    Measured rather than assumed — on a 720-tall window a verb's tooltip, the
+    tallest there is at 137px, stood 18px over the masthead. The book is taller
+    relative to the window here than in the other gloss tests, which is why they
+    never saw it: at 900 the same tooltip cleared the header by 6px.
+    """
+    page = open_reader(browser, build_glossed_reader(tmp_path_factory), height=720)
+    try:
+        page.hover("#stage-wrap .page-left .unit >> nth=1")   # a verb: two extra lines
+        page.wait_for_selector(".tip", timeout=3000)
+        tip, header = page.evaluate(
+            """() => ['.tip', '#app-header'].map(s => {
+                 const r = document.querySelector(s).getBoundingClientRect();
+                 return {top: r.top, bottom: r.bottom}; })"""
+        )
+        assert tip["top"] >= header["bottom"], (tip, header)
+    finally:
+        page.close()
+
+
 def test_escape_dismisses_the_tooltip(glossed):
     glossed.hover("#stage-wrap .page-left .unit >> nth=0")
     glossed.wait_for_selector(".tip", timeout=3000)

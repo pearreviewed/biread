@@ -883,10 +883,14 @@
     var box = tip.getBoundingClientRect();
     var left = target.left + target.width / 2 - box.width / 2;
     left = Math.max(8, Math.min(left, window.innerWidth - box.width - 8));
-    // Flip below when there is no room above.
+    // Flip below when there is no room above — and the room above ends at the
+    // header, not at the window. By the window's reckoning a unit on a page's
+    // first line has plenty, and the tooltip paints over the book's own title.
+    var header = document.getElementById('app-header');
+    var ceiling = (header ? header.getBoundingClientRect().bottom : 0) + 8;
     var above = target.top - box.height - 8;
     tip.style.left = left + 'px';
-    tip.style.top = (above >= 8 ? above : target.bottom + 8) + 'px';
+    tip.style.top = (above >= ceiling ? above : target.bottom + 8) + 'px';
   }
 
   document.getElementById('stage-wrap').addEventListener('mouseover', function (e) {
