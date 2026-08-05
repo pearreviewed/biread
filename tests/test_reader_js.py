@@ -357,8 +357,8 @@ def test_blur_hides_the_translation_side_tag_and_folio(reader):
     assert opacity("right", "page-num", "0") == "0"
     # ...and comes back when blur is switched off, leaving the fixture clean.
     reader.click("#blur-toggle")
-    reader.wait_for_timeout(600)
-    assert opacity("right", "page-corner") == "1" and opacity("right", "page-num") == "1"
+    assert opacity("right", "page-corner", "1") == "1"
+    assert opacity("right", "page-num", "1") == "1"
 
 
 def test_bookmarks_persist_as_a_position_in_the_book(reader):
