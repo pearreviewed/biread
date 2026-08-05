@@ -965,7 +965,9 @@ function paintShelf() {
   if (!S.shelf) return;
   const chips = $("shelf-filters");
   chips.innerHTML = "";
-  const all = el("button", null, "All " + S.shelf.books.length);
+  // "All", with no figure on it: the row under the cards already counts the
+  // shelf, and two counts in one panel disagree the moment a page is turned.
+  const all = el("button", null, "All");
   all.setAttribute("aria-pressed", String(!S.filter));
   all.addEventListener("click", () => { S.filter = null; S.page = 0; paintShelf(); });
   chips.appendChild(all);
