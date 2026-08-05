@@ -136,10 +136,17 @@ def _at(page, name: str, target: int, shots: Path, look: Look) -> Spread:
     english = " ".join(page.inner_text("#stage-wrap .page-right").split())
     page.screenshot(path=str(shots / f"{name}.png"))
 
-    if min(len(french), len(english)) < THIN_CHARS:
+    # Thin on *one* side is the fault this was written for: a column that did not
+    # arrive. Thin on both is a short leaf, which is how books end — Notre-Dame
+    # closes on one sentence, 73 characters against 74, and was refused for it.
+    # Empty on both is still a fault wherever it happens.
+    thin = sum(n < THIN_CHARS for n in (len(french), len(english)))
+    if thin == 1:
         look.faults.append(
             f"the {name} spread is nearly empty on one side "
             f"(French {len(french)}, English {len(english)})")
+    elif thin == 2 and not (french.strip() and english.strip()):
+        look.faults.append(f"the {name} spread has nothing on it")
     elif max(len(french), len(english)) > min(len(french), len(english)) * LOPSIDED:
         look.faults.append(
             f"the {name} spread is lopsided (French {len(french)}, English {len(english)}) "

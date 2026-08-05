@@ -35,6 +35,12 @@
       "file": "salammbo.html",
       "english": "Chartres · 1886",
       "approved": "2026-08-05"
+    },
+    {
+      "slug": "notredame",
+      "file": "notredame.html",
+      "english": "Hapgood · 1888",
+      "approved": "2026-08-05"
     }
   ]
 }

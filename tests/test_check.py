@@ -72,6 +72,31 @@ def test_a_lopsided_spread_is_caught(tmp_path):
     assert any("lopsided" in f or "nearly empty" in f for f in look.faults)
 
 
+def test_a_short_last_leaf_is_how_books_end_not_a_fault(tmp_path):
+    """Notre-Dame closes on one sentence — 73 characters against 74 — and was
+    refused for it, reported as "nearly empty on one side" when neither side was
+    emptier than the other. Thin on one side is a column that did not arrive;
+    thin on both is a page with a sentence on it."""
+    book, translations = [], {}
+    for n in range(14):
+        paragraphs = [f"{FR} [{n}-{i}]" for i in range(6)]
+        for paragraph in paragraphs:
+            translations[hash_text(paragraph)] = EN + f" [{len(paragraph)}]"
+        book.append(Chapter(str(n + 1), f"Chapitre {n + 1}", paragraphs))
+    # The last word of the book, on both sides, as short as a last word gets.
+    last = "Il tomba."
+    translations[hash_text(last)] = "He fell."
+    book.append(Chapter("15", "Chapitre 15", [last]))
+
+    out = tmp_path / "short-end.html"
+    render_book("Livre", book, translations, out)
+    look = spot_check(out, shots_dir=tmp_path / "shots")
+
+    end = look.spreads[-1]
+    assert end.french < THIN_CHARS and end.english < THIN_CHARS, "a short leaf"
+    assert look.faults == [], look.faults
+
+
 def test_the_thresholds_are_the_ones_it_reports_against():
     """Named rather than buried, because a checker's numbers are the argument."""
     assert THIN_CHARS == 200 and LOPSIDED == 3.0
