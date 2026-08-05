@@ -301,10 +301,12 @@ clients are tested against stubbed SDK responses.
 The reader itself is driven in a real browser, because its bugs live in layout
 and timing — pagination measured against a box that had not been laid out yet,
 a drag target destroyed mid-gesture — and none of those are reachable without a
-rendering engine. Those tests skip unless the browser extra is installed:
+rendering engine. In two browsers, in fact: Safari has faults Chromium cannot
+see, so every one of those tests runs twice. They skip unless the browser extra
+is installed:
 
 ```sh
-pip install -e ".[browser]" && playwright install chromium
+pip install -e ".[browser]" && playwright install chromium webkit
 pytest tests/test_reader_js.py
 ```
 

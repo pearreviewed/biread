@@ -15,10 +15,12 @@ pip install -e ".[dev]"
 ```
 
 That's enough for everything except the browser tests and the EPUB and PDF
-export, which drive a real headless Chromium:
+export, which drive real headless browsers — Chromium for the exports, and both
+Chromium and WebKit for the reader and the builder, since Safari carries faults
+Chromium cannot see:
 
 ```sh
-pip install -e ".[browser]" && playwright install chromium
+pip install -e ".[browser]" && playwright install chromium webkit
 ```
 
 ## Tests

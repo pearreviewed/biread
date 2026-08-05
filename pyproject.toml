@@ -20,8 +20,10 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["pytest>=8.0"]
 # Powers --epub and --pdf export and the reader's browser tests; also needs
-# `playwright install chromium`.
-browser = ["pytest>=8.0", "playwright>=1.40"]
+# `playwright install chromium webkit`. Pillow is here for the few tests that
+# read pixels rather than the DOM — a border that is styled correctly and not
+# painted is invisible to every other kind of assertion.
+browser = ["pytest>=8.0", "playwright>=1.40", "pillow>=10.0"]
 
 [project.scripts]
 biread = "biread.cli:main"

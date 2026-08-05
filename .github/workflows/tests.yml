@@ -26,8 +26,13 @@ jobs:
       - run: pip install -e ".[dev]"
       - run: pytest -q
 
-  # The slow path: the reader driven in a real headless Chromium, plus the PDF
-  # export it renders. Separate so it never holds up the fast check.
+  # The slow path: the reader and the builder driven in real headless browsers,
+  # plus the PDF export they render. Separate so it never holds up the fast
+  # check. Both engines, because Safari carries faults Chromium does not — it
+  # broke a shelf card across a column boundary and left it open at the top,
+  # there and nowhere else — and the builder's own screens are here for the same
+  # reason: that fault was on one of them, and this job used not to open the
+  # builder at all.
   browser:
     name: browser
     runs-on: ubuntu-latest
@@ -37,8 +42,8 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -e ".[browser]"
-      - run: python -m playwright install --with-deps chromium
-      - run: pytest tests/test_reader_js.py tests/test_reader_sync_js.py tests/test_export.py tests/test_cli.py -q
+      - run: python -m playwright install --with-deps chromium webkit
+      - run: pytest tests/test_reader_js.py tests/test_builder_js.py tests/test_reader_sync_js.py tests/test_export.py tests/test_cli.py -q
 
   # The bookmark-sync service, against a real Postgres. Its own job because it is
   # its own program: not installed with the package, not collected by the root

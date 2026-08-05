@@ -11,21 +11,24 @@ price figure claiming more than it covered, a dangling clause, an ETA computed
 from a clock that was never started, a control shown on the route that cannot
 honour it. None of it is reachable without a rendering engine.
 
-Requires `pip install -e ".[browser]"` plus `playwright install chromium`;
+Every test runs once per engine in `conftest.ENGINES` — Chromium and WebKit,
+because Safari has faults Chromium cannot see.
+
+Requires `pip install -e ".[browser]"` plus `playwright install chromium webkit`;
 skipped entirely when that is not present.
 """
 import functools
 import http.server
+import io
 import json
 import shutil
 import threading
+import unicodedata
 from pathlib import Path
 
 import pytest
 
-sync_playwright = pytest.importorskip(
-    "playwright.sync_api", reason="playwright not installed"
-).sync_playwright
+pytest.importorskip("playwright.sync_api", reason="playwright not installed")
 
 ROOT = Path(__file__).resolve().parent.parent
 FONTS = ROOT / "biread" / "assets" / "fonts"
@@ -58,14 +61,6 @@ def site(tmp_path_factory):
     threading.Thread(target=server.serve_forever, daemon=True).start()
     yield f"http://127.0.0.1:{server.server_port}/builder.html"
     server.shutdown()
-
-
-@pytest.fixture(scope="module")
-def browser():
-    with sync_playwright() as playwright:
-        instance = playwright.chromium.launch()
-        yield instance
-        instance.close()
 
 
 @pytest.fixture
@@ -585,7 +580,10 @@ def test_taking_the_finished_book_neither_builds_it_nor_costs_a_key(page):
     page.click("[data-route=shelf]")
     with page.expect_download() as caught:
         page.click(".card[data-slug=micromegas] .name")
-    assert caught.value.suggested_filename == "Micromégas - bilingual reader.html"
+    # Normalized on both sides: Safari hands the name back decomposed (an `e`
+    # and a separate accent), which is the same name and a different string.
+    assert (unicodedata.normalize("NFC", caught.value.suggested_filename)
+            == "Micromégas - bilingual reader.html")
     # Taking the file is not choosing the book: no build starts behind it.
     assert page.eval_on_selector_all(".card[aria-pressed=true]", "n => n.length") == 0
     assert not hidden(page, "#s-books")
@@ -598,6 +596,63 @@ def test_the_line_underneath_still_builds_the_book_yourself(page):
     assert not hidden(page, ".card[data-slug=micromegas] .act.ready"), (
         "a book already made must still be buildable — another English, another language"
     )
+
+
+def edge_contrast(page, box, side):
+    """How strongly one edge of a box is painted, position by position.
+
+    Read off a screenshot, because a border can be styled perfectly and never
+    painted: Safari broke a shelf card across a column boundary and the piece
+    below it came out with no top edge, while every computed style said it was
+    there. Each position is measured against the pixel just outside the box, so
+    it reads the same in day and night.
+    """
+    image = pytest.importorskip("PIL.Image", reason="pillow not installed")
+    inset, reach = 24, 6  # past the rounded corners; deep enough to cross the border
+    if side == "top":
+        clip = {"x": box["x"] + inset, "y": box["y"] - 3,
+                "width": box["width"] - 2 * inset, "height": reach}
+    else:
+        clip = {"x": box["x"] - 3, "y": box["y"] + inset,
+                "width": reach, "height": box["height"] - 2 * inset}
+    shot = image.open(io.BytesIO(page.screenshot(clip=clip))).convert("L")
+    px = shot.load()
+    width, height = shot.size
+    if side == "top":
+        return [max(abs(px[x, y] - px[x, 0]) for y in range(1, height)) for x in range(width)]
+    return [max(abs(px[x, y] - px[0, y]) for x in range(1, width)) for y in range(height)]
+
+
+def test_a_hovered_card_keeps_the_whole_of_its_frame(page):
+    """The frame is one border: if the left edge is painted, so is the top.
+
+    Judged against the card's own left edge rather than a number, since what
+    counts as bright depends on the theme, the engine and the screen.
+    """
+    page.click("[data-route=shelf]")
+    page.wait_for_selector(".card")
+    # Solid frames only: a book nobody has read through is drawn dashed, and a
+    # dash and a gap are the same reading as a border that is missing.
+    cards = page.query_selector_all(".card:not(.unread)")
+    assert cards, "no card with a solid frame to read"
+    for card in cards:
+        for state in ("at rest", "hovered"):
+            if state == "hovered":
+                card.hover()
+                page.wait_for_timeout(300)
+            box = card.bounding_box()
+            top, left = edge_contrast(page, box, "top"), edge_contrast(page, box, "left")
+            # The side first, or the comparison is vacuous: Safari once broke a
+            # card across two columns, and the box it then reported enclosed the
+            # whole flow, so both readings came back flat and everything
+            # "passed". Healthy is 24 and up at rest, 150 and up hovered.
+            assert min(left) > 12, f"{state}, the frame is not painted where it is read"
+            assert min(top) > 0.5 * min(left), (
+                f"{state}, the top of the frame goes missing where the side does not "
+                f"(weakest top {min(top)}, weakest side {min(left)})"
+            )
+        page.mouse.move(2, 2)
+        page.wait_for_timeout(150)
 
 
 # ---- beyond the shelf ----------------------------------------------------

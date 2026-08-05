@@ -521,10 +521,30 @@ selector must be scoped to `#stage-wrap`.
 
 ```sh
 pip install -e ".[dev]" && pytest              # ~438 Python tests, no network
-pip install -e ".[browser]" && playwright install chromium
-pytest tests/test_reader_js.py                 # 58 browser tests, the reader
-pytest tests/test_builder_js.py                # 46 browser tests, the builder
+pip install -e ".[browser]" && playwright install chromium webkit
+pytest tests/test_reader_js.py                 # 58 tests × 2 engines, the reader
+pytest tests/test_builder_js.py                # 63 tests × 2 engines, the builder
+BIREAD_ENGINES=chromium pytest tests/test_reader_js.py   # one engine, when it must be quick
 ```
+
+**Both suites run in Chromium and in WebKit**, once each, from one parameterized
+`browser` fixture in `tests/conftest.py`. WebKit is there because Safari carries
+faults Chromium cannot see: on the `columns: 3` shelf, Safari **broke a card
+across the column boundary** in spite of `break-inside: avoid`, and the piece
+that began the next column had no top border — so the card read as open at the
+top, most visibly under the pointer, where the border brightens. Safari reported
+that card's box as 675×710 where Chromium reported 330×356, which is the
+fragmentation showing through. A sweep of every width from 1000 to 1920px at
+four pixel densities in Chromium saw nothing. An engine that is not installed
+skips; `BIREAD_ENGINES` narrows the list. WebKit is roughly six times slower, so
+a quick loop is worth narrowing and a merge is not.
+
+`test_a_hovered_card_keeps_the_whole_of_its_frame` guards it, and it is the one
+test here that reads **pixels**: the fault was pure paint, and every computed
+style was correct throughout. It measures the top edge against the card's own
+side edge rather than a fixed brightness, so it holds in both themes and both
+engines, and it refuses to pass when the side reads flat too — that is what a
+fragmented card looks like from the outside.
 
 The builder's tests serve `web/builder.html` beside `tests/builder_worker_stub.js`,
 which answers the worker protocol with canned replies. The page reaches its engine

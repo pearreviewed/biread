@@ -5,7 +5,10 @@ bugs have lived — pagination measured against a box that was not laid out yet,
 a drag target destroyed mid-gesture, a layout mode chosen from a stale width —
 and none of them are reachable without a rendering engine.
 
-Requires `pip install -e ".[browser]"` plus `playwright install chromium`;
+Every test runs once per engine in `conftest.ENGINES` — Chromium and WebKit,
+because Safari has faults Chromium cannot see.
+
+Requires `pip install -e ".[browser]"` plus `playwright install chromium webkit`;
 skipped entirely when that is not present.
 """
 import pathlib
@@ -68,14 +71,6 @@ def build_reader(tmp_path_factory, published: bool, downloads=None, target=ENGLI
         builder_url=builder_url,
     )
     return out
-
-
-@pytest.fixture(scope="module")
-def browser():
-    with sync_playwright() as playwright:
-        instance = playwright.chromium.launch()
-        yield instance
-        instance.close()
 
 
 def open_reader(browser, path, width=1280, height=900):

@@ -1,3 +1,5 @@
+import os
+import pathlib
 import re
 
 import pytest
@@ -5,6 +7,29 @@ import pytest
 from biread.cleanup import Chapter
 from biread.config import Config
 from biread.llm.base import Completion, LLMClient
+
+#: Which engines the reader and builder are driven in. Chromium is the ground
+#: truth; WebKit is here because Safari has faults Chromium cannot see — it broke
+#: a shelf card across a column boundary and left the piece beneath it with no
+#: top border, at a width and pixel density Chromium was clean at all of. An
+#: engine that is not installed skips rather than fails, and
+#: `BIREAD_ENGINES=chromium` narrows a run that needs to be quick.
+#: Only the two suites that test what a reader *sees* take this
+#: fixture; the sync, counter and gloss-parity suites keep their own Chromium,
+#: because they drive logic through a browser rather than layout.
+ENGINES = tuple(e.strip() for e in os.environ.get("BIREAD_ENGINES", "chromium,webkit").split(","))
+
+
+@pytest.fixture(scope="module", params=ENGINES)
+def browser(request):
+    api = pytest.importorskip("playwright.sync_api", reason="playwright not installed")
+    with api.sync_playwright() as playwright:
+        engine = getattr(playwright, request.param)
+        if not pathlib.Path(engine.executable_path).exists():
+            pytest.skip(f"{request.param} not installed: playwright install {request.param}")
+        instance = engine.launch()
+        yield instance
+        instance.close()
 
 
 class FakeClient(LLMClient):
