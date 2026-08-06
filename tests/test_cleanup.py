@@ -302,6 +302,44 @@ def test_two_lone_numerals_are_too_few_to_be_a_spine():
     assert all(c.number is None for c in chapters)
 
 
+def test_page_numbers_that_merely_ascend_are_not_a_spine():
+    # The Nausea PDF: a diary with no chapters at all, whose page numbers 99 and
+    # 146 sit on lines of their own beside the tail of a wrapped sentence. All
+    # three ascend, and the book was read as having four chapters — after which
+    # trimming to the first of them deleted its opening third.
+    text = (
+        "The best thing would be to write down events from day to day.\n\n"
+        "one.\n\n"
+        "I must not put in strangeness where there is none.\n\n"
+        "99\n\n"
+        "I am the one who pulls myself from the nothingness.\n\n"
+        "146\n\n"
+        "There were many episodes I could no longer recall.\n"
+    )
+    chapters, _ = clean(text)
+    assert all(c.number is None for c in chapters)
+
+
+def test_a_lowercase_word_is_the_tail_of_a_sentence_not_a_heading():
+    # "one." ends a sentence a PDF wrapped; "One." heads a chapter. Case is what
+    # tells them apart, since both read as the number 1.
+    from biread.cleanup import _written_as_a_heading
+    assert _written_as_a_heading("One.") and _written_as_a_heading("IV") and _written_as_a_heading("12")
+    assert not _written_as_a_heading("one.")
+
+
+def test_chapters_headed_by_a_spelled_out_word_are_still_found():
+    # Eleanor Marx's Madame Bovary heads its chapters "One", "Two", "Three" with
+    # no heading word — capitalized, consecutive, and a spine.
+    text = (
+        "One\n\nA paragraph of ordinary prose.\n\n"
+        "Two\n\nAnother paragraph of ordinary prose.\n\n"
+        "Three\n\nA third paragraph of ordinary prose.\n"
+    )
+    chapters, _ = clean(text)
+    assert [c.number for c in chapters if c.number] == ["One", "Two", "Three"]
+
+
 def test_explicit_chapter_headings_still_win():
     text = "CHAPITRE I.\nLE DÉBUT\n\nUn paragraphe.\n\nCHAPITRE II.\nLA SUITE\n\nDeux.\n"
     chapters, _ = clean(text)

@@ -249,6 +249,13 @@ RESTART_GAP = 3
 #: nothing under each entry — a blank line, or a part label.
 MIN_CHAPTER_TEXT = 10
 
+#: How much of a bare-numeral spine has to step by one. Ascending is not enough
+#: on its own: a PDF's page numbers ascend too, and 99 and 146 beside a stray
+#: "one." at the end of a wrapped sentence read as a four-chapter Nausea — which
+#: then had its first third trimmed away as front matter. Not all of it, because
+#: an extractor that loses a single heading would otherwise break a real spine.
+MIN_CONSECUTIVE = 0.5
+
 
 def _spine(headings: list, lines: list[str]) -> list:
     """The real chapters among the candidate headings, whichever pattern found
@@ -286,6 +293,22 @@ def _with_text_under_them(candidates: list, lines: list[str]) -> list:
     return kept
 
 
+def _written_as_a_heading(token: str) -> bool:
+    """A bare heading is set as one: "IV", "12", "One" — never "one.", which is
+    the tail of a sentence a PDF wrapped onto a line of its own. Digits carry no
+    case and are judged by their company alone; letters must be capitalized."""
+    letters = [c for c in token if c.isalpha()]
+    return not letters or letters[0].isupper()
+
+
+def _steps_by_one(run: list[tuple[int, str]]) -> bool:
+    """A spine numbers its chapters without gaps. A part boundary counts as a
+    step, since a book in parts begins again at one."""
+    values = [chapter_number(token) or 0 for _, token in run]
+    steps = [later == earlier + 1 or later == 1 for earlier, later in zip(values, values[1:])]
+    return sum(steps) > len(steps) * MIN_CONSECUTIVE
+
+
 def _numeral_headings(lines: list[str]) -> list[tuple[int, str]]:
     """Headings for an edition that marks chapters with a bare numeral and no
     heading word — a lone "I", "II" … "XXX", as a Gutenberg PDF sets Candide.
@@ -294,12 +317,14 @@ def _numeral_headings(lines: list[str]) -> list[tuple[int, str]]:
     a figure in the prose. What makes it a heading is company: chapters number
     upward through the book, so the real headings are the longest run of
     candidates whose values strictly increase in reading order, starting from
-    the top. A stray numeral that does not fit that run is left as prose.
+    the top, and step by one oftener than not. A stray numeral that does not fit
+    that run is left as prose.
     """
     candidates = [
         (i, s, value)
         for i, line in enumerate(lines)
         if (s := line.strip()) and len(s) <= HEADING_NUMERAL_MAX_LEN
+        and _written_as_a_heading(s)
         and (value := chapter_number(s)) is not None
     ]
     if len(candidates) < 3:
@@ -342,7 +367,7 @@ def _numeral_headings(lines: list[str]) -> list[tuple[int, str]]:
     # high numeral left over from a table of contents can otherwise anchor the run
     # ahead of the real first chapter — Madame Bovary keeps one "XI" that way.
     run = _spine(run, lines)
-    if len(run) < 3:
+    if len(run) < 3 or not _steps_by_one(run):
         return []
     return run
 
