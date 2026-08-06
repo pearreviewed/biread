@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
-from .align import AlignmentReport, Embed, align_published, trim_matter
+from .align import AlignmentReport, Embed, align_published, open_together, trim_matter
 from .cache import Cache
 from .cleanup import Chapter
 from .config import Config
@@ -233,6 +233,11 @@ def build_aligned(
     its own; the embedding key usually reaches one. Without them the book reads the
     same, minus the hover.
     """
+    # Before the cut, because a flat edition cut to a counterpart that still
+    # carries an introduction is cut to the wrong shape by the whole length of it.
+    chapters, published_chapters, dropped_orig, dropped_pub = open_together(
+        chapters, published_chapters, embed
+    )
     chapters, published_chapters, cut = recut(chapters, published_chapters)
     # Only a chat model can read a book for its paragraphs, and the align route
     # has one only when the reader wanted glosses. Without it the refusal stands,
@@ -245,6 +250,12 @@ def build_aligned(
         chapters, published_chapters, embed=embed, on_progress=_stage(on_progress, "align")
     )
     report.cut = cut
+    for count, side in ((dropped_orig, "original"), (dropped_pub, "edition you brought")):
+        if count:
+            report.notes.append(
+                f"{count} paragraphs stood in front of the book in the {side} — an "
+                f"introduction or a note the other edition does not carry — and were left out."
+            )
     # Render the body only — the same trim the aligner used — and gloss exactly what
     # is rendered, so no call is paid for on a paragraph the reader never sees.
     body = [c for c in trim_matter(chapters) if c.paragraphs] or chapters

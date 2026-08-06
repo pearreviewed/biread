@@ -781,6 +781,90 @@ def embed_nearest(
     return out
 
 
+#: How far into an edition a one-sided introduction may reach before the match
+#: that found it is disbelieved. Sixty paragraphs is a long critical essay and an
+#: editors' note together; past that, a hit is likelier a mis-hit, and dropping on
+#: it would take the book with the apparatus.
+OPENING_WINDOW = 60
+
+#: Enough of an opening to recognise the book by, and short enough that a flat
+#: edition — one paragraph of half a million characters — can be probed with its
+#: first page rather than its whole self.
+OPENING_CHARS = 1200
+
+
+def open_together(
+    original: list[Chapter], published: list[Chapter], embed: Embed
+) -> tuple[list[Chapter], list[Chapter], int, int]:
+    """Drop whatever stands in front of the book on either side, by asking the
+    other edition where the book begins.
+
+    A critic's introduction, an editors' note, a publisher's notice: one edition
+    carries it and the other does not, and nothing in the file says where it ends.
+    `trim_matter` cuts to the first numbered chapter, which is the right answer
+    and no answer at all for a book that numbers nothing — Nausea is a diary, and
+    its published edition opened on thirty-one paragraphs of Hayden Carruth that
+    the aligner then poured over Sartre's first pages, because the pivot must
+    place every published paragraph somewhere.
+
+    What marks the boundary is the other edition. The paragraph answering to its
+    own first page is where this one's book starts; everything before that is
+    apparatus. Both directions, since either side may carry the introduction, and
+    nothing is dropped where the two openings do not clearly agree.
+    """
+    skip_pub = _where_the_book_starts(_opening(original), published, embed)
+    skip_orig = _where_the_book_starts(_opening(published), original, embed)
+    # Each edition cannot open inside the other's body. Both firing is a pair of
+    # matches that contradict each other, so neither is believed — a book left
+    # with its introduction reads; a book cut on a bad match does not.
+    if skip_orig and skip_pub:
+        skip_orig = skip_pub = 0
+    return _drop_leading(original, skip_orig), _drop_leading(published, skip_pub), skip_orig, skip_pub
+
+
+def _opening(chapters: list[Chapter]) -> str:
+    """A book's first page as one probe. Truncated rather than counted in
+    paragraphs, so an edition that never broke into any is probed the same way."""
+    for chapter in chapters:
+        for paragraph in prose_only(chapter.paragraphs):
+            return paragraph[:OPENING_CHARS]
+    return ""
+
+
+def _where_the_book_starts(opening: str, chapters: list[Chapter], embed: Embed) -> int:
+    """How many of `chapters`' leading paragraphs stand in front of `opening`.
+
+    Bounded twice over. Only the first `OPENING_WINDOW` paragraphs are searched,
+    and what is dropped is held to the share `trim_matter` allows front matter —
+    otherwise one confident wrong match on a short book takes the book, and
+    Micromégas is thirty-four paragraphs long.
+    """
+    body = [p for c in chapters for p in c.paragraphs]
+    head = body[:OPENING_WINDOW]
+    if not opening or len(head) < 2:
+        return 0
+    probe, window = embed([opening]), embed([p[:OPENING_CHARS] for p in head])
+    vec = _unit(probe[0])
+    scores = [sum(a * b for a, b in zip(vec, _unit(v))) for v in window]
+    at = max(range(len(scores)), key=scores.__getitem__)
+    if scores[at] - median(scores) < NEAREST_MARGIN:
+        return 0
+    return at if sum(map(len, body[:at])) <= sum(map(len, body)) * MAX_FRONT_MATTER else 0
+
+
+def _drop_leading(chapters: list[Chapter], count: int) -> list[Chapter]:
+    """The book without its first `count` paragraphs, chapters that empty out
+    dropped with them."""
+    kept = []
+    for chapter in chapters:
+        if count >= len(chapter.paragraphs):
+            count -= len(chapter.paragraphs)
+            continue
+        kept.append(Chapter(chapter.number, chapter.title, chapter.paragraphs[count:], chapter.part))
+        count = 0
+    return kept or chapters
+
+
 #: How much of the French must find a numbered counterpart before the two
 #: editions are taken to be divided the same way.
 NUMBERING_AGREES = 0.8

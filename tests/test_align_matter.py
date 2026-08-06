@@ -4,7 +4,7 @@ than numerals, and a PDF whose text never broke into paragraphs at all.
 """
 import pytest
 
-from biread.align import align_published, chapter_number, trim_matter
+from biread.align import align_published, chapter_number, open_together, trim_matter
 from biread.build import check_usable
 from biread.cleanup import Chapter, clean
 from biread.errors import ExtractError
@@ -102,6 +102,72 @@ He chose, in virtue of the gift of God called liberty, to run the gauntlet.
 )
 def test_chapter_numbers_normalise_across_styles(token, number):
     assert chapter_number(token) == number
+
+
+# A fake multilingual embedder, as elsewhere: a concept has one vector, so the
+# French and the English of it land together though they share no characters.
+CONCEPTS = {"chat": [1, 0, 0], "cat": [1, 0, 0], "chien": [0, 1, 0], "dog": [0, 1, 0]}
+
+
+def embed(texts):
+    def vector(text):
+        for word, v in CONCEPTS.items():
+            if word in text.lower():
+                return v
+        return [0, 0, 0]
+    return [vector(t) for t in texts]
+
+
+def book(opening, count=20):
+    """A book long enough that a few paragraphs in front of it are front matter
+    rather than a third of the file."""
+    return [opening] + [f"And the story went on, at length, for paragraph {i}." for i in range(count)]
+
+
+def test_an_introduction_only_one_edition_carries_is_dropped():
+    # Nausea: the published edition opens on a critic's essay and an editors'
+    # note, and the book numbers no chapters, so nothing marks where they end.
+    # What marks it is the other edition — the paragraph its own first page
+    # answers to is where this one's book begins.
+    original = [Chapter(None, None, book("Le chat dort sur la table."))]
+    published = [Chapter(None, None, [
+        "An introduction, discussing the author at some length.",
+        "A second page of the same essay, and still not the book.",
+        "The editors note that these papers were found among others.",
+    ] + book("The cat sleeps on the table."))]
+    orig, pub, dropped_orig, dropped_pub = open_together(original, published, embed)
+    assert (dropped_orig, dropped_pub) == (0, 3)
+    assert pub[0].paragraphs[0] == "The cat sleeps on the table."
+    assert orig[0].paragraphs[0] == "Le chat dort sur la table."
+
+
+def test_two_editions_that_open_on_the_book_are_left_alone():
+    original = [Chapter(None, None, book("Le chat dort sur la table."))]
+    published = [Chapter(None, None, book("The cat sleeps on the table."))]
+    orig, pub, dropped_orig, dropped_pub = open_together(original, published, embed)
+    assert (dropped_orig, dropped_pub) == (0, 0)
+    assert len(pub[0].paragraphs) == len(published[0].paragraphs)
+
+
+def test_an_introduction_worth_a_quarter_of_the_file_is_not_believed():
+    # The same ceiling trimming uses. One confident wrong match must not be able
+    # to take the book with it, and a short book is all opening.
+    original = [Chapter(None, None, ["Le chat dort.", "Le chien court."])]
+    published = [Chapter(None, None, ["A long essay standing in front of a very short book indeed.",
+                                      "The cat sleeps.", "The dog runs."])]
+    _, pub, _, dropped_pub = open_together(original, published, embed)
+    assert dropped_pub == 0 and len(pub[0].paragraphs) == 3
+
+
+def test_the_original_may_be_the_side_carrying_the_introduction():
+    original = [Chapter(None, None, [
+        "Une preface, ecrite bien plus tard, sur l'auteur et son temps.",
+        "Une seconde page de la meme preface, qui n'est pas le livre.",
+    ] + book("Le chat dort sur la table."))]
+    published = [Chapter(None, None, book("The cat sleeps on the table."))]
+    orig, _, dropped_orig, dropped_pub = open_together(original, published, embed)
+    assert (dropped_orig, dropped_pub) == (2, 0)
+    assert orig[0].paragraphs[0] == "Le chat dort sur la table."
 
 
 def test_trim_drops_the_matter_that_brackets_a_book():

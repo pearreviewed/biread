@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .align import Embed, embed_nearest, prose_only, trim_matter
+from .align import Embed, embed_nearest, open_together, prose_only, trim_matter
 from .build import check_usable, recut
 from .cache import Cache
 from .cleanup import Chapter
@@ -78,8 +78,10 @@ def sample_align(
 
     Cost is left None: the caller owns the embedding model and prices it.
     """
-    # Cut before either is judged, exactly as the build does, so a sample of a
-    # flattened edition shows the reader the same book the build will make.
+    # Opened and cut before either is judged, exactly as the build does, so a
+    # sample of a flattened edition shows the reader the same book it will make —
+    # and page one is page one, not the last of somebody's introduction.
+    chapters, published_chapters, _, _ = open_together(chapters, published_chapters, embed)
     chapters, published_chapters, _ = recut(chapters, published_chapters)
     index, total, source = _page(chapters, "The book", index)
     published = prose_only(

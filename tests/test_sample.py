@@ -129,8 +129,9 @@ def test_sample_align_window_clamps_at_the_start_of_the_book():
     page = sample_align(french, published, watched, index=0, window=5)
     assert page.index == 0
     # Nothing before the first paragraph, and the window does not run away with
-    # the whole book.
-    window = seen[1]
+    # the whole book. The published window is the last thing embedded: the
+    # openings are matched first, to drop any introduction only one side carries.
+    window = seen[-1]
     assert window[0] == "Paragraph 0."
     assert len(window) == 5 + PAGE_PARAGRAPHS
 
@@ -145,7 +146,7 @@ def test_sample_align_window_clamps_at_the_end_of_the_book():
     french = numbered(60)  # 20 pages
     published = [chapter("I", [f"Paragraph {i}." for i in range(60)])]
     sample_align(french, published, watched, index=19, window=5)
-    window = seen[1]
+    window = seen[-1]
     assert window[-1] == "Paragraph 59."
     assert len(window) <= 5 + PAGE_PARAGRAPHS + 5
 
