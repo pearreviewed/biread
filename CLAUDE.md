@@ -355,6 +355,18 @@ CI so it stops depending on anyone remembering.
 
 | Page numbers that count perfectly? | **Not a spine, because the prose under them does not begin.** The rule above that ascending is not enough was written against page numbers that ascend *raggedly* — 99 and 146 among a diary's stray lines. A clean scan is the harder case: its printed folios ascend, step by one without a single gap, are written as headings, and have a page of prose beneath each. They satisfy every condition `_numeral_headings` had, and the second Nausea came back as **175 chapters** of a novel with none. What separates them is the one thing a chapter always does and a folio never does — start a sentence. `_opens_a_chapter` reads the first line under each numeral: every edition in the corpus scores **100%**, the page numbers score **15%**, and the gate at 80% sits in a gap wide enough that the figure is immaterial. Scoped to the bare-numeral path, where the ambiguity actually lives; a written-out `CHAPTER IV` needs no corroboration and gets none. |
 
+| A heading the file sets flush left? | **Cut before it, because a file that indents says nothing about a line beginning no paragraph.** Reading the indent (the row above) fixed where paragraphs *begin* and quietly broke where they *end*: `_split_on_indent` breaks only before an indented line, so a heading, which is set flush, joined whatever preceded it. Both scans of Nausea came out reading `Il ne faut pas avoir peur. JEUDI.` and `1 must not be afraid. Thursday:` — 21 headings swallowed in the French, 18 in the English, and with them the only structure the book has. `_stands_alone` cuts before a flush line on three conditions together: it is short (under half the measure — `JEUDI.` is seven characters against ninety), the line below opens a paragraph at the indent, and what stands above it has finished, by a blank line or a closed sentence. A paragraph's own last line fails the middle condition or the one above it, which is why Candide, Bovary and Micromégas come out to the paragraph unchanged, both sides. |
+
+| A book divided by date rather than by number? | **A spine, and the dates are it.** Nausea is a diary: no numerals, no heading word, nothing `_numeral_headings` or `CHAPTER_RE` can see, so the whole novel arrived as one section of 1,500 paragraphs and aligned as one unanchored run. `_dated_headings` reads the days it is kept in — 22 sections in the French against 19 in the English, pairing 17-for-17 at 128/136, 96/95, 36/36, 71/71 paragraphs, which is two editions of the same book. A day name is nowhere near enough: the French offers **twenty** wrapped lines carrying *dimanche* or *samedi* mid-sentence against twenty-two real headings, enough to sink the spine on shape alone. Three marks together settle it, and each comes from the file rather than from us — the line stands as a block of its own with a blank either side, which a line inside a paragraph never does; prose *begins* under it (`_opens_a_chapter` again); and it is not **spoken**, because both editions set `— Toi, tu me l'as dit dimanche. »` and `"You did. You told me Sunday."` apart exactly as they set a heading and nothing about the shape tells them apart. Last resort by construction — it runs only where no numbered spine was found, so a novel whose chapters open on a weekday is untouched. Measured inert on the whole corpus. |
+
+| Two editions divided but numbered by neither? | **Paired by content, not collapsed into one run.** Discarding untrustworthy numbering and discarding the *division* were the same code path, and they are not the same thing: sections carrying no numbers pair on nothing, so a diary fell all the way back to whole-book-against-whole-book — the regime `_chapter_pairs`'s own docstring says cannot be carried. `_pair_by_content` already existed for the case where numbering pairs and lies; it now also serves the case where numbering cannot pair at all. Bounded by `DIVISION_AGREES`, and the bound is the whole of it: that matcher is **one to one**, so it is right for 22 sections against 19 and wrong for six chapters against three merged ones, where half the book would be stranded by construction. The merged case keeps the whole-book path, which is many-to-one — and it is a test, not a hope: the first cut of this change took that case from 100% coverage to 50%. |
+
+| Both editions open on apparatus? | **Cut where they first say the same thing.** `open_together` asked which paragraph answers to *the other edition's first page*, which assumes one edition opens on the book. La Nausée and its translation both open on apparatus — a Gallimard title page and an epigraph on one side, twenty-nine paragraphs of Hayden Carruth on the other — so both probes were front matter, nothing was found, nothing was dropped, and the reader met `GALLIMARD Au CASTOR` facing a paragraph of Existentialism. `_where_they_first_agree` instead finds the earliest **mutual** best match in the two opening windows: one-sided is the whole definition of apparatus here, and mutual is what keeps an introduction discussing Roquentin by name for pages from matching itself in. Both bounds are unchanged and are what make a wrong answer survivable — only the first sixty paragraphs are searched, and neither drop may exceed the quarter of the file trimming allows. Measured on the real pair with a real multilingual model, which is the run the spec said was owed: **4 dropped from the French, 32 from the English**, both editions opening on *Ces cahiers ont été trouvés* / *These notebooks were found*, and closing on the same sentence too. |
+
+| A PDF that names itself? | **Read, like an EPUB's OPF, and refused where it is the converter talking.** `meta.describe` read an EPUB's title and author and, for a PDF, only counted pages — so two scans that both carry `/Title` and `/Author` in their document information produced a reader headed with the literal word `book`. La Nausée names itself and its author exactly. The English scan says `Jean-Paul Sartre - Nausea.rtf`, which is the file Acrobat was pointed at: a title ending in a document extension is a filename, and the rule that a filename is not an author applies to it unchanged. The author field is not checkable that way and is taken as given — shown as the file's claim, beside its other claims, never as ours. |
+
+| An apparatus run together into one paragraph? | **Split back out where the numbers count.** `notes.scan` reads how a paragraph *opens*, so an edition whose notes are set close together defeats it entirely: the French Nausea ends on `FIN [1] - Un mot laissé en blanc. [2] - …`, twelve editor's notes and the novel's last word in one paragraph of fourteen hundred characters, and every one of them was translated, glossed and set against the other edition's ending. The corroboration is the one `_trailing_run` already uses, looked for inside a paragraph instead of across several — numbers that open notes and **count**, 1, 2, 3, because prose does not enumerate itself. Three of them, where a paragraph of its own needs two, since a break that is not in the file is weaker evidence than one that is; and the run must start at 1, since a note numbered 5 with nothing before it points into an apparatus printed elsewhere. Inline markers go with them: `FOOTNOTE_REF_RE` demanded a non-space before the bracket, which caught Micromégas's `Micromégas[1]` and missed all 24 of Nausea's `ce serait si [4]`, so it now anchors on anything at all except the head of the line — where a note's own marker identifies it. |
+
 ## Reversals
 
 Recorded because the reasoning matters more than the outcome.
@@ -525,12 +537,25 @@ Recorded because the reasoning matters more than the outcome.
 - **An embedding run is priced only when OpenRouter lists the model.** The align
   route's cost gate shows a dollar figure when the rate is known and an honest
   token count when it is not, rather than a plausible cent.
-- **`open_together` has never met a real embedding model.** The rule that drops a
-  one-sided introduction was measured with a bag-of-words embedder, which is a
-  fair stand-in on same-language text (the pair that prompted it is one English
-  translation in two files) and no stand-in at all cross-lingual. Its fixtures
-  use the concept embedder, which proves the wiring. What is owed is one run on
-  a French/English pair with a real multilingual model, watching what it drops.
+- **`open_together` has now met a real embedding model, and was rewritten by
+  what it found.** The debt recorded here — one run on a French/English pair with
+  a real multilingual model — was paid on La Nausée against its 1964 translation,
+  `text-embedding-3-large`, and the rule dropped **nothing**, because both
+  editions open on apparatus and it probed with each one's first paragraph. See
+  the decision row. It now cuts where the two editions first agree, mutually, and
+  on that pair drops 4 and 32. What is still owed is the same run on a book where
+  only *one* side carries an introduction, which is the case the old rule was
+  written for and the case no real model has yet been shown.
+- **Eleven English paragraphs still carry a footnote through the middle of a
+  sentence.** The 1964 Nausea scan interleaves its page-foot notes with the
+  prose, so `…I must finally realize 1 Ogier P . . . , who will be often
+  mentioned in this journal.` arrives as one paragraph — 11 of 1,313, about 0.8%.
+  Deliberately not fixed: the marker is a bare digit with nothing around it, and
+  a twelfth candidate found by the same pattern is `Nyam-Nyams, 34 Malgaches`,
+  where 34 is a page number. That is exactly the ambiguity `notes.py` refuses to
+  guess at, and the standing rule applies — a note left in is untidy, a deleted
+  sentence is silent and unrecoverable. The French side of the same book is
+  clean, because its notes are bracketed and countable.
 - **The deployed site lags main by hand.** As of 2026-08-06 prod
   (`vps-bab9636f.vps.ovh.net`) served engine wheel `02aba59a8` against a local
   `0731760f4`, and a builder page 119 lines behind. Nothing deploys itself; the
