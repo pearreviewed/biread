@@ -160,6 +160,50 @@ def test_the_shelf_it_ships_names_a_book_that_exists():
         assert (build.BOOKS / entry["file"]).is_file(), f"{entry['file']} is missing"
 
 
+def a_wheel(tmp_path, engine: bytes) -> Path:
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    path = tmp_path / "biread-0.1.0-py3-none-any.whl"
+    path.write_bytes(engine)
+    return path
+
+
+def test_a_changed_engine_arrives_under_a_changed_name(build, tmp_path):
+    """The whole point: a host caches the wheel for a year under one URL, so two
+    engines must never share one. A returning reader got today's worker against
+    the engine cached on their first visit, and it called a function that engine
+    did not have."""
+    one = build.fingerprint(a_wheel(tmp_path / "a", b"import biread"))
+    two = build.fingerprint(a_wheel(tmp_path / "b", b"import biread  # and recut"))
+    assert one.name != two.name
+    again = build.fingerprint(a_wheel(tmp_path / "c", b"import biread"))
+    assert again.name == one.name, "the same engine is the same URL, and stays cached"
+
+
+def test_the_stamped_wheel_is_still_a_wheel_micropip_can_read(build, tmp_path):
+    """The hash rides in the build tag, which is the one field free to hold it —
+    the version is what micropip resolves by, and must go on saying 0.1.0."""
+    from packaging.utils import parse_wheel_filename
+
+    stamped = build.fingerprint(a_wheel(tmp_path / "a", b"import biread"))
+    name, version, _build, tags = parse_wheel_filename(stamped.name)
+    assert (name, str(version)) == ("biread", "0.1.0")
+    assert str(next(iter(tags))) == "py3-none-any"
+
+
+def test_the_worker_names_the_wheel_pip_will_actually_produce(build):
+    """Both halves of the stamping hang off this name: the build fails loudly if
+    the worker does not carry it, and rewrites it to the stamped one on the way
+    into the bundle. A version bumped in pyproject.toml and nowhere else would
+    take the fingerprinting down with it."""
+    import re
+
+    root = Path(__file__).resolve().parent.parent
+    version = re.search(
+        r'^version = "(.+?)"', (root / "pyproject.toml").read_text(), re.M).group(1)
+    worker = (root / "web" / "worker.js").read_text(encoding="utf-8")
+    assert f"biread-{version}-py3-none-any.whl" in worker
+
+
 def test_a_shelf_that_has_published_nothing_yet_builds_fine(build, monkeypatch, tmp_path):
     """The manifest is written by `biread.publish`, so it does not exist until the
     first book is approved — and a bundle with no books is a normal bundle."""

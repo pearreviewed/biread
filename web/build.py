@@ -8,6 +8,7 @@ output is a handful of files you can drop on any static host.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import shutil
@@ -132,6 +133,29 @@ def gather_published(catalogue: dict) -> None:
         }
 
 
+def fingerprint(wheel: Path) -> Path:
+    """Rename the wheel after its own contents, and hand back the new path.
+
+    The wheel is 300 KB and every visit fetches it, so a host is right to cache
+    it hard — the one served today carries `Cache-Control: immutable` for a year.
+    But its name is pinned to the version in pyproject.toml, which moves once a
+    release and not once a build, so an unchanging URL was handed a changing
+    file: a returning reader got today's `worker.js` against the engine cached on
+    their first ever visit, and the page called into a `biread.build` that had
+    never had the function. A hash in the name is the only thing an immutable
+    cache understands — a different engine is a different URL, and the same
+    engine is still free.
+    """
+    digest = hashlib.sha256(wheel.read_bytes()).hexdigest()[:8]
+    name, version, tags = wheel.name.split("-", 2)
+    # It goes in the wheel's build tag, which PEP 427 requires to start with a
+    # digit and a hash does not, hence the leading 0. Not in the version: that
+    # would be a lie about which biread this is, and micropip reads it.
+    stamped = wheel.with_name(f"{name}-{version}-0{digest}-{tags}")
+    wheel.rename(stamped)
+    return stamped
+
+
 #: Everything a bundle consists of. Anything else at the top of DIST is left
 #: over from a previous shape of the project — three pages from an abandoned
 #: type experiment were sitting there, and a deploy would have published them.
@@ -153,14 +177,17 @@ def main() -> None:
         raise SystemExit("no biread wheel was produced")
 
     # The worker installs the wheel by exact name; fail loudly if they drift.
-    if wheel.name not in (WEB / "worker.js").read_text(encoding="utf-8"):
+    worker = (WEB / "worker.js").read_text(encoding="utf-8")
+    if wheel.name not in worker:
         raise SystemExit(
             f"worker.js does not reference {wheel.name}. Update its wheel filename "
             f"to match the version in pyproject.toml."
         )
+    stamped = fingerprint(wheel)
 
-    for name in ("builder.html", "worker.js"):
-        shutil.copy2(WEB / name, DIST / name)
+    shutil.copy2(WEB / "builder.html", DIST / "builder.html")
+    (DIST / "worker.js").write_text(
+        worker.replace(wheel.name, stamped.name), encoding="utf-8")
     for font in FONT_FILES:
         shutil.copy2(FONTS / font, DIST / font)
 

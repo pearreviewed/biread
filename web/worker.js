@@ -4,6 +4,13 @@
 // The page never blocks.
 importScripts("https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js");
 
+// The name below is a placeholder: `web/build.py` stamps the wheel's own content
+// hash into it when the bundle is assembled, and rewrites this line to match. It
+// has to, because the wheel is the one file worth caching for a year and its
+// version changes once a release rather than once a build — so a returning
+// reader was served today's worker against the engine their browser cached on
+// its first ever visit, and the page called a `biread.build` function that
+// engine had never heard of.
 const WHEEL_URL = new URL("biread-0.1.0-py3-none-any.whl", self.location.href).href;
 let pyodide;
 
