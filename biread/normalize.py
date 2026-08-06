@@ -215,6 +215,38 @@ CLOSED_RE = re.compile(r"[.!?…:;—–][\"”»’')\]]?$")
 #: speech before one.
 OPENED_RE = re.compile(r"[—–]\s|[\"“«'(]?[A-ZÀ-Þ]")
 
+#: How much of the measure a flush line may run to and still be a heading rather
+#: than the last line of a paragraph. Half, because a heading is set on its own
+#: and a paragraph's final line is as long as its sentence happened to leave it —
+#: `JEUDI.` is seven characters against a measure of ninety.
+HEADING_LINE = 0.5
+
+
+def _stands_alone(text: str, above: str, below: str, mark: int, measure: int) -> bool:
+    """Is this flush line a heading, rather than the tail of the paragraph above?
+
+    A file that indents says where its paragraphs begin, and says nothing at all
+    about the lines that begin no paragraph — so a heading, which is set flush,
+    arrives with no mark of its own and joins whatever preceded it. That is how
+    both scans of Nausea lost the dates its diary is built out of: `Il ne faut pas
+    avoir peur. JEUDI.` and `1 must not be afraid. Thursday:`, 21 of them in the
+    French and 18 in the English.
+
+    Three conditions, and the three together are what make it corroboration
+    rather than shape. The line is short, well inside the measure. The line below
+    it opens a paragraph at the indent, so it is the last thing before a fresh
+    start. And what stands above it has finished — a blank line, or a closed
+    sentence — so the line is not a continuation of anything. A paragraph's own
+    last line fails the middle test or the one above it, which is why every book
+    in the corpus comes out to the paragraph unchanged.
+    """
+    if not measure or len(text) >= measure * HEADING_LINE:
+        return False
+    if not CLOSED_RE.search(text):
+        return False
+    below_opens = bool(below) and len(below) - len(below.lstrip(" ")) >= mark
+    return below_opens and (not above or bool(CLOSED_RE.search(above)))
+
 
 def _split_on_indent(lines: list[str], mark: int) -> tuple[list[str], int]:
     """Cut the file where it says its paragraphs begin, and only there.
@@ -233,18 +265,31 @@ def _split_on_indent(lines: list[str], mark: int) -> tuple[list[str], int]:
     a paragraph, and on the same pair it takes the two editions from 2,182
     paragraphs against 1,563 to 1,761 against 1,527, agreeing on 92% of their
     openings each way instead of 97% and 81%.
+
+    A flush line that begins no paragraph is still cut where it plainly begins
+    nothing else — see `_stands_alone`, which is what gives a diary back the dates
+    it is written in.
     """
+    measure = _measure(lines)
     out: list[str] = []
     marked = 0
-    for line in lines:
+    previous = ""
+    for i, line in enumerate(lines):
         if not line.strip():
+            previous = ""
             continue
+        text = line.strip()
         if len(line) - len(line.lstrip(" ")) >= mark and out:
-            above, below = out[-1].strip(), line.strip()
-            if CLOSED_RE.search(above) or OPENED_RE.match(below):
+            if CLOSED_RE.search(out[-1].strip()) or OPENED_RE.match(text):
+                out.append("")
+                marked += 1
+        elif out:
+            below = next((l for l in lines[i + 1:] if l.strip()), "")
+            if _stands_alone(text, previous, below, mark, measure):
                 out.append("")
                 marked += 1
         out.append(line)
+        previous = text
     return out, marked
 
 

@@ -170,6 +170,37 @@ def test_a_file_that_indents_is_not_also_guessed_at():
     assert len(text.split("\n\n")) == 3
 
 
+def test_a_heading_set_flush_is_not_swallowed_by_the_paragraph_above_it():
+    # A file that indents says where paragraphs begin and nothing about a line
+    # that begins none, so a heading joined whatever preceded it: both scans of
+    # Nausea came out reading "Il ne faut pas avoir peur. JEUDI."
+    dated = INDENTED.replace(
+        "    I must tell how I see this table", "THURSDAY:\n    I must tell how I see this table"
+    )
+    blocks = repair(dated)[0].split("\n\n")
+    assert len(blocks) == 4
+    assert blocks[1].strip() == "THURSDAY:"
+
+
+def test_a_paragraphs_own_last_line_is_not_read_as_a_heading():
+    # The line above a heading has finished saying something; the line above a
+    # paragraph's last line is still mid-clause, which is what tells them apart.
+    blocks = repair(INDENTED)[0].split("\n\n")
+    assert len(blocks) == 3
+    assert all("cardboard box" not in b or b.count("\n") == 2 for b in blocks)
+
+
+def test_a_long_flush_line_is_prose_however_it_is_placed():
+    # Length is the first of the three conditions: a heading is set on its own,
+    # and a line running most of the measure is a sentence.
+    running_on = INDENTED.replace(
+        "    I must tell how I see this table",
+        "And then he walked the whole length of the boulevard without once looking up.\n"
+        "    I must tell how I see this table",
+    )
+    assert len(repair(running_on)[0].split("\n\n")) == 3
+
+
 # ---- ligatures ----
 
 def test_a_ligature_glyph_becomes_the_letters_it_stands_for():
