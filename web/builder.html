@@ -1369,9 +1369,9 @@ function refreshNext() {
   if (S.busy === "shelf") return;
   $("books-foot").textContent = !S.ready ? "Warming up the workshop…"
     : S.route === "shelf" ? (haveBook()
-        ? "Both editions are here. Who does the work, and what it costs, come next."
+        ? "Both editions are here. Next: an engine, and the price."
         : "Nothing is fetched until you choose a book.")
-    : "Who does the work, and what it costs, come next — before anything is sent.";
+    : "Next you'll pick an engine and see the price. Nothing leaves this page until then.";
 }
 function wireFile(which) {
   const button = $("pick-" + which), input = $("f-" + which);
