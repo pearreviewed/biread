@@ -185,6 +185,12 @@ def main() -> None:
     for stale in DIST.iterdir():
         if stale.is_file() and stale.name not in BUNDLED:
             stale.unlink()
+    # And the same again one level down: a book taken off the shelf stops being
+    # written here, but the copy from the last build stays and is still served.
+    # Salammbô came off and its file remained downloadable.
+    for stale in (DIST / "books").glob("*"):
+        if stale.is_file() and stale.name not in {b["file"] for b in published()}:
+            stale.unlink()
 
     subprocess.run(
         [sys.executable, "-m", "pip", "wheel", str(ROOT), "--no-deps", "-w", str(DIST)],
