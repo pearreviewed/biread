@@ -470,7 +470,7 @@
       </div>
       <div class="beyond">
         <div>
-          <b id="beyond-title">Not one of these?</b>
+          <b>Looking for another book?</b>
           <p>Any book out of copyright can be fetched the same way. Looking one up happens on its own screen.</p>
         </div>
         <button class="ghost" data-goto="lookup">Look on Wikisource →</button>
@@ -1116,7 +1116,6 @@ function paintShelf() {
     }
     nums.appendChild(step("›", S.page + 1, S.page === pages - 1));
   }
-  $("beyond-title").textContent = "Not one of these " + S.shelf.books.length + "?";
 }
 
 // A book found by looking arrives without figures. Once both editions are here
