@@ -320,6 +320,32 @@ def test_page_numbers_that_merely_ascend_are_not_a_spine():
     assert all(c.number is None for c in chapters)
 
 
+def test_printed_page_numbers_are_not_a_spine_however_perfectly_they_count():
+    # A scan of Nausea keeps the page number printed at the foot of every page.
+    # They ascend, they step by one without a single gap, and each has a page of
+    # prose beneath it — every other test here passes them, and the novel came
+    # back as a hundred and seventy-five chapters. What gives them away is that
+    # the prose under them does not *begin*: it carries on mid-sentence.
+    page = (
+        "of the nuances or small happenings even if they seem to mean\n\n"
+        "nothing, and above all, classify them. I must tell how I see\n\n"
+    )
+    text = "".join(f"{page}{n}\n\n" for n in range(1, 10))
+    chapters, _ = clean(text)
+    assert all(c.number is None for c in chapters)
+
+
+def test_a_numeral_with_a_chapter_beginning_under_it_still_is_one():
+    # The guard above must not cost a real spine: the same nine numerals, each
+    # with a sentence starting beneath it, are the nine chapters they look like.
+    text = "".join(
+        f"{n}\n\nThe marquis received him with all the politeness imaginable.\n\n"
+        for n in range(1, 10)
+    )
+    chapters, _ = clean(text)
+    assert [c.number for c in chapters if c.number] == [str(n) for n in range(1, 10)]
+
+
 def test_a_lowercase_word_is_the_tail_of_a_sentence_not_a_heading():
     # "one." ends a sentence a PDF wrapped; "One." heads a chapter. Case is what
     # tells them apart, since both read as the number 1.

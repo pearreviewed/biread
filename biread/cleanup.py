@@ -301,6 +301,39 @@ def _written_as_a_heading(token: str) -> bool:
     return not letters or letters[0].isupper()
 
 
+#: How much of a bare-numeral spine has to have a chapter's opening under it.
+#: Every edition in the corpus scores 100%; the printed page numbers of a book
+#: with no chapters at all score 15%, so the exact figure is immaterial.
+MIN_OPENING = 0.8
+
+#: How a chapter's first line begins: a capital, or the mark that introduces
+#: speech before one. Generous on purpose — the cost of failing to recognise a
+#: real opening is a lost chapter, and the cost of recognising a false one is
+#: only that this test declines to settle the question.
+CHAPTER_OPENING_RE = re.compile(r"[—–]\s|[\"“«'(]?[A-ZÀ-Þ]")
+
+
+def _opens_a_chapter(run: list[tuple[int, str]], lines: list[str]) -> bool:
+    """Does prose *begin* under each numeral, or merely carry on past it?
+
+    The one thing every chapter does, whatever the edition, is start a sentence.
+    A number stamped into the middle of a page does not: the line under it
+    resumes whatever was already running — mid-clause, lower case, often
+    mid-word.
+
+    This is what tells a spine from a set of page numbers, which nothing else
+    could. Page numbers ascend, step by one without a gap, and have a page of
+    prose under each — they satisfy every other test here perfectly, and the
+    scanned Nausea that prompted this came back as a hundred and seventy-five
+    chapters of a novel that has none.
+    """
+    def under(index: int) -> str:
+        return next((line.strip() for line in lines[index + 1:] if line.strip()), "")
+
+    opened = sum(1 for index, _ in run if CHAPTER_OPENING_RE.match(under(index)))
+    return opened >= len(run) * MIN_OPENING
+
+
 def _steps_by_one(run: list[tuple[int, str]]) -> bool:
     """A spine numbers its chapters without gaps. A part boundary counts as a
     step, since a book in parts begins again at one."""
@@ -367,7 +400,7 @@ def _numeral_headings(lines: list[str]) -> list[tuple[int, str]]:
     # high numeral left over from a table of contents can otherwise anchor the run
     # ahead of the real first chapter — Madame Bovary keeps one "XI" that way.
     run = _spine(run, lines)
-    if len(run) < 3 or not _steps_by_one(run):
+    if len(run) < 3 or not _steps_by_one(run) or not _opens_a_chapter(run, lines):
         return []
     return run
 
