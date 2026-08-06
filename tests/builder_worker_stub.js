@@ -129,6 +129,14 @@ self.onmessage = (e) => {
   Object.assign(standing, parse(m.query));
   const s = { ...DEFAULTS, ...standing, ...scenario(m.orig) };
 
+  // A real engine takes seconds to a minute; this one answers within the frame
+  // that asked. `hold` puts the wait back, which is the only way a test can see
+  // what the page looks like while it is working.
+  if (s.hold && !m.held) {
+    setTimeout(() => self.onmessage({ data: { ...m, held: true } }), s.hold);
+    return;
+  }
+
   if (s.failOn === m.type) {
     postMessage({ type: "error", error: s.error, during: m.type });
     return;

@@ -955,3 +955,84 @@ def test_a_card_opens_on_what_the_book_is_about_without_moving_the_shelf(page):
     # A book somebody looked up carries no summary, and its card stays shut
     # rather than opening on an empty panel.
     assert page.locator(".card[data-slug='80days'] .brief").count() == 0
+
+
+# ---- waiting -------------------------------------------------------------
+# Every one of these was silent until a reader complained the page had frozen,
+# and two of them were silent by accident rather than by omission: the wait was
+# drawn and then painted over by the repaint on the next line. The stub answers
+# within the frame that asked, so `hold` puts a real engine's pause back — with
+# no pause there is no wait to look at.
+
+def test_a_page_being_translated_says_so_where_the_button_stood(page):
+    """The wait used to be drawn by `takeSample` and destroyed by the
+    `refreshBuild` on its own last line, so what a reader saw after pressing was
+    the invitation again with a faded button — the frozen page itself."""
+    to_settings(page, body=scenario(hold=700))
+    page.wait_for_function("!S.busy")
+    page.click(".empty .ghost")
+    page.wait_for_selector(".empty .ghost.busy")
+    assert "Translating a page into English" in text(page, ".empty")
+    assert text(page, ".empty .ghost.busy") == "Translating…"
+    assert "fraction of a cent" not in text(page, ".empty")
+    # And the rule under it is running, not merely present.
+    assert page.eval_on_selector(
+        ".empty .ghost.busy", "e => getComputedStyle(e, '::after').animationName") == "sweep"
+    page.wait_for_selector("#proof-l p")
+    assert page.locator(".empty").count() == 0
+
+
+def test_a_further_page_supersedes_the_one_already_read(page):
+    """Not the page under it left standing with a live 'Another page' beside it:
+    a control that no longer answers is the frozen feeling in miniature."""
+    to_settings(page, body=scenario(hold=700))
+    page.wait_for_function("!S.busy")
+    page.click(".empty .ghost")
+    page.wait_for_selector("#proof-l p")
+    page.wait_for_function("!S.busy")
+    page.click("#proof-note button")
+    page.wait_for_selector(".empty .ghost.busy")
+    assert text(page, "#proof-note") == ""
+    assert text(page, "#proof-l") == ""
+
+
+def test_the_price_says_it_is_counting_rather_than_showing_an_ellipsis(page):
+    to_settings(page, body=scenario(hold=700))
+    page.wait_for_selector("#fig-wait:not([hidden])")
+    assert "Counting the book" in text(page, "#fig-detail")
+    page.wait_for_function("document.getElementById('fig').textContent.indexOf('$') !== -1")
+    assert hidden(page, "#fig-wait")
+
+
+def test_the_bar_sweeps_until_there_is_something_to_count(page):
+    """A book is opened, and on a long PDF that is a minute before the first
+    count arrives. The bar used to stand at the 4% that meant 'started'."""
+    to_settings(page, body=scenario(hold=700))
+    page.wait_for_function("!S.busy")
+    page.click("#build")
+    page.wait_for_selector(".meter .track.wait")
+    assert page.eval_on_selector(
+        "#bar", "e => getComputedStyle(e).animationName") == "sweep"
+    page.wait_for_selector("#s-done:not([hidden])", timeout=15000)
+    assert page.locator(".meter .track.wait").count() == 0
+
+
+def test_a_file_being_read_says_so_on_the_card_it_was_dropped_on(page):
+    upload(page, "#f-orig", "livre.txt", scenario(hold=700))
+    page.wait_for_selector("#pick-orig.busy")
+    assert "Reading…" in text(page, "#orig-about")
+    page.wait_for_function("!document.getElementById('pick-orig').classList.contains('busy')")
+    assert "Voltaire · fr · 34 ¶" == text(page, "#orig-about")
+
+
+def test_the_search_says_it_is_looking_while_it_looks(page):
+    """Same fault as the sample page: `paintLookup` ran before `send` set the
+    busy flag, so the screen drew itself idle and never repainted."""
+    # The scenario is the whole query — the stub parses the rest of the line as
+    # JSON — and a query matching no fixture returns the default two works.
+    look_up(page, 'SCENARIO:{"hold":700}')
+    page.wait_for_selector("#look-go.busy")
+    assert text(page, "#look-go") == "Looking…"
+    assert "Looking on Wikisource" in text(page, "#look-out")
+    page.wait_for_selector(".hit .solid")
+    assert text(page, "#look-go") == "Search"
