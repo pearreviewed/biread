@@ -58,7 +58,8 @@
   .solid:hover:not(:disabled) { background: var(--solid-hover); border-color: var(--solid-hover); }
   .solid:disabled { opacity: .34; cursor: default; }
   .ghost { padding: 11px 22px; font: 600 15px/1 'Charis SIL', Charter, Georgia, serif; color: var(--ink); background: transparent; border: 1px solid var(--rule-2); border-radius: 13px; }
-  .ghost:hover { background: var(--tint); border-color: var(--solid); }
+  .ghost:hover:not(:disabled) { background: var(--tint); border-color: var(--solid); }
+  .ghost:disabled { opacity: .34; cursor: default; }
   .quiet { padding: 6px 12px; font: 400 13.5px/1 'Charis SIL', Charter, Georgia, serif; background: none; border: 1px solid var(--rule); border-radius: 999px; color: var(--body); }
   .quiet:hover { background: var(--tint); }
   .link { background: none; border: 0; padding: 0; font: inherit; font-size: 13px; color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
@@ -331,6 +332,9 @@
   .gate .fig b { font-size: 26px; color: var(--ink); font-variant-numeric: tabular-nums; }
   .gate .fig span { font-size: 14px; color: var(--body); }
   .gate .solid { padding: 13px 26px; font-size: 16px; flex: none; }
+  .gate .ready { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 7px; }
+  .gate .why { padding: 0; border: 0; background: none; text-align: right; font: 400 13px/1.3 'Charis SIL', Charter, Georgia, serif; color: var(--muted); }
+  .gate .why:hover { color: var(--ink); }
 
   /* --- binding and done --- */
   .centre { display: flex; flex-direction: column; align-items: center; gap: 24px; padding: 34px 0 10px; }
@@ -386,6 +390,7 @@
     .leaf.r { box-shadow: none; }
     .gate { flex-direction: column; align-items: stretch; }
     .gate .solid { width: 100%; }
+    .gate .why { text-align: center; }
   }
 </style>
 </head>
@@ -582,7 +587,10 @@
           <div class="fig"><b id="fig">—</b><span id="fig-of"></span></div>
           <div class="note" id="fig-detail"></div>
         </div>
-        <button class="solid" id="build" disabled>Build it</button>
+        <div class="ready">
+          <button class="solid" id="build" disabled>Build it</button>
+          <button class="why" id="build-why" hidden></button>
+        </div>
       </div>
       <div class="alert" id="settings-alert" hidden></div>
     </div>
@@ -1512,10 +1520,20 @@ try {
 } catch (e) {}
 
 function hasKey() { return S.local || !!$("key").value.trim(); }
+// A faded button under a finished price is the builder keeping its own counsel:
+// the piece that is missing is a screen above on a narrow window, and nothing
+// here said so. The line names it and goes there.
 function refreshBuild() {
   $("build").disabled = !(S.ready && haveBook() && hasKey() && !S.busy);
+  const why = S.ready && haveBook() && !S.busy && !hasKey() ? "Your key goes above ↑" : "";
+  $("build-why").hidden = !why;
+  $("build-why").textContent = why;
   paintProofEmpty();
 }
+$("build-why").addEventListener("click", () => {
+  $("key").scrollIntoView({ block: "center", behavior: "smooth" });
+  $("key").focus({ preventScroll: true });
+});
 function enterSettings() {
   setProvider(S.provider);
   paintTiers();

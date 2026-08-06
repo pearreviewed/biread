@@ -243,6 +243,34 @@ def test_the_build_button_waits_for_a_key(page):
     page.wait_for_function("!document.getElementById('build').disabled")
 
 
+def test_a_dead_build_button_says_what_it_is_waiting_for(page):
+    """A faded button under a finished price, and nothing saying why: the reader
+    pressed it, watched nothing happen, and had no way to learn that the field
+    it wanted was a screen above."""
+    to_settings(page, route="align", key=None)
+    page.wait_for_function("document.getElementById('fig').textContent.indexOf('$') !== -1")
+    assert page.eval_on_selector("#build", "e => e.disabled")
+    assert not hidden(page, "#build-why")
+    assert "key" in text(page, "#build-why")
+    # And the line is the way there.
+    page.click("#build-why")
+    page.wait_for_timeout(600)
+    assert page.evaluate("document.activeElement.id") == "key"
+    assert page.eval_on_selector(
+        "#key", "e => { const r = e.getBoundingClientRect(); return r.top > 0 && r.bottom < innerHeight; }")
+    page.fill("#key", "sk-or-v1-test")
+    page.wait_for_function("!document.getElementById('build').disabled")
+    assert hidden(page, "#build-why")
+
+
+def test_the_local_engine_is_never_asked_for_a_key_it_does_not_need(page):
+    to_settings(page, key=None)
+    page.click("[data-engine=local]")
+    page.wait_for_timeout(150)
+    assert not page.eval_on_selector("#build", "e => e.disabled")
+    assert hidden(page, "#build-why")
+
+
 # ---- the proof page ------------------------------------------------------
 
 def test_a_page_is_never_bought_without_being_asked_for(page):
