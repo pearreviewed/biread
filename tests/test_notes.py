@@ -88,3 +88,55 @@ def test_a_chapter_of_plain_prose_keeps_every_paragraph():
     chapters, removed = clean(source)
     assert len(chapters[0].paragraphs) == 2
     assert not [r for r in removed if r.kind == "Note"]
+
+
+# ---- a whole apparatus run together into one paragraph ----
+
+FUSED = (
+    "FIN [1] - Un mot laissé en blanc. [2] - Un mot est raturé, un autre "
+    "rajouté en surcharge est illisible. [3] - Du soir, évidemment. "
+    "[4] - Le texte du feuillet sans date s'arrête ici."
+)
+
+
+def test_an_apparatus_fused_into_one_paragraph_is_split_back_out():
+    """An edition whose notes are set close together arrives as a single block:
+    the French Nausea ends on twelve editor's notes and the novel's last word in
+    one paragraph of fourteen hundred characters."""
+    prose, notes = scan(["Le vrai texte du livre.", FUSED])
+    assert prose == ["Le vrai texte du livre.", "FIN"]
+    assert [n.number for n in notes] == [1, 2, 3, 4]
+    assert notes[2].text == "[3] - Du soir, évidemment."
+
+
+def test_a_paragraph_that_is_nothing_but_its_notes_leaves_nothing_behind():
+    prose, notes = scan([FUSED.removeprefix("FIN ")])
+    assert prose == []
+    assert len(notes) == 4
+
+
+def test_numbers_that_do_not_count_are_left_where_they_are():
+    """Prose does not enumerate itself, which is the whole of the corroboration.
+    Bracketed figures that are not a run are somebody's citation."""
+    cited = "Voyez Berger [6] et Champion [11] sur ce point, et aussi [2] plus haut."
+    prose, notes = scan([cited])
+    assert prose == [cited]
+    assert notes == []
+
+
+def test_a_fused_run_must_start_at_one():
+    # A note numbered 5 with nothing before it is a reference into an apparatus
+    # printed elsewhere, not the apparatus itself.
+    tail = "Le texte. [5] - Cinquième. [6] - Sixième. [7] - Septième."
+    prose, notes = scan([tail])
+    assert prose == [tail]
+    assert notes == []
+
+
+def test_two_fused_notes_are_too_few():
+    # A break that is not in the file is weaker evidence than one that is, so it
+    # is asked for more: three where a paragraph of its own needs two.
+    pair = "Le texte. [1] - Une note. [2] - Une autre."
+    prose, notes = scan([pair])
+    assert prose == [pair]
+    assert notes == []

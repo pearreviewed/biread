@@ -43,6 +43,52 @@ REFERENCE_SHAPES = (
 #: Two is a run, one is a sentence that happens to start with a numeral.
 MIN_TRAILING_RUN = 2
 
+#: A note's body inside a run of them, wherever the run begins — at the head of
+#: the paragraph or part-way through it. Only the bracketed and parenthesised
+#: shapes, and never glued to a word: "1." mid-paragraph ends one sentence and
+#: starts another far more often than it opens a note, and "Micromégas[1]" is a
+#: reference to a note rather than the body of one.
+FUSED_SHAPE = re.compile(r"(?:^|(?<=\s))[\[(](\d{1,3})[\])]\s*[-–—]?\s+")
+
+#: How many fused note-openings make an apparatus. Three, where a paragraph of
+#: its own needs two: a break that is not there in the file is weaker evidence
+#: than one that is, so it is asked for more.
+MIN_FUSED_RUN = 3
+
+
+def _fused(paragraph: str) -> tuple[str, list[Note]]:
+    """One paragraph carrying a whole apparatus, split back into its notes.
+
+    An edition whose notes are set close together arrives as a single block — the
+    French Nausea ends on `FIN [1] - Un mot laissé en blanc. [2] - Un mot est
+    raturé…`, twelve editor's notes and the novel's last word in one paragraph of
+    fourteen hundred characters. Read as prose it is translated, glossed, and set
+    against a page of the other edition's ending, which shifts the close of the
+    book.
+
+    The corroboration is the same one `_trailing_run` reads, looked for inside a
+    paragraph instead of across several: numbers that open notes and *count* —
+    1, 2, 3 — are an apparatus, because prose does not enumerate itself. Anything
+    short of a counting run leaves the paragraph exactly as it was.
+    """
+    found = [(m.start(), m.end(), int(m.group(1))) for m in FUSED_SHAPE.finditer(paragraph)]
+    run: list[tuple[int, int, int]] = []
+    for mark in found:
+        if run and mark[2] != run[-1][2] + 1:
+            run = []
+        if not run and mark[2] != 1:
+            continue
+        run.append(mark)
+    if len(run) < MIN_FUSED_RUN:
+        return paragraph, []
+
+    notes = [
+        Note(number, paragraph[start:run[at + 1][0]].strip() if at + 1 < len(run)
+             else paragraph[start:].strip())
+        for at, (start, _, number) in enumerate(run)
+    ]
+    return paragraph[:run[0][0]].strip(), notes
+
 
 @dataclass(frozen=True)
 class Note:
@@ -99,6 +145,9 @@ def scan(paragraphs: list[str]) -> tuple[list[str], list[Note]]:
         corroborated = number is not None and (number in pointed_at or at >= from_here)
         if corroborated:
             notes.append(Note(number, paragraph))
-        else:
-            prose.append(paragraph)
+            continue
+        kept, fused = _fused(paragraph)
+        notes.extend(fused)
+        if kept:
+            prose.append(kept)
     return prose, notes
