@@ -418,13 +418,17 @@ Recorded because the reasoning matters more than the outcome.
 
 ## Known open issues
 
-- **All eight shelf books are built, and none but Micromégas is glossed.**
+- **All seven shelf books are built, and none but Micromégas is glossed.**
   Micromégas (34 paragraphs, glossed throughout, the published column beside
   ours, EPUB and PDF inside), Candide (98.9%), Bovary (87%), Eighty Days (79%),
-  20,000 Leagues (58.8%), Salammbô (90%), Notre-Dame (86%) and Les Misérables
-  (92%, 12,208 paragraphs — the largest by three times). A reader adds glosses as
-  they read, on their own key. What the shelf is short of now is *glosses* and
-  more titles, not builds.
+  20,000 Leagues (58.8%), Notre-Dame (86%) and Les Misérables (92%, 12,208
+  paragraphs — the largest by three times). A reader adds glosses as they read,
+  on their own key. What the shelf is short of now is *glosses* and more titles,
+  not builds.
+- **Salammbô is off the shelf for now.** It was the eighth, built and approved at
+  90%; its `Book` record and its published row were taken out on 2026-08-06 and
+  its built file left in `web/books/`, unlisted. Restoring it is one `Book` back
+  in `shelf.py` and one row back in `published.json` — both whole in the history.
 - **Glossing costs roughly four times translating, and that governs the budget.**
   Priced off Candide's real French (469 paragraphs, 184,197 characters) against
   live OpenRouter rates: on DeepSeek v3.1 the translation is $0.077 and the

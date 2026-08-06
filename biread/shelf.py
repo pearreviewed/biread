@@ -242,32 +242,11 @@ SHELF: tuple[Book, ...] = (
                 "them.",
         read_through=True, coverage=0.861,
     ),
-    Book(
-        slug="salammbo",
-        title="Salammbô",
-        author="Gustave Flaubert",
-        page="Salammbô",
-        chapters=15, paragraphs=2_075, chars=688_530,
-        translations=(
-            Translation("/ebooks/gustave-flaubert/salammbo/j-s-chartres",
-                        "Chartres", "1886", 15, 1_890, 605_414,
-                        source="standardebooks"),
-        ),
-        note="Carthage after the mercenaries’ revolt, and Flaubert at his most "
-             "pitiless. The wiki has no English copy of this one at all.",
-        summary="Carthage has won its war with Rome and cannot pay the army that "
-                "won it. The mercenaries turn on the city, and Hamilcar’s "
-                "daughter walks into their camp after the veil of the goddess. "
-                "Flaubert at his most pitiless.",
-        read_through=True, coverage=0.903,
-        # The wiki's Salammbô is the novel plus an edition's apparatus: 829
-        # paragraphs of notice, sources, textual variants and the letters
-        # Flaubert was sent about it. Nothing in the book's own English, so all
-        # of it faced a blank page and the last spread came out empty.
-        skip=("Notice", "Source principale", "Sources accessoires", "Variantes",
-              "Salammbô et les auteurs contemporains"),
-    ),
 )
+# Salammbô stood here and is off the shelf for now. Its record is whole in the
+# history — the wiki page, the Chartres translation, and the skip list naming
+# the edition's apparatus — so putting it back is restoring one Book, not
+# working it out again. Its built file stays in web/books/, unlisted.
 
 
 def by_slug(slug: str) -> Book | None:

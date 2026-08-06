@@ -69,7 +69,7 @@ def catalogue_filters(books):
 
 def test_the_filters_that_are_offered_agree_with_the_books():
     got = {f["key"]: f["slugs"] for f in shelf.catalogue()["filters"]}
-    assert got["read"] == ["candide", "bovary", "lesmis", "notredame", "salammbo"]
+    assert got["read"] == ["candide", "bovary", "lesmis", "notredame"]
     assert "80days" in got["several"] and "80days" not in got["whole"]
 
 
@@ -183,12 +183,12 @@ def test_a_book_with_one_side_only_is_not_buildable():
 
 
 def test_a_book_may_take_its_english_from_the_other_library():
-    """Three of the shelf's books have no usable English on the wiki at all, so
+    """Two of the shelf's books have no usable English on the wiki at all, so
     the French is the wiki's and the English is Standard Ebooks'."""
-    salammbo = shelf.by_slug("salammbo")
-    assert salammbo.page == "Salammbô"                     # the wiki's, as ever
-    assert salammbo.translation.source == "standardebooks"
-    assert salammbo.as_dict()["source"] == "standardebooks"
+    lesmis = shelf.by_slug("lesmis")
+    assert lesmis.page == "Les Misérables"                 # the wiki's, as ever
+    assert lesmis.translation.source == "standardebooks"
+    assert lesmis.as_dict()["source"] == "standardebooks"
 
 
 def test_the_english_side_is_fetched_from_the_library_that_holds_it():
@@ -197,11 +197,11 @@ def test_the_english_side_is_fetched_from_the_library_that_holds_it():
     def fetch(url):
         seen.append(url)
         return "<body><section epub:type='chapter' id='chapter-1'><p>%s</p></section></body>" % (
-            "It was at Megara, a suburb of Carthage, in the gardens of Hamilcar.")
+            "In 1815, M. Charles-François-Bienvenu Myriel was Bishop of D——")
 
     original, english, info = shelf.load_pages(
-        "fr", "Salammbô", "en", "/ebooks/gustave-flaubert/salammbo/j-s-chartres",
-        fetch=fetch, translation=shelf.by_slug("salammbo").translation)
+        "fr", "Les Misérables", "en", "/ebooks/victor-hugo/les-miserables/isabel-f-hapgood",
+        fetch=fetch, translation=shelf.by_slug("lesmis").translation)
     assert any("standardebooks.org" in u for u in seen)
     assert info["pub"]["shape"] == "standardebooks"
-    assert english[0].paragraphs[0].startswith("It was at Megara")
+    assert english[0].paragraphs[0].startswith("In 1815")
