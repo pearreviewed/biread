@@ -349,6 +349,8 @@ CI so it stops depending on anyone remembering.
 | A flat book with no second edition at all? | **The model is asked, and asked in the safest form there is.** Last resort, reached only where nothing free could work — `segment_like` is exact and costs nothing, so it always goes first. The text is cut into sentences, the model is shown them *numbered*, and it answers with the numbers that begin a paragraph. It therefore cannot rewrite a word even in principle: the same reasoning as glossing, one step further, where the model's text is thrown away after anchoring — here it never has any. A reply that is nonsense costs a badly placed break, never a sentence of Voltaire, and a window whose call fails is left unbroken while the rest of the book comes back. About a third of what translating the same book costs — **$0.06** on Balanced, $0.32 on Haiku, $0.96 on Sonnet for a book of Bovary's size. |
 | A book that numbers no chapters at all? | **Left as one section, because ascending is not a spine.** Nausea is a diary, and the bare-numeral pass read four chapters into it: the page numbers 99 and 146, and two lines reading `one.` — the tail of a sentence the PDF had wrapped alone onto a line. 1, 99, 146, 1 ascends, and ascending was the whole test. What that cost was not the headings but `trim_matter`, which dropped the 411 paragraphs standing before the first of them as front matter: a third of the book, deleted in silence, and differently on each side, so the reader opened on prose facing *nothing in this edition answers to it*. Three conditions now. A run must step by one oftener than not, since chapters are numbered without gaps — not always, because an extractor that loses one heading would otherwise break a real spine in two. A bare heading written in letters must be capitalized, since `One.` heads a chapter and `one.` ends a sentence and both read as 1. And under both of them, trimming refuses to drop a leading section worth more than a quarter of the file, because a title page and an introduction are small beside the book: the cost of falling back is an introduction left in and unmatched, and the cost of not is the book. Measured inert on every example — Bovary, Candide and Micromégas come out with the same chapters, numbers and paragraph counts on both sides. Bovary's published edition is what keeps the capitalization rule honest: Eleanor Marx heads her chapters *One*, *Two*, *Three*, bare and spelled out, and they are found exactly as before. |
 
+| One edition opens on an introduction and the other on the book? | **Cut, because the other edition says where the book begins.** Not a tidiness question: `_embedding_pivot` must place *every* published paragraph somewhere, so an introduction only one side carries is not left unmatched — it is poured over the opening pages. `trim_matter` cuts to the first numbered chapter, which is the right answer and no answer at all for a book that numbers nothing; Nausea is a diary, and thirty-one paragraphs of a critic's essay and an editors' note sat in front of it with nothing in the file to mark their end. `align.open_together` embeds each edition's own first page, finds where it lands in the other's opening stretch, and drops whatever stands in front of it — both directions, since either side may be the one carrying it, and neither where the two matches contradict each other. Bounded twice: only the first sixty paragraphs are searched, and the drop is held to the same quarter of the file trimming allows front matter, because one confident wrong match would otherwise take a short book whole. Runs before `recut` — a flat edition cut to a counterpart that still carries an introduction is cut wrong by the whole length of it — and in `sample_align`, so the page shown before paying is page one. Measured on the pair that prompted it: 31 dropped from the published side, 0 from the original, both editions opening on the same sentence and lining up paragraph for paragraph. Inert on Bovary and Micromégas; on Candide it takes seven paragraphs of Gutenberg notice and Modern Library title page, which is right. The align route only — the CLI's pivot path has chapter numbering and is untouched. |
+
 ## Reversals
 
 Recorded because the reasoning matters more than the outcome.
@@ -515,6 +517,19 @@ Recorded because the reasoning matters more than the outcome.
 - **An embedding run is priced only when OpenRouter lists the model.** The align
   route's cost gate shows a dollar figure when the rate is known and an honest
   token count when it is not, rather than a plausible cent.
+- **`open_together` has never met a real embedding model.** The rule that drops a
+  one-sided introduction was measured with a bag-of-words embedder, which is a
+  fair stand-in on same-language text (the pair that prompted it is one English
+  translation in two files) and no stand-in at all cross-lingual. Its fixtures
+  use the concept embedder, which proves the wiring. What is owed is one run on
+  a French/English pair with a real multilingual model, watching what it drops.
+- **The deployed site lags main by hand.** As of 2026-08-06 prod
+  (`vps-bab9636f.vps.ovh.net`) served engine wheel `02aba59a8` against a local
+  `0731760f4`, and a builder page 119 lines behind. Nothing deploys itself; the
+  prod bundle is whatever was last copied up. Diagnosing "it's broken on prod"
+  starts by fetching `/worker.js` and the wheel it names and diffing them against
+  the tree, because half of what looks like a live bug is a fix that never left
+  this machine.
 - **Now on GitHub.** LICENSE (MIT), CI (GitHub Actions), and CONTRIBUTING notes
   are in place; the repo has a remote (`origin`) and has been pushed, so CI now
   runs on real GitHub.
