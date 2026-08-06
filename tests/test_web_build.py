@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -160,10 +161,16 @@ def test_the_shelf_it_ships_names_a_book_that_exists():
         assert (build.BOOKS / entry["file"]).is_file(), f"{entry['file']} is missing"
 
 
-def a_wheel(tmp_path, engine: bytes) -> Path:
+def a_wheel(tmp_path, engine: bytes, when=(2026, 8, 6, 12, 0, 0)) -> Path:
+    """A wheel, as far as the stamping is concerned: a zip with an engine in it.
+
+    `when` is the moment the zip says its members were written, which is the one
+    thing that differs between two builds of identical source.
+    """
     tmp_path.mkdir(parents=True, exist_ok=True)
     path = tmp_path / "biread-0.1.0-py3-none-any.whl"
-    path.write_bytes(engine)
+    with zipfile.ZipFile(path, "w") as bundle:
+        bundle.writestr(zipfile.ZipInfo("biread/build.py", when), engine)
     return path
 
 
@@ -175,8 +182,17 @@ def test_a_changed_engine_arrives_under_a_changed_name(build, tmp_path):
     one = build.fingerprint(a_wheel(tmp_path / "a", b"import biread"))
     two = build.fingerprint(a_wheel(tmp_path / "b", b"import biread  # and recut"))
     assert one.name != two.name
-    again = build.fingerprint(a_wheel(tmp_path / "c", b"import biread"))
-    assert again.name == one.name, "the same engine is the same URL, and stays cached"
+
+
+def test_an_unchanged_engine_stays_where_it_is(build, tmp_path):
+    """Built twice from one source, the wheel is two different files — a zip
+    stamps the hour onto every member. Keyed on that, a rebuild would send every
+    reader after 300 KB to arrive where they already were, and the year-long
+    cache would be worth nothing."""
+    first = build.fingerprint(a_wheel(tmp_path / "a", b"import biread"))
+    later = build.fingerprint(
+        a_wheel(tmp_path / "b", b"import biread", when=(2026, 9, 1, 3, 30, 0)))
+    assert first.name == later.name
 
 
 def test_the_stamped_wheel_is_still_a_wheel_micropip_can_read(build, tmp_path):

@@ -14,6 +14,7 @@ import re
 import shutil
 import subprocess
 import sys
+import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -133,6 +134,23 @@ def gather_published(catalogue: dict) -> None:
         }
 
 
+def engine_hash(wheel: Path) -> str:
+    """What is *in* the wheel, not what the wheel's bytes happen to be.
+
+    A zip records the moment each member was written, so building the same
+    source twice gives two different files — and hashing those bytes would put
+    an unchanged engine at a new URL on every build, making every reader fetch
+    300 KB again to arrive where they already were. The contents are what a
+    cache should key on, so the contents are what is read.
+    """
+    digest = hashlib.sha256()
+    with zipfile.ZipFile(wheel) as bundle:
+        for name in sorted(bundle.namelist()):
+            digest.update(name.encode())
+            digest.update(bundle.read(name))
+    return digest.hexdigest()[:8]
+
+
 def fingerprint(wheel: Path) -> Path:
     """Rename the wheel after its own contents, and hand back the new path.
 
@@ -146,7 +164,7 @@ def fingerprint(wheel: Path) -> Path:
     cache understands — a different engine is a different URL, and the same
     engine is still free.
     """
-    digest = hashlib.sha256(wheel.read_bytes()).hexdigest()[:8]
+    digest = engine_hash(wheel)
     name, version, tags = wheel.name.split("-", 2)
     # It goes in the wheel's build tag, which PEP 427 requires to start with a
     # digit and a hash does not, hence the leading 0. Not in the version: that
