@@ -807,48 +807,73 @@ def open_together(
     the aligner then poured over Sartre's first pages, because the pivot must
     place every published paragraph somewhere.
 
-    What marks the boundary is the other edition. The paragraph answering to its
-    own first page is where this one's book starts; everything before that is
-    apparatus. Both directions, since either side may carry the introduction, and
-    nothing is dropped where the two openings do not clearly agree.
+    What marks the boundary is where the two editions first say the same thing.
+    Everything in front of that is carried by one side alone, whichever side that
+    is, and one-sided is the whole definition of apparatus here. Read against a
+    real multilingual model, La Nausée and its translation first agree on the
+    editors' note — three paragraphs into the French, thirty into the English,
+    which is Hayden Carruth's essay exactly.
+
+    Asking instead which paragraph answers to the *other edition's first page*
+    was the earlier rule, and it assumed one edition opens on the book. Both of
+    these open on apparatus: the probe was a title page on one side and an
+    introduction on the other, so it found nothing and dropped nothing, and the
+    reader met `GALLIMARD Au CASTOR` facing a paragraph of Existentialism.
     """
-    skip_pub = _where_the_book_starts(_opening(original), published, embed)
-    skip_orig = _where_the_book_starts(_opening(published), original, embed)
-    # Each edition cannot open inside the other's body. Both firing is a pair of
-    # matches that contradict each other, so neither is believed — a book left
-    # with its introduction reads; a book cut on a bad match does not.
-    if skip_orig and skip_pub:
-        skip_orig = skip_pub = 0
+    skip_orig, skip_pub = _where_they_first_agree(original, published, embed)
     return _drop_leading(original, skip_orig), _drop_leading(published, skip_pub), skip_orig, skip_pub
 
 
-def _opening(chapters: list[Chapter]) -> str:
-    """A book's first page as one probe. Truncated rather than counted in
-    paragraphs, so an edition that never broke into any is probed the same way."""
-    for chapter in chapters:
-        for paragraph in prose_only(chapter.paragraphs):
-            return paragraph[:OPENING_CHARS]
-    return ""
+def _head(chapters: list[Chapter]) -> tuple[list[str], list[str]]:
+    """An edition's paragraphs, and the opening stretch of them to search.
 
-
-def _where_the_book_starts(opening: str, chapters: list[Chapter], embed: Embed) -> int:
-    """How many of `chapters`' leading paragraphs stand in front of `opening`.
-
-    Bounded twice over. Only the first `OPENING_WINDOW` paragraphs are searched,
-    and what is dropped is held to the share `trim_matter` allows front matter —
-    otherwise one confident wrong match on a short book takes the book, and
-    Micromégas is thirty-four paragraphs long.
+    Each probe is truncated rather than counted in paragraphs, so an edition that
+    never broke into any is searched the same way as one that did.
     """
     body = [p for c in chapters for p in c.paragraphs]
-    head = body[:OPENING_WINDOW]
-    if not opening or len(head) < 2:
-        return 0
-    probe, window = embed([opening]), embed([p[:OPENING_CHARS] for p in head])
-    vec = _unit(probe[0])
-    scores = [sum(a * b for a, b in zip(vec, _unit(v))) for v in window]
-    at = max(range(len(scores)), key=scores.__getitem__)
-    if scores[at] - median(scores) < NEAREST_MARGIN:
-        return 0
+    return body, [p[:OPENING_CHARS] for p in body[:OPENING_WINDOW]]
+
+
+def _where_they_first_agree(
+    original: list[Chapter], published: list[Chapter], embed: Embed
+) -> tuple[int, int]:
+    """The first paragraph each edition has in common with the other.
+
+    The match has to be mutual — each side's best read of the other — because a
+    one-sided best is what an introduction full of the book's own themes produces
+    in quantity, and Carruth's essay discusses Roquentin by name for pages.
+    Mutual, it is two editions agreeing rather than one of them guessing.
+
+    Bounded exactly as before, and the bounds are what make a wrong answer
+    survivable. Only the first `OPENING_WINDOW` paragraphs are searched, so a
+    match found deep in the book is never acted on; and what is dropped is held
+    on each side to the share `trim_matter` allows front matter, so one confident
+    wrong match cannot take a short book whole — Micromégas is thirty-four
+    paragraphs long. Where nothing stands out against the window's own median,
+    nothing is dropped: a book left with its introduction reads, and a book cut
+    on a bad match does not.
+    """
+    orig_body, orig_head = _head(original)
+    pub_body, pub_head = _head(published)
+    if len(orig_head) < 2 or len(pub_head) < 2:
+        return 0, 0
+
+    orig_vecs = [_unit(v) for v in embed(orig_head)]
+    pub_vecs = [_unit(v) for v in embed(pub_head)]
+    grid = [[sum(a * b for a, b in zip(o, p)) for p in pub_vecs] for o in orig_vecs]
+    flat = [score for row in grid for score in row]
+    floor = median(flat) + NEAREST_MARGIN
+
+    best_for_pub = [max(range(len(grid)), key=lambda i: grid[i][j]) for j in range(len(pub_vecs))]
+    for i, row in enumerate(grid):
+        j = max(range(len(row)), key=row.__getitem__)
+        if row[j] >= floor and best_for_pub[j] == i:
+            return (_held(i, orig_body), _held(j, pub_body))
+    return 0, 0
+
+
+def _held(at: int, body: list[str]) -> int:
+    """A drop, or nothing if it would take more of the book than front matter is."""
     return at if sum(map(len, body[:at])) <= sum(map(len, body)) * MAX_FRONT_MATTER else 0
 
 
@@ -868,6 +893,21 @@ def _drop_leading(chapters: list[Chapter], count: int) -> list[Chapter]:
 #: How much of the French must find a numbered counterpart before the two
 #: editions are taken to be divided the same way.
 NUMBERING_AGREES = 0.8
+
+#: How many sections a side before an unnumbered division is worth pairing on.
+#: Both sides, and never one: a spine found in one edition and missed in the
+#: other would otherwise hand the whole of that edition to a single section and
+#: leave the rest of the book blank. Three is enough to be a division and few
+#: enough that a short book still gets the benefit.
+MIN_DIVIDED = 3
+
+#: How alike the two counts must be before the sections are paired one to one.
+#: `_pair_by_content` matches a section to at most one counterpart, so it is the
+#: right answer for two editions that divide the book comparably — Nausea's diary
+#: is 22 dates against 19 — and the wrong one where an edition merges, since six
+#: chapters against three merged ones strand half the book by construction. That
+#: case belongs to the whole-book path, which is many-to-one and can carry it.
+DIVISION_AGREES = 0.8
 
 
 def _chapter_gist(chapter: Chapter) -> str:
@@ -972,6 +1012,16 @@ def _chapter_pairs(
     number. Six French chapters against three merged English ones cover 50% paired
     this way, and 100% run whole — so where the numbering does not agree, the
     numbering is the thing to discard.
+
+    Discarding the numbering is not the same as discarding the division, and the
+    two were run together here. A book divided but unnumbered — a diary, where
+    the sections are dates — pairs on nothing, and fell all the way back to one
+    run of fifteen hundred paragraphs against another, which is the regime the
+    paragraph above says cannot be carried. Where both editions divide the book
+    into comparable counts and an embedder is on offer, the sections are paired
+    by what they are about, exactly as untrustworthy numbering is. Comparable is
+    the whole of the condition: the merged edition above is the case this must
+    not take back, and `DIVISION_AGREES` is what leaves it alone.
     """
     pairs = _pair_by_number(french, published)
     matched = sum(1 for _, pub in pairs if pub is not None)
@@ -981,6 +1031,10 @@ def _chapter_pairs(
         fr_vecs, pub_vecs = _chapter_vectors(french, published, embed)
         if _numbering_holds(published, pairs, fr_vecs, pub_vecs):
             return pairs
+        return _pair_by_content(french, published, fr_vecs, pub_vecs)
+    fewer, more = sorted((len(french), len(published)))
+    if embed is not None and fewer >= MIN_DIVIDED and fewer >= more * DIVISION_AGREES:
+        fr_vecs, pub_vecs = _chapter_vectors(french, published, embed)
         return _pair_by_content(french, published, fr_vecs, pub_vecs)
     return [(
         Chapter(None, None, [p for c in french for p in c.paragraphs]),

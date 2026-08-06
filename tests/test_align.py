@@ -410,3 +410,50 @@ def test_english_spread_over_several_french_paragraphs_is_counted_once():
 
 def test_a_report_with_no_published_side_measured_says_nothing_rather_than_zero():
     assert AlignmentReport(method="pivot", chapters_matched=True).placed_share is None
+
+
+# ---------- a book divided but unnumbered ----------
+
+def test_sections_with_no_numbers_are_paired_by_what_they_are_about():
+    """A diary has a spine and no numbers in it. Pairing on nothing, Nausea fell
+    all the way back to one run of fifteen hundred paragraphs against another —
+    the regime the whole-book path exists to avoid, not to serve."""
+    from biread.align import _chapter_pairs
+
+    words, embed = _concepts()
+    french = [Chapter(None, f"JEUDI {i}", [f"Le {fr} dort ici."]) for i, (fr, _) in enumerate(words)]
+    english = [Chapter(None, f"Thursday {i}", [f"The {en} sleeps here."])
+               for i, (_, en) in enumerate(words)]
+    pairs = _chapter_pairs(french, english, embed)
+    assert len(pairs) == len(french)
+    assert all(pub is not None for _, pub in pairs)
+
+    aligned, report = align_published(french, english, embed=embed)
+    assert report.coverage == 1.0
+    assert aligned[hash_text("Le chat dort ici.")] == "The cat sleeps here."
+
+
+def test_an_edition_that_divides_the_book_far_more_finely_still_runs_whole():
+    """The guard on the rule above. Pairing by content is one to one, so where
+    one edition merges, half the book is stranded by construction — that case
+    belongs to the whole-book path, which is many to one."""
+    from biread.align import _chapter_pairs
+
+    words, embed = _concepts()
+    french = [Chapter(None, f"JEUDI {i}", [f"Le {fr} dort ici."]) for i, (fr, _) in enumerate(words)]
+    merged = [Chapter(None, "Thursday", [f"The {en} sleeps here." for _, en in words[:3]]),
+              Chapter(None, "Friday", [f"The {en} sleeps here." for _, en in words[3:]])]
+    assert len(_chapter_pairs(french, merged, embed)) == 1
+    assert align_published(french, merged, embed=embed)[1].coverage == 1.0
+
+
+def test_a_spine_found_in_only_one_edition_does_not_blank_the_other():
+    # Sections against a single undivided chapter would hand the whole of that
+    # edition to one section and leave the rest of the book facing nothing.
+    from biread.align import _chapter_pairs
+
+    words, embed = _concepts()
+    french = [Chapter(None, f"JEUDI {i}", [f"Le {fr} dort ici."]) for i, (fr, _) in enumerate(words)]
+    whole = [Chapter(None, None, [f"The {en} sleeps here." for _, en in words])]
+    assert len(_chapter_pairs(french, whole, embed)) == 1
+    assert align_published(french, whole, embed=embed)[1].coverage == 1.0
