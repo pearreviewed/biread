@@ -406,3 +406,69 @@ def test_a_table_of_contents_does_not_become_the_book():
     numbered = [c for c in chapters if c.number]
     assert len(numbered) == 6
     assert all(c.paragraphs for c in numbered)
+
+
+# ---- a book divided by date rather than by number ----
+
+DIARY = (
+    "MONDAY, 29 JANUARY 1932\n\n"
+    "Something has happened to me, I can't doubt it any more. It came as an\n"
+    "illness does, not like an ordinary certainty.\n\n"
+    "TUESDAY, 30 JANUARY\n\n"
+    "Nothing new. I worked from nine till one in the library and made a\n"
+    "start on Rollebon's stay in Russia.\n\n"
+    "WEDNESDAY\n\n"
+    "I must not be afraid. There is a sunbeam on the paper napkin and a fly\n"
+    "is drawing in its legs.\n\n"
+    "THURSDAY\n\n"
+    "Four pages written, then a long moment of happiness. I must not think\n"
+    "too much about the value of history.\n"
+)
+
+
+def test_a_diary_is_divided_by_the_dates_it_is_kept_in():
+    """Nausea numbers nothing. Read as no spine at all it aligns as one run of
+    fifteen hundred paragraphs with nothing to pin it to."""
+    chapters, _ = clean(DIARY)
+    assert [c.title for c in chapters] == [
+        "MONDAY, 29 JANUARY 1932", "TUESDAY, 30 JANUARY", "WEDNESDAY", "THURSDAY",
+    ]
+    assert all(c.number is None and c.paragraphs for c in chapters)
+
+
+def test_prose_that_merely_mentions_a_day_is_not_a_heading():
+    """The French Nausea offers twenty wrapped lines carrying "dimanche" or
+    "samedi" mid-sentence — enough to sink the spine on shape alone. A heading is
+    set apart, with a blank line either side; a line inside a paragraph is not."""
+    mentions = DIARY.replace(
+        "is drawing in its legs.", "is drawing in its legs. It was a Sunday then,\nand the docks were shut."
+    )
+    chapters, _ = clean(mentions)
+    assert len(chapters) == 4
+
+
+def test_a_day_named_in_dialogue_is_not_a_heading():
+    # Both editions set a line of speech apart exactly as they set a heading.
+    # Nothing about the shape tells them apart; a heading is simply not spoken.
+    spoken = DIARY.replace("WEDNESDAY\n", "“You did. You told me Sunday.”\n")
+    assert [c.title for c in clean(spoken)[0] if c.title] == [
+        "MONDAY, 29 JANUARY 1932", "TUESDAY, 30 JANUARY", "THURSDAY",
+    ]
+
+
+def test_two_dates_are_too_few_to_be_a_spine():
+    # Two of anything is a coincidence. Three is the book saying how it is built.
+    chapters, _ = clean(DIARY.split("WEDNESDAY")[0])
+    assert len(chapters) == 1
+    assert chapters[0].title is None
+
+
+def test_a_numbered_book_is_never_read_as_a_diary():
+    # The dated pass is the last resort and stands down wherever a real spine was
+    # found, so a novel whose chapters happen to open on a weekday is untouched.
+    numbered = "\n\n".join(
+        f"CHAPITRE {to_roman(n)}\n\nDimanche, il sortit de bonne heure et marcha longtemps."
+        for n in range(1, 6)
+    )
+    chapters, _ = clean(numbered)
+    assert [c.number for c in chapters] == ["I", "II", "III", "IV", "V"]

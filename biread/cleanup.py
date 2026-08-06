@@ -62,10 +62,12 @@ PUBLICATION_DATE_RE = re.compile(r"^\(\s*\d{3,4}\s*\)$")
 # other arrows in an editor. Written U+2191.
 FOOTNOTE_MARK = "↑"
 
-# An inline reference: "il s'appelait Micromégas[1], nom qui convient…".
-# Anchored on a preceding non-space so that a paragraph which *is* a footnote —
-# "[1] From micros, small…" — keeps the marker that identifies it as one.
-FOOTNOTE_REF_RE = re.compile(r"(?<=\S)\[\d{1,3}\]")
+# An inline reference: "il s'appelait Micromégas[1], nom qui convient…", and
+# "…ce serait si [4]", which the French Nausea sets off with a space where
+# Micromégas glues it to the word. Anchored on *anything* preceding it rather
+# than on a non-space, so a paragraph which *is* a footnote — "[1] From micros,
+# small…" — still keeps at its head the marker that identifies it as one.
+FOOTNOTE_REF_RE = re.compile(r"(?<=.)\[\d{1,3}\]")
 FOOTNOTE_BODY_RE = re.compile(r"^\[\d{1,3}\]\s")
 # The heading word, then its number as any edition writes it: a roman numeral, an
 # integer, or a spelled-out ordinal — including a hyphenated one ("dix-septième",
@@ -405,12 +407,77 @@ def _numeral_headings(lines: list[str]) -> list[tuple[int, str]]:
     return run
 
 
+#: The days a diary is kept in. Two languages because that is what the corpus
+#: has and what a bilingual reader pairs; a third is another row.
+WEEKDAYS = frozenset({
+    "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche",
+    "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
+})
+
+#: How long a dated heading may run. Long enough for the ones that say more than
+#: the day — "JEUDI MATIN, À LA BIBLIOTHÈQUE.", "MERCREDI : Mon dernier jour à
+#: Bouville." — and far short of a sentence that merely mentions a Thursday.
+DATED_HEADING_MAX_LEN = 60
+
+WORD_RE = re.compile(r"[A-Za-zÀ-ÿ]+")
+
+#: A line that opens as speech. A day named inside dialogue is a character
+#: saying it — «— Toi, tu me l'as dit dimanche.», "You did. You told me Sunday."
+#: — and both editions of Nausea set such lines apart exactly as they set a
+#: heading, so nothing about their shape tells them apart. What tells them apart
+#: is that a heading is not spoken.
+SPOKEN_RE = re.compile(r"^[—–\"“«]")
+
+
+def _dated_headings(lines: list[str]) -> list[tuple[int, str]]:
+    """Headings for a book divided by date rather than by number.
+
+    A diary has a spine and no numbers in it. Nausea is the case: thirty-odd
+    entries headed `JEUDI.` in the French and `Thursday:` in the English, and
+    nothing else marking where one ends and the next begins. Read as no spine at
+    all, the novel aligns as a single run of fifteen hundred paragraphs with
+    nothing to pin it to; read as a spine, it pairs section against section like
+    any other book.
+
+    A day name is not enough on its own, and this is where saying so is not
+    academic: prose mentions Thursdays constantly, and the French Nausea offers
+    twenty wrapped lines carrying "dimanche" or "samedi" mid-sentence against
+    twenty-two real headings — enough to sink the spine on shape alone.
+
+    What separates them is that a heading is *set apart*: it stands as a block of
+    its own, a blank line either side of it, which a line in the middle of a
+    paragraph never does. That mark comes from the file rather than from us —
+    it is the compositor's, the same evidence `normalize._stands_alone` reads.
+    On top of it the usual company: the line is short, several of them run
+    through the book, and a chapter's worth of prose *begins* under each rather
+    than carrying on past it (`_opens_a_chapter`).
+    """
+    def alone(i: int) -> bool:
+        return ((i == 0 or not lines[i - 1].strip())
+                and (i + 1 >= len(lines) or not lines[i + 1].strip()))
+
+    candidates = [
+        (i, s)
+        for i, line in enumerate(lines)
+        if (s := line.strip()) and len(s) <= DATED_HEADING_MAX_LEN
+        and alone(i) and not SPOKEN_RE.match(s)
+        and any(word.lower() in WEEKDAYS for word in WORD_RE.findall(s))
+    ]
+    run = _with_text_under_them(candidates, lines)
+    if len(run) < 3 or not _opens_a_chapter(run, lines):
+        return []
+    return run
+
+
 def detect_chapters(text: str) -> tuple[list[Chapter], list[Removal]]:
     """Split cleaned text into chapters at their heading lines.
 
     Headings are "Chapitre/Chapter N" lines where an edition writes them out;
     where it marks a chapter with only a bare numeral, they are found by the
-    ascending run of those instead (`_numeral_headings`).
+    ascending run of those instead (`_numeral_headings`); and where it numbers
+    nothing but keeps a diary, by the dates it is kept in (`_dated_headings`).
+    A dated heading *is* its own title, where a numbered one names its title on
+    the line beneath.
 
     A file with no headings at all is valid input: everything comes back as one
     untitled chapter. Numbering need not be contiguous.
@@ -430,6 +497,8 @@ def detect_chapters(text: str) -> tuple[list[Chapter], list[Removal]]:
     headings = _spine(headings, lines) if len(headings) >= 2 else headings
     if len(headings) < 2:
         headings = _numeral_headings(lines) or headings
+    dated = _dated_headings(lines) if len(headings) < 2 else []
+    headings = dated or headings
 
     def section(start: int, end: int) -> list[list[str]]:
         blocks, r = _blocks("\n".join(lines[start:end]))
@@ -446,10 +515,14 @@ def detect_chapters(text: str) -> tuple[list[Chapter], list[Removal]]:
         chapters.append(Chapter(None, None, [" ".join(b) for b in preamble]))
 
     parts = _parts(headings)
-    for pos, (line_idx, number) in enumerate(headings):
+    for pos, (line_idx, token) in enumerate(headings):
         end = headings[pos + 1][0] if pos + 1 < len(headings) else len(lines)
-        title, body = _split_title(section(line_idx + 1, end))
-        chapters.append(Chapter(number, title, [" ".join(b) for b in body], parts[pos]))
+        blocks = section(line_idx + 1, end)
+        if dated:
+            chapters.append(Chapter(None, token, [" ".join(b) for b in blocks]))
+            continue
+        title, body = _split_title(blocks)
+        chapters.append(Chapter(token, title, [" ".join(b) for b in body], parts[pos]))
 
     return chapters, removed
 
