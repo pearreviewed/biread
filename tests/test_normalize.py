@@ -106,6 +106,39 @@ def test_a_long_file_that_did_break_is_still_left_alone():
     assert repair(broken, from_pdf=False)[0] == broken
 
 
+# The same accident from the other side: a PDF poured into Word that kept a
+# paragraph mark after every typeset line. One "paragraph" per line of type.
+PER_LINE = "\n\n".join([
+    "Le mieux serait d'ecrire les evenements au jour le jour. Tenir un journal",
+    "pour y voir clair, ne pas laisser echapper les nuances, les petits faits,",
+    "meme s'ils n'ont l'air de rien, et surtout les classer.",
+] * 40)
+
+
+def test_a_file_that_broke_after_every_line_is_rejoined():
+    """A book is not set in fifty-seven character paragraphs. Read as paragraphs
+    these align as fragments — the reader's English page was "The best thing
+    would be to write down events from day", cut mid sentence, over and over."""
+    text, removed = repair(PER_LINE, from_pdf=False)
+    assert any(r.kind == "Line breaks read as paragraph breaks" for r in removed)
+    assert len(text.split("\n\n")) == 40
+
+
+def test_paragraphs_that_are_genuinely_one_line_each_are_left_alone():
+    """The guard, and the case that nearly broke it: Micromégas arrives as a text
+    file whose every paragraph is one unwrapped line of 831 characters. Single
+    lines, and not typeset lines."""
+    whole = "\n\n".join([FUSED] * 40)
+    assert repair(whole, from_pdf=False)[0] == whole
+
+
+def test_a_handful_of_one_line_blocks_is_not_a_convention():
+    # Every book in the corpus has some — a heading, a line of dialogue. It takes
+    # near enough all of them before the blank lines stop meaning what they say.
+    mixed = "\n\n".join(([FUSED] + ["Oui."] * 3) * 10)
+    assert repair(mixed, from_pdf=False)[0] == mixed
+
+
 def test_nothing_is_split_where_the_next_line_continues_the_sentence():
     wrapped = "\n".join([
         "Il ne fut que médiocrement affligé d'être banni d'une cour qui",

@@ -124,11 +124,80 @@ def _never_broke(text: str) -> bool:
     a conversion that dropped the marks — a PDF flattened into Word loses every
     one of them — and the repair is a rescue rather than a guess.
     """
-    blocks = [b for b in re.split(r"\n\s*\n+", text.strip()) if b.strip()]
+    blocks = _blocks_of(text)
     if not blocks:
         return False
     lengths = sorted(len(b) for b in blocks)
     return lengths[len(lengths) // 2] > UNBROKEN_BLOCK
+
+
+def _blocks_of(text: str) -> list[str]:
+    return [b for b in re.split(r"\n\s*\n+", text.strip()) if b.strip()]
+
+
+#: What share of a file's blocks must be a single line before its blank lines are
+#: read as line breaks. Near enough all of them: every book in the corpus sits
+#: between 25% and 38%, and the conversion that prompted this sits at 100%.
+LINE_BLOCK_SHARE = 0.9
+
+#: How long such a block may run and still be a typeset line rather than a
+#: paragraph. A printed line is sixty characters and a paragraph is hundreds:
+#: Micromégas arrives as a text file whose every paragraph is one unwrapped line
+#: of 831 characters, which is the case this must not touch.
+LINE_BLOCK = 200
+
+#: Enough blocks to have a shape at all. Below this a file is a fragment and its
+#: proportions say nothing.
+ENOUGH_BLOCKS = 20
+
+#: How few of those lines may finish a sentence. Only a paragraph's last line
+#: closes, so a column of type closes about once per paragraph — the conversion
+#: that prompted this scores 27%, and the corpus, whose blocks really are
+#: paragraphs, scores 60% to 89%. The gate sits in the gap.
+LINE_BLOCK_CLOSES = 0.4
+
+
+def _broke_every_line(text: str) -> bool:
+    """Does this file put a paragraph break at the end of every *line*?
+
+    The mirror of `_never_broke`, and the same accident seen from the other side.
+    A PDF poured into Word comes back either with every paragraph mark gone or
+    with one after each typeset line — the reader who brought La Nausée as two
+    `.docx` files got one of each, the French flat as a single block of 443,298
+    characters and the English cut into 9,271 pieces averaging 57.
+
+    Neither file is describing itself. A book is not set in fifty-seven character
+    paragraphs, and a run of them all ending at the measure is a column of type,
+    not prose. Read as paragraphs they align as fragments: the reader's English
+    page was `The best thing would be to write down events from day`, cut mid
+    sentence, over and over.
+
+    Four marks have to agree, and the last is the one that decides. Nearly every
+    block is a single line; that line is a line long rather than a paragraph long,
+    which keeps out Micromégas — a text file whose every paragraph is one
+    unwrapped line of 831 characters; those lines run to the *full measure*; and
+    most of them **do not finish a sentence**.
+
+    The last two are `_unfuse_paragraphs`'s own reasoning read backwards. A line
+    stopping short of the measure stopped because its paragraph ended; these
+    neither stop short nor stop speaking, so they did not end paragraphs, and the
+    break after each of them was put there by something other than the author.
+    Only a paragraph's final line closes, so a column of type closes about once
+    per paragraph — the broken file scores 27%, and every book in the corpus,
+    whose blocks really are paragraphs, scores 60% to 89%.
+    """
+    blocks = _blocks_of(text)
+    if len(blocks) < ENOUGH_BLOCKS:
+        return False
+    singles = [b.strip() for b in blocks if "\n" not in b.strip()]
+    if len(singles) < len(blocks) * LINE_BLOCK_SHARE:
+        return False
+    lengths = sorted(len(s) for s in singles)
+    typical = lengths[len(lengths) // 2]
+    if not LINE_BLOCK >= typical >= _measure(text.split("\n")) * SHORT_LINE:
+        return False
+    closing = sum(1 for s in singles if CLOSED_RE.search(s))
+    return closing < len(singles) * LINE_BLOCK_CLOSES
 
 
 def _unfuse_paragraphs(lines: list[str]) -> tuple[list[str], int]:
@@ -297,8 +366,8 @@ def repair(raw: str, from_pdf: bool = False) -> tuple[str, list[Removal]]:
     """Raw extractor text -> (repaired text, what was repaired).
 
     `from_pdf` admits the repairs that only a PDF always needs; a file of any
-    format that never came apart into paragraphs gets them too — see
-    `_unfuse_paragraphs` and `_never_broke`.
+    format whose paragraphing was lost in conversion gets them too, whichever way
+    it was lost — see `_unfuse_paragraphs`, `_never_broke` and `_broke_every_line`.
     """
     removed: list[Removal] = []
 
@@ -313,6 +382,19 @@ def repair(raw: str, from_pdf: bool = False) -> tuple[str, list[Removal]]:
         removed.append(Removal("Page marker", f"{marks} removed, e.g. “{first.group().strip()}”"))
 
     lines = text.split("\n")
+
+    # Before anything reads the blank lines as boundaries: where they fall after
+    # every typeset line they are line breaks, and taking them out leaves
+    # ordinary hard-wrapped text for the rest of this to repair.
+    line_broken = _broke_every_line(text)
+    if line_broken:
+        was = len(_blocks_of(text))
+        lines = [line for line in lines if line.strip()]
+        removed.append(Removal(
+            "Line breaks read as paragraph breaks",
+            f"{was} one-line blocks rejoined; the file marked every line, not every paragraph",
+        ))
+
     mark = _indent_mark(lines)
     lines, joined = _rejoin_split_headings(lines)
     if joined:
@@ -329,7 +411,7 @@ def repair(raw: str, from_pdf: bool = False) -> tuple[str, list[Removal]]:
                 "Paragraph indent read",
                 f"{marked} paragraph(s) marked by an indent, at column {mark} and beyond",
             ))
-    elif from_pdf or _never_broke(text):
+    elif from_pdf or line_broken or _never_broke(text):
         lines, split = _unfuse_paragraphs(lines)
         if split:
             removed.append(Removal(
