@@ -315,17 +315,17 @@
   .leaf .waiting { color: rgba(51,42,28,.34); }
   .caret { display: inline-block; width: 7px; height: 11px; margin-left: 2px; vertical-align: -1px; background: rgba(51,42,28,.45); animation: blink 1.1s step-end infinite; }
   @keyframes blink { 50% { opacity: 0; } }
-  /* An invitation laid across the open blank spread, so the book keeps its shape
-     while there is nothing on its pages yet. */
-  .empty { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; text-align: center; padding: 22px 26px; }
-  .empty p { margin: 0; font-size: 12.5px; color: var(--page-muted); max-width: 46ch; }
+  /* An invitation laid on the open blank spread, so the book keeps its shape
+     while there is nothing on its pages yet. Nothing sits on the fold: the
+     sentence keeps to the left page and what it asks for to the right, each
+     clear of the gutter, because type printed across a binding is the one
+     thing a real book never does. */
+  .empty { position: absolute; inset: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 1px; text-align: center; }
+  .empty .side { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 46px 30px 24px; }
+  .empty p { margin: 0; font-size: 12.5px; color: var(--page-muted); max-width: 30ch; }
   .empty .ghost { color: var(--page-ink); border-color: var(--page-edge); background: rgba(255,255,255,.5); }
   .empty .ghost:hover:not(:disabled) { background: #fff; border-color: var(--page-ink); }
   .empty .ghost:disabled { opacity: .4; cursor: default; }
-  /* Lines the page itself bends: each one is rebuilt a glyph at a time so it can
-     sag into the gutter the way type does on paper. See bend(). */
-  .bent .ln { display: block; white-space: pre; }
-  .bent .ln > span { display: inline-block; }
   .gate { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; margin-top: 8px; padding-top: 18px; border-top: 1px solid var(--rule); }
   .gate .fig { display: flex; align-items: baseline; gap: 9px; }
   .gate .fig b { font-size: 26px; color: var(--ink); font-variant-numeric: tabular-nums; }
@@ -375,8 +375,14 @@
   @media (max-width: 560px) {
     .cards { grid-template-columns: minmax(0, 1fr); }
     .spread { grid-template-columns: 1fr; }
-    .empty p { max-width: 34ch; }   /* no fold to reach across once the pages stack */
+    /* No fold to keep off once the pages stack, so the two halves stack too —
+       one to a page, and the pages are held open far enough to take them,
+       or the invitation lands on top of the running heads. */
+    .empty { grid-template-columns: 1fr; grid-auto-rows: 1fr; }
+    .empty p { max-width: 34ch; }
+    .empty .side { padding: 40px 22px 16px; }
     .leaf { min-height: 0; }
+    .spread:has(.empty) .leaf { min-height: 132px; }
     .leaf.r { box-shadow: none; }
     .gate { flex-direction: column; align-items: stretch; }
     .gate .solid { width: 100%; }
@@ -1541,85 +1547,20 @@ function paintProofEmpty() {
   $("proof-l").innerHTML = ""; $("proof-r").innerHTML = "";
   $("proof-l-folio").textContent = ""; $("proof-r-folio").textContent = "";
   const box = el("div", "empty");
-  const line = el("p", null, !haveBook() ? "Choose a book first."
+  const left = el("div", "side"), right = el("div", "side");
+  left.appendChild(el("p", null, !haveBook() ? "Choose a book first."
     : S.route === "shelf" ? "See one page of the two editions set side by side before you commit to the whole book."
     : aligning() ? "See one page of your edition set beside the original before you commit to the whole book."
-    : "See one page in " + langName() + ", in the model's own prose, before you commit to the whole book.");
+    : "See one page in " + langName() + ", in the model's own prose, before you commit to the whole book."));
   const go = el("button", "ghost", aligning() ? "Match one page" : "Translate one page");
   go.disabled = !(S.ready && haveBook() && hasKey() && !S.busy);
   go.addEventListener("click", () => takeSample(0));
-  box.appendChild(line); box.appendChild(go);
-  if (!S.local) box.appendChild(el("p", null, "A fraction of a cent, on your key."));
+  right.appendChild(go);
+  if (!S.local) right.appendChild(el("p", null, "A fraction of a cent, on your key."));
+  box.appendChild(left); box.appendChild(right);
   $("proof-spread").appendChild(box);
   leafTitles();
-  bendEmpty(box);
   $("proof-note").textContent = "";
-}
-/* --- the bend -----------------------------------------------------------
-   Nothing here can sit on the fold and stay flat: on paper the sheet turns
-   into the gutter, and the type turns with it. The invitation keeps its
-   width across the spread and is laid on that curve instead — sagging at
-   the fold, flat again by the outer thirds, each glyph on the tangent. */
-const SAG = 12, REACH = .75;                // px at the fold, over what share of a page
-function sagAt(dx, half) {
-  const t = 1 - Math.abs(dx) / (half * REACH);
-  // Eased at both ends: a valley with a point in it steps between the words
-  // that sit either side of the fold.
-  return t <= 0 ? 0 : SAG * t * t * (3 - 2 * t);
-}
-// The curve is measured, so a resized spread has to be laid on it again.
-let reBend;
-addEventListener("resize", () => {
-  clearTimeout(reBend);
-  reBend = setTimeout(() => { if (!S.sample && $("proof-spread").querySelector(".empty")) paintProofEmpty(); }, 120);
-});
-function bendEmpty(box) {
-  if (matchMedia("(max-width: 560px)").matches) return;   // stacked pages have no fold
-  const spread = $("proof-spread").getBoundingClientRect();
-  const fold = spread.left + spread.width / 2, half = spread.width / 2;
-  if (!half) return;
-  for (const node of box.children) {
-    if (node.tagName === "P") bend(node, fold, half);
-    else node.style.transform = "translateY(" + sagAt(0, half).toFixed(2) + "px)";
-  }
-}
-// The lines the browser chose, read back off the text node before it is replaced.
-function lines(host) {
-  const node = host.firstChild;
-  if (!node || node.nodeType !== 3) return [];
-  const s = node.data, r = document.createRange(), out = [];
-  let start = 0, top = null;
-  for (let i = 0; i < s.length; i++) {
-    r.setStart(node, i); r.setEnd(node, i + 1);
-    const b = r.getBoundingClientRect();
-    if (!b.width && !b.height) continue;
-    if (top === null) top = b.top;
-    else if (b.top > top + 1) { out.push(s.slice(start, i)); start = i; top = b.top; }
-  }
-  out.push(s.slice(start));
-  return out.map(t => t.trim()).filter(Boolean);
-}
-function bend(host, fold, half) {
-  const rows = lines(host);
-  if (!rows.length) return;
-  host.textContent = "";
-  host.classList.add("bent");
-  rows.forEach((row, i) => {
-    if (i) host.appendChild(document.createTextNode(" "));
-    const line = el("span", "ln");
-    // A word at a time, never a letter at a time: a letter of its own loses the
-    // pair-kerning the face is cut with, and the line reads loose before it
-    // reads bent.
-    row.split(" ").forEach((word, w, all) => line.appendChild(el("span", null, w < all.length - 1 ? word + " " : word)));
-    host.appendChild(line);
-  });
-  const words = [...host.querySelectorAll(".ln > span")];
-  const mid = words.map(g => { const b = g.getBoundingClientRect(); return b.left + b.width / 2 - fold; });
-  words.forEach((g, i) => {
-    const slope = (sagAt(mid[i] + 3, half) - sagAt(mid[i] - 3, half)) / 6;
-    g.style.transform = "translateY(" + sagAt(mid[i], half).toFixed(2) + "px) rotate("
-      + (Math.atan(slope) * 180 / Math.PI).toFixed(2) + "deg)";
-  });
 }
 function paintProof() {
   leafTitles();
@@ -1648,7 +1589,11 @@ function takeSample(index) {
   S.sampleIndex = index;
   clearEmpty();
   $("proof-l").innerHTML = ""; $("proof-r").innerHTML = "";
-  $("proof-spread").appendChild(el("div", "empty", aligning() ? "Reading both editions…" : "Translating a page…"));
+  // Waiting keeps to the left page, where the sentence that asked for it stood.
+  const wait = el("div", "empty"), side = el("div", "side");
+  side.appendChild(el("p", null, aligning() ? "Reading both editions…" : "Translating a page…"));
+  wait.appendChild(side); wait.appendChild(el("div", "side"));
+  $("proof-spread").appendChild(wait);
   alert_("settings-alert", "");
   const model = chosenModel();
   const price = S.local ? [0, 0] : S.prices[model.id] || [0, 0];

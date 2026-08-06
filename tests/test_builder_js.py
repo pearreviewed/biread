@@ -252,6 +252,23 @@ def test_a_page_is_never_bought_without_being_asked_for(page):
     assert "fraction of a cent" in text(page, ".empty")
 
 
+def test_the_invitation_keeps_off_the_fold(page):
+    """Type printed across a binding is the one thing a real book never does.
+
+    The sentence keeps to the left page and what it asks for to the right, so
+    both pages carry something and neither crosses the gutter.
+    """
+    to_settings(page)
+    spread = page.eval_on_selector("#proof-spread", "e => e.getBoundingClientRect().toJSON()")
+    fold = spread["x"] + spread["width"] / 2
+    sides = {"left": 0, "right": 0}
+    for box in page.eval_on_selector_all(
+            ".empty p, .empty .ghost", "ns => ns.map(n => n.getBoundingClientRect().toJSON())"):
+        assert box["x"] >= fold or box["x"] + box["width"] <= fold, "it sits on the fold"
+        sides["right" if box["x"] >= fold else "left"] += 1
+    assert sides["left"] and sides["right"]
+
+
 def test_reading_a_page_fills_the_spread_and_offers_the_next(page):
     to_settings(page)
     page.click(".empty .ghost")
