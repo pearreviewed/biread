@@ -533,9 +533,26 @@ def trim_matter(chapters: list[Chapter]) -> list[Chapter]:
     than on "Produced by …".
     """
     numbered = [i for i, c in enumerate(chapters) if chapter_number(c.number) is not None]
-    if not numbered:
+    if not numbered or _too_much_to_be_front_matter(chapters[: numbered[0]], chapters):
         return _strip_leading_matter(chapters)
     return _strip_trailing_matter(chapters[numbered[0] : numbered[-1] + 1])
+
+
+#: A title page, a contents list and a critic's introduction are small beside the
+#: book. Where what stands before the first numbered chapter is a quarter of the
+#: file, the heading was not a chapter's: Nausea, which numbers nothing, was read
+#: as starting at a page number a third of the way in, and trimming to it deleted
+#: the opening of the book without a word. Falling back costs an introduction left
+#: in, which the aligner leaves unmatched; the alternative loses the book.
+MAX_FRONT_MATTER = 0.25
+
+
+def _weigh(chapters: list[Chapter]) -> int:
+    return sum(len(p) for c in chapters for p in c.paragraphs)
+
+
+def _too_much_to_be_front_matter(head: list[Chapter], book: list[Chapter]) -> bool:
+    return _weigh(head) > _weigh(book) * MAX_FRONT_MATTER
 
 
 def _key(chapter: Chapter) -> tuple[int | None, int | None]:

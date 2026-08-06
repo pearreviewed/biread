@@ -10,17 +10,40 @@ from biread.cleanup import Chapter, clean
 from biread.errors import ExtractError
 from biread.translate import hash_text
 
+# Long enough to be a book rather than a sample of one: an introduction is a
+# minority of any real file, and trimming now refuses to drop a leading section
+# that outweighs the text — so a two-sentence book would test the wrong thing.
 FRENCH = """CHAPITRE premier
 
 Comment Candide fut eleve.
 
 Il y avait en Westphalie un jeune garcon a qui la nature avait donne les moeurs les plus douces.
 
+Le baron etait un des plus puissants seigneurs de la province, car son chateau avait une porte et des fenetres.
+
+Pangloss enseignait la metaphysico-theologo-cosmolonigologie, et prouvait que tout est au mieux.
+
+Il prouvait admirablement qu'il n'y a point d'effet sans cause, et que tout est fait pour une fin.
+
+Cunegonde, agee de dix-sept ans, etait haute en couleur, fraiche, grasse et fort appetissante.
+
+Un jour Cunegonde rencontra Candide en revenant au chateau, et tous deux rougirent beaucoup.
+
 CHAPITRE second
 
 Ce que devint Candide.
 
 Candide chasse du paradis terrestre marcha longtemps sans savoir ou aller.
+
+Il se coucha sans souper au milieu des champs, et la neige tombait a gros flocons.
+
+Deux hommes habilles de bleu le remarquerent et le prierent a diner fort civilement.
+
+Candide leur dit avec une modestie charmante qu'il leur faisait beaucoup d'honneur.
+
+On le mena dans un cachot, et on lui demanda s'il aimait mieux etre fustige ou fusille.
+
+Il choisit, en vertu du don de Dieu qu'on nomme liberte, de passer par les baguettes.
 """
 
 # The same book — but this edition opens with a publisher's notice and a long
@@ -39,11 +62,31 @@ How Candide was brought up.
 
 There lived in Westphalia a young lad on whom nature had bestowed the gentlest of manners.
 
+The baron was one of the most powerful lords of the province, for his castle had a door and windows.
+
+Pangloss taught metaphysico-theologo-cosmolonigology, and proved that all is for the best.
+
+He proved admirably that there is no effect without a cause, and that all is made to an end.
+
+Cunegonde, aged seventeen, was of a high colour, fresh, plump, and very appetising indeed.
+
+One day Cunegonde met Candide on her way back to the castle, and they both blushed a great deal.
+
 CHAPTER II
 
 What became of Candide.
 
 Candide, driven out of the earthly paradise, walked a long while without knowing where.
+
+He lay down supperless in the middle of the fields, and the snow fell in great flakes.
+
+Two men dressed in blue noticed him and invited him to dinner most civilly.
+
+Candide told them with a charming modesty that they did him a great deal of honour.
+
+He was led into a dungeon, and asked whether he would rather be flogged or shot.
+
+He chose, in virtue of the gift of God called liberty, to run the gauntlet.
 """
 
 
@@ -65,6 +108,20 @@ def test_trim_drops_the_matter_that_brackets_a_book():
     chapters, _ = clean(ENGLISH)
     assert chapters[0].number is None  # the notice and the introduction
     assert [c.number for c in trim_matter(chapters)] == ["I", "II"]
+
+
+def test_a_leading_section_larger_than_the_book_is_not_front_matter():
+    # The safety net under chapter detection: where a false heading is found part
+    # way into a book, trimming to it would delete everything before it in
+    # silence. A title page and an introduction are small beside the book, so a
+    # "front matter" outweighing the text is a heading that was never a chapter's.
+    opening = [f"The book opens, and goes on for a while: paragraph {i}." for i in range(20)]
+    chapters = [
+        Chapter(None, None, opening),
+        Chapter("1", None, ["A short section that follows it."]),
+        Chapter("2", None, ["And a second short section."]),
+    ]
+    assert [c.number for c in trim_matter(chapters)] == [None, "1", "2"]
 
 
 def test_trim_drops_a_trailing_bibliography():
@@ -106,9 +163,8 @@ def test_a_one_sided_introduction_does_not_shift_the_book():
     english, _ = clean(ENGLISH)
     aligned, report = align_published(french, english, None)
 
-    body = [p for chapter in french for p in chapter.paragraphs]
-    assert "Westphalia" in aligned[hash_text(body[0])]
-    assert "earthly paradise" in aligned[hash_text(body[1])]
+    assert "Westphalia" in aligned[hash_text(french[0].paragraphs[0])]
+    assert "earthly paradise" in aligned[hash_text(french[1].paragraphs[0])]
     assert report.chapters_matched
     assert not any("essay" in text or "Produced by" in text for text in aligned.values())
 
@@ -234,7 +290,7 @@ def test_coverage_is_reported_and_high_when_editions_line_up():
     french, _ = clean(FRENCH)
     english, _ = clean(ENGLISH)
     _, report = align_published(french, english, None)
-    assert report.total == 2
+    assert report.total == 12
     assert report.coverage == 1.0
     assert not report.degraded
 
