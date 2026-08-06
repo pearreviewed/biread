@@ -91,3 +91,41 @@ def test_an_unreadable_pdf_reports_no_pages(tmp_path):
     path = tmp_path / "book.pdf"
     path.write_bytes(b"not really a PDF")
     assert describe(path).pages is None
+
+
+def make_pdf(path: Path, **info) -> None:
+    """A one-page PDF carrying whatever document information the test needs."""
+    from pypdf import PdfWriter
+
+    writer = PdfWriter()
+    writer.add_blank_page(width=200, height=200)
+    writer.add_metadata({f"/{k}": v for k, v in info.items()})
+    with path.open("wb") as handle:
+        writer.write(handle)
+
+
+def test_pdf_metadata_is_read_from_the_document_information(tmp_path):
+    # The same principle as the EPUB's OPF in the other format's vocabulary, and
+    # it was simply not being read: the reader was headed with the word "book".
+    path = tmp_path / "book.pdf"
+    make_pdf(path, Title="La Nausée", Author="Jean-Paul Sartre")
+    info = describe(path)
+    assert (info.title, info.author) == ("La Nausée", "Jean-Paul Sartre")
+
+
+def test_a_title_that_is_a_filename_is_the_converter_talking(tmp_path):
+    """"Jean-Paul Sartre - Nausea.rtf" is the document Acrobat was pointed at. A
+    filename is not a title any more than it is an author."""
+    path = tmp_path / "book.pdf"
+    make_pdf(path, Title="Jean-Paul Sartre - Nausea.rtf", Author="Kenneth")
+    info = describe(path)
+    assert info.title is None
+    assert info.author == "Kenneth"
+
+
+def test_a_pdf_that_says_nothing_about_itself_claims_nothing(tmp_path):
+    path = tmp_path / "book.pdf"
+    make_pdf(path, Title="   ")
+    info = describe(path)
+    assert (info.title, info.author) == (None, None)
+    assert info.pages == 1
