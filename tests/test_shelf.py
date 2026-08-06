@@ -70,7 +70,11 @@ def catalogue_filters(books):
 def test_the_filters_that_are_offered_agree_with_the_books():
     got = {f["key"]: f["slugs"] for f in shelf.catalogue()["filters"]}
     assert got["read"] == ["candide", "bovary", "lesmis", "notredame"]
-    assert "80days" in got["several"] and "80days" not in got["whole"]
+    assert "80days" in got["several"]
+    # Abridgement is a fact about one translation, not about a book, so it is
+    # marked on the card and is not a filter: 80 Days is abridged in Towle and
+    # whole in the 1911, and a pill can only say one of those.
+    assert "whole" not in got
 
 
 def test_a_card_says_only_what_the_wiki_says():

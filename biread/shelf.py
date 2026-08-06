@@ -266,9 +266,14 @@ def search(query: str, books: tuple[Book, ...] = SHELF) -> list[Book]:
 # The filters a shelf of this size can honestly offer. One that would match every
 # book, or none, is not a filter; the page drops those rather than showing a
 # control that does nothing.
+#
+# There was a "Nothing abridged" here and it is gone. It hid exactly one book,
+# and it hid the wrong thing about it: it judged only the default translation,
+# so 80 Days disappeared although the unabridged 1911 edition of it is on the
+# card and choosable. The fact keeps its place on the card, where it is about a
+# translation and not about a book.
 FILTERS: dict[str, str] = {
     "read": "Read through",
-    "whole": "Nothing abridged",
     "several": "More than one translation",
     "quick": "Builds in under ten minutes",
 }
@@ -277,8 +282,6 @@ FILTERS: dict[str, str] = {
 def matches(book: Book, key: str) -> bool:
     if key == "read":
         return book.read_through
-    if key == "whole":
-        return not book.translation.abridged
     if key == "several":
         return len(book.translations) > 1
     if key == "quick":
