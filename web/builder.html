@@ -1780,14 +1780,14 @@ function paintPrice() {
     const known = [reading, glosses].filter((v) => v != null);
     $("fig").textContent = known.length ? money(known.reduce((a, b) => a + b, 0)) : embedTokens().toLocaleString();
     // The figure claims only what it actually covers: with no rate for the
-    // embedding model, the reading is not in it and must not look like it is.
+    // embedding model, the matching is not in it and must not look like it is.
     $("fig-of").textContent = !known.length ? "tokens to read"
-      : reading == null ? "the glosses — the reading is on top" : "the whole book";
+      : reading == null ? "the glosses only" : "the whole book";
     const parts = ["Both editions read once by " + (model || "an embedding model")
       + (reading == null ? "" : " (" + money(reading) + ")")];
     if (glosses != null) parts.push("glosses (" + money(glosses) + ")");
     $("fig-detail").textContent = parts.join(" plus ") + ", charged to your key."
-      + (reading == null ? " The reading is priced at your provider's embedding rate — typically a cent or two a book." : "");
+      + (reading == null ? " Matching the two editions is priced at your provider's embedding rate — typically a cent or two a book." : "");
     return;
   }
   const weighed = measured();

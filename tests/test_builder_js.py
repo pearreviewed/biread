@@ -232,8 +232,8 @@ def test_the_aligned_gate_does_not_claim_the_reading_it_cannot_price(page):
     page.wait_for_timeout(300)
     # No OpenRouter rate is known for the embedding model in a test, so the figure
     # covers the glosses alone and must say so rather than read as the whole bill.
-    assert "reading is on top" in text(page, "#fig-of")
-    assert "embedding rate" in text(page, "#fig-detail")
+    assert "glosses only" in text(page, "#fig-of")
+    assert "Matching the two editions is priced" in text(page, "#fig-detail")
 
 
 def test_the_build_button_waits_for_a_key(page):
