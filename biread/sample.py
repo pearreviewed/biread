@@ -21,7 +21,13 @@ from .gloss import gloss_book
 from .llm import LLMClient
 from .translate import hash_text, translate_book
 
-PAGE_PARAGRAPHS = 3  # a page's worth of prose
+#: About a page of prose. Measured in characters rather than paragraphs, because
+#: a fixed three made a page mean whatever the book's paragraphs happened to be:
+#: three of Voltaire's is a page and three of Sartre's is a metre of screen — and
+#: the price is scaled off however much prose that turned out to be. Whole
+#: paragraphs still, so the sample is something a model can translate and an
+#: aligner can match.
+PAGE_CHARS = 1400
 
 
 @dataclass
@@ -34,9 +40,20 @@ class SamplePage:
 
 
 def pages(chapters: list[Chapter]) -> list[list[str]]:
-    """Body paragraphs sliced into pages of PAGE_PARAGRAPHS."""
-    body = [p for chapter in chapters for p in chapter.paragraphs]
-    return [body[at : at + PAGE_PARAGRAPHS] for at in range(0, len(body), PAGE_PARAGRAPHS)]
+    """Body paragraphs gathered into pages of about `PAGE_CHARS`, never fewer than
+    one — a paragraph longer than a page is still a page."""
+    out: list[list[str]] = []
+    page: list[str] = []
+    size = 0
+    for paragraph in (p for chapter in chapters for p in chapter.paragraphs):
+        if page and size + len(paragraph) > PAGE_CHARS:
+            out.append(page)
+            page, size = [], 0
+        page.append(paragraph)
+        size += len(paragraph)
+    if page:
+        out.append(page)
+    return out
 
 
 def sample_translate(
@@ -91,7 +108,9 @@ def sample_align(
         index=index,
         total=total,
         source=source,
-        target=embed_nearest(source, _window(published, index, total, window), embed),
+        target=embed_nearest(
+            source, _window(published, index, total, window, len(source)), embed
+        ),
         cost=None,
     )
 
@@ -138,12 +157,15 @@ def _page(chapters: list[Chapter], label: str, index: int) -> tuple[int, int, li
     return index, len(every), every[index]
 
 
-def _window(published: list[str], index: int, total: int, window: int) -> list[str]:
+def _window(
+    published: list[str], index: int, total: int, window: int, page: int
+) -> list[str]:
     """The stretch of the published edition the page's counterpart lies in.
 
     Two editions of a book run in the same order, so a page a third of the way
     through one is about a third of the way through the other; `window`
-    paragraphs either side absorbs how differently they divide their text.
+    paragraphs either side absorbs how differently they divide their text, and
+    `page` is however many paragraphs this page turned out to be.
     """
     at = round(index / total * len(published))
-    return published[max(at - window, 0) : at + PAGE_PARAGRAPHS + window]
+    return published[max(at - window, 0) : at + page + window]

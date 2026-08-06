@@ -309,7 +309,7 @@
   .leaf.l { box-shadow: inset -16px 0 26px -22px var(--page-edge); }
   .leaf.r { box-shadow: inset 16px 0 26px -22px var(--page-edge); }
   .leaf .head { display: flex; flex-direction: column; gap: 7px; }
-  .leaf .head i { font: italic 10.5px/1.3 'Charis SIL', Charter, Georgia, serif; letter-spacing: .04em; color: var(--page-muted); text-align: center; }
+  .leaf .head i { font: italic 10.5px/1.3 'Charis SIL', Charter, Georgia, serif; letter-spacing: .04em; color: var(--page-muted); text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .leaf .head .rule { height: 1px; background: var(--page-edge); opacity: .5; }
   .leaf p { margin: 0; font-size: 11.5px; line-height: 1.68; color: var(--page-ink); }
   .leaf .folio { margin-top: auto; padding-top: 14px; font: italic 10px/1 'Charis SIL', Charter, Georgia, serif; color: var(--page-muted); text-align: center; }
@@ -1604,14 +1604,20 @@ function enterSettings() {
 }
 
 /* --- the proof spread ---------------------------------------------------- */
-// A running head carries what the edition says about itself, never the filename
-// it happened to be saved under.
+// A running head carries what the edition says about itself; where it says
+// nothing, the name of the file the reader chose. "the original" was the old
+// fallback and it is a claim about language the align route cannot make — a
+// reader who brings two English editions of a French novel was told the one on
+// the left was the original, in English. A filename claims nothing except which
+// of your two files this is, which is the whole question a heading answers here.
 function leafTitles() {
   const orig = S.info.orig || {};
   const pub = S.info.pub || {};
-  $("proof-l-title").textContent = [orig.title, orig.language].filter(Boolean).join(" · ") || "the original";
+  $("proof-l-title").textContent = [orig.title, orig.language].filter(Boolean).join(" · ")
+    || (S.orig && S.orig.name) || "the book";
   $("proof-r-title").textContent = aligning()
-    ? [pub.title, pub.author && "tr. " + pub.author].filter(Boolean).join(" · ") || "the edition you brought"
+    ? [pub.title, pub.author && "tr. " + pub.author].filter(Boolean).join(" · ")
+      || (S.pub && S.pub.name) || "the edition you brought"
     : langName();
 }
 function langName() {
@@ -1663,11 +1669,19 @@ function paintProof() {
   if (!S.sample || S.busy === "sample") return paintProofEmpty();
   clearEmpty();
   const s = S.sample;
-  for (const [box, lines] of [[$("proof-l"), s.source], [$("proof-r"), s.target]]) {
+  // Said once, at the head of the column, however many paragraphs it is true of:
+  // the same sentence against each of them read as three faults rather than one
+  // page, and its closing dash fell to a line of its own every time.
+  for (const [box, lines, brought] of [[$("proof-l"), s.source, false], [$("proof-r"), s.target, true]]) {
     box.innerHTML = "";
+    const blank = lines.filter((text) => !text).length;
+    if (brought && blank) {
+      box.appendChild(el("p", "waiting", blank === lines.length
+        ? "Nothing in this edition answers to this page."
+        : "Nothing in this edition answers to part of this page."));
+    }
     lines.forEach((text, i) => {
-      const p = el("p", text ? null : "waiting", text || "— nothing in this edition answers to it —");
-      box.appendChild(p);
+      box.appendChild(el("p", null, text || ""));
       if (i < lines.length - 1) box.appendChild(el("div", null, ""));
     });
   }

@@ -2,15 +2,20 @@ import pytest
 
 from biread.cleanup import Chapter
 from biread.errors import ExtractError
-from biread.sample import PAGE_PARAGRAPHS, pages, sample_align, sample_translate
+from biread.sample import PAGE_CHARS, pages, sample_align, sample_translate
 
 
 def chapter(number, paragraphs):
     return Chapter(number, f"Titre {number}", paragraphs)
 
 
+#: Half a page each, so a page is two of them and the arithmetic below reads.
+def para(i):
+    return f"Paragraphe {i}." + " mot" * 170
+
+
 def numbered(count):
-    return [chapter("I", [f"Paragraphe {i}." for i in range(count)])]
+    return [chapter("I", [para(i) for i in range(count)])]
 
 
 # A fake multilingual embedder, as in test_align: a concept maps to a fixed
@@ -34,21 +39,27 @@ def embed(texts):
 
 # ---- slicing ----
 
-def test_pages_slices_the_body_into_page_sized_runs():
-    assert pages(numbered(7)) == [
-        ["Paragraphe 0.", "Paragraphe 1.", "Paragraphe 2."],
-        ["Paragraphe 3.", "Paragraphe 4.", "Paragraphe 5."],
-        ["Paragraphe 6."],
-    ]
+def test_pages_fill_to_about_a_page_of_prose():
+    # Short paragraphs: many to a page, and each page stops at the first that
+    # would take it over.
+    every = pages([chapter("I", ["x" * 500] * 7)])
+    assert [len(p) for p in every] == [2, 2, 2, 1]
+    assert all(sum(map(len, p)) <= PAGE_CHARS for p in every)
+
+
+def test_a_paragraph_longer_than_a_page_is_still_a_page():
+    # Sartre's are, and a page that refused to hold one would hold nothing.
+    assert pages([chapter("I", ["y" * 4000, "Deux."])]) == [["y" * 4000], ["Deux."]]
 
 
 def test_a_book_shorter_than_a_page_is_one_short_page():
-    assert pages(numbered(2)) == [["Paragraphe 0.", "Paragraphe 1."]]
+    assert pages(numbered(2)) == [[para(0), para(1)]]
 
 
 def test_pages_reads_across_chapters_in_order():
-    book = [chapter("I", ["Un.", "Deux."]), chapter("II", ["Trois.", "Quatre."])]
-    assert pages(book) == [["Un.", "Deux.", "Trois."], ["Quatre."]]
+    # A page runs on across a chapter boundary rather than stopping at it.
+    book = [chapter("I", ["A" * 600]), chapter("II", ["B" * 600, "C" * 600])]
+    assert pages(book) == [["A" * 600, "B" * 600], ["C" * 600]]
 
 
 def test_a_book_with_no_paragraphs_has_no_pages():
@@ -60,8 +71,8 @@ def test_a_book_with_no_paragraphs_has_no_pages():
 def test_sample_translates_the_first_page(client, config):
     page = sample_translate(numbered(7), client, config(), "English")
     assert page.index == 0
-    assert page.total == 3
-    assert page.source == ["Paragraphe 0.", "Paragraphe 1.", "Paragraphe 2."]
+    assert page.total == 4
+    assert page.source == [para(0), para(1)]
     assert all(t.startswith("English rendering of") for t in page.target)
     assert len(page.target) == len(page.source)
 
@@ -79,10 +90,10 @@ def test_sample_has_no_cost_without_pricing(client, config):
 
 
 def test_sample_index_wraps_so_another_page_can_count_forever(client, config):
-    book = numbered(7)  # three pages
-    assert sample_translate(book, client, config(), "English", index=3).index == 0
-    assert sample_translate(book, client, config(), "English", index=4).index == 1
-    assert sample_translate(book, client, config(), "English", index=-1).index == 2
+    book = numbered(7)  # four pages
+    assert sample_translate(book, client, config(), "English", index=4).index == 0
+    assert sample_translate(book, client, config(), "English", index=5).index == 1
+    assert sample_translate(book, client, config(), "English", index=-1).index == 3
 
 
 def test_sample_names_the_target_language(client, config):
@@ -124,7 +135,7 @@ def test_sample_align_window_clamps_at_the_start_of_the_book():
         seen.append(texts)
         return embed(texts)
 
-    french = numbered(60)
+    french = numbered(60)  # thirty pages of two paragraphs
     published = [chapter("I", [f"Paragraph {i}." for i in range(60)])]
     page = sample_align(french, published, watched, index=0, window=5)
     assert page.index == 0
@@ -133,7 +144,7 @@ def test_sample_align_window_clamps_at_the_start_of_the_book():
     # openings are matched first, to drop any introduction only one side carries.
     window = seen[-1]
     assert window[0] == "Paragraph 0."
-    assert len(window) == 5 + PAGE_PARAGRAPHS
+    assert len(window) == 5 + len(page.source)
 
 
 def test_sample_align_window_clamps_at_the_end_of_the_book():
@@ -143,12 +154,12 @@ def test_sample_align_window_clamps_at_the_end_of_the_book():
         seen.append(texts)
         return embed(texts)
 
-    french = numbered(60)  # 20 pages
+    french = numbered(60)  # thirty pages of two paragraphs
     published = [chapter("I", [f"Paragraph {i}." for i in range(60)])]
-    sample_align(french, published, watched, index=19, window=5)
+    page = sample_align(french, published, watched, index=29, window=5)
     window = seen[-1]
     assert window[-1] == "Paragraph 59."
-    assert len(window) <= 5 + PAGE_PARAGRAPHS + 5
+    assert len(window) <= 5 + len(page.source) + 5
 
 
 def test_sample_align_leaves_a_paragraph_blank_rather_than_guessing():

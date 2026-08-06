@@ -311,13 +311,31 @@ def test_reading_a_page_fills_the_spread_and_offers_the_next(page):
         "document.getElementById('proof-note').textContent.indexOf('Page 2 of 12') !== -1")
 
 
+def test_a_file_that_says_nothing_about_itself_is_named_by_its_filename(page):
+    """"the original" is a claim about language the align route cannot make. A
+    reader who brings two English editions of a French novel was told the one on
+    the left was the original, in English. A filename claims only which file it is."""
+    silent = scenario(inspect={"orig": {"title": None, "author": None, "language": None,
+                                        "pages": None, "paragraphs": 700, "chars": 38974},
+                               "pub": {"title": None, "author": None, "language": None,
+                                       "pages": 89, "paragraphs": 689, "chars": 41000}})
+    to_settings(page, route="align", body=silent)
+    assert text(page, "#proof-l-title") == "livre.txt"
+    assert text(page, "#proof-r-title") == "edition.txt"
+
+
 def test_a_page_with_no_counterpart_says_so_rather_than_showing_blank(page):
     to_settings(page, route="align", body=scenario(sample={"total": 12, "cost": None, "glossCost": None,
                                                            "chars": 3102, "bookChars": 38974,
                                                            "blankTarget": True}))
     page.click(".empty .ghost")
     page.wait_for_selector("#proof-r p")
-    assert "nothing in this edition" in text(page, "#proof-r")
+    column = text(page, "#proof-r")
+    assert "Nothing in this edition answers to this page." in column
+    # Once, at the head of the column. Said against each paragraph it read as
+    # several faults rather than one page, and its closing dash wrapped every time.
+    assert column.count("Nothing in this edition") == 1
+    assert "—" not in column
 
 
 def test_the_price_is_scaled_from_the_page_that_was_read(page):
