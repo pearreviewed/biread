@@ -114,6 +114,62 @@ def test_nothing_is_split_where_the_next_line_continues_the_sentence():
     assert repair(wrapped, from_pdf=True)[0] == wrapped
 
 
+# ---- paragraphs the file marks by indenting them ----
+
+# A scan of a printed page: every paragraph set in four spaces, every line after
+# it flush, and not a blank line anywhere the compositor put one.
+INDENTED = "\n".join([
+    "    The best thing would be to write down events from day to day.",
+    "Keep a diary to see clearly, let none of the nuances escape, even",
+    "if they have the air of nothing at all, and above all classify them.",
+    "    I must tell how I see this table, the street, the people, my",
+    "packet of tobacco, since that is what has changed. I must determine",
+    "the exact extent and nature of this change.",
+    "    For instance, here is a cardboard box holding my bottle of ink.",
+    "I should try to tell how I saw it before and how I see it now. Well,",
+    "it is a rectangular parallelepiped and it stands out against the wall.",
+]) + "\n"
+
+
+def test_an_indent_is_read_as_the_paragraph_mark_it_is():
+    text, removed = repair(INDENTED)
+    assert len(text.split("\n\n")) == 3
+    assert any(r.kind == "Paragraph indent read" for r in removed)
+
+
+def test_a_blank_line_is_not_trusted_where_the_indent_speaks():
+    # A scan sets its leading wherever a line happened to measure tall. Once the
+    # file has said where its paragraphs begin, a blank line that the indent does
+    # not corroborate cannot cut one in half.
+    scanned = INDENTED.replace("Keep a diary", "\nKeep a diary")
+    assert repair(scanned)[0] == repair(INDENTED)[0]
+
+
+def test_an_indent_the_sentence_runs_straight_through_is_declined():
+    # A margin the scanner mismeasured: the line above stops mid-clause and the
+    # line below picks the clause up. Two marks disagreeing, and the prose wins.
+    wandering = INDENTED.replace(
+        "    For instance, here is a cardboard box", "    of this change"
+    ).replace("the exact extent and nature of this change.", "the exact extent and nature")
+    assert len(repair(wandering)[0].split("\n\n")) == 2
+
+
+def test_a_few_centred_headings_are_not_a_convention():
+    # Two lines set in from the margin among forty is a heading or a page number,
+    # not a house style, and reading it as one would cut the book at each.
+    body = "\n".join(["A line of perfectly ordinary prose, set flush left."] * 40)
+    _, removed = repair(f"          I\n{body}\n          II\n{body}")
+    assert not any(r.kind == "Paragraph indent read" for r in removed)
+
+
+def test_a_file_that_indents_is_not_also_guessed_at():
+    # The short-line guess is the weaker of the two signals and stands down where
+    # the better one is present, rather than adding breaks on top of it.
+    text, removed = repair(INDENTED, from_pdf=True)
+    assert not any(r.kind == "Paragraph break restored" for r in removed)
+    assert len(text.split("\n\n")) == 3
+
+
 # ---- ligatures ----
 
 def test_a_ligature_glyph_becomes_the_letters_it_stands_for():
