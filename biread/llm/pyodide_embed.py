@@ -53,7 +53,7 @@ class PyodideEmbedder:
 
 def _error_message(xhr) -> str:
     if xhr.status == 0:
-        return ("could not reach the embedding model — if it is local, start Ollama "
+        return ("could not reach the embedding model. If it is local, start Ollama "
                 "and allow this page (OLLAMA_ORIGINS); otherwise check the connection.")
     try:
         return json.loads(xhr.responseText)["error"]["message"]

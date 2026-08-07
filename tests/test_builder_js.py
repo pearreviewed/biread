@@ -478,7 +478,7 @@ def test_a_book_nobody_has_read_says_so_instead_of_claiming_coverage(page):
     page.click("[data-route=shelf]")
     unread = text(page, ".card[data-slug='80days']")
     assert "Nobody has read this one through" in unread
-    assert "Abridged" in unread
+    assert "Towle · 1873 · abridged" in unread
     # And the one that has been read carries no such warning.
     assert "Nobody has read" not in text(page, ".card[data-slug=candide]")
 
@@ -753,7 +753,7 @@ def test_a_search_reports_the_pair_it_found_and_the_side_it_did_not(page):
     page.wait_for_selector(".hit .solid")
     found = text(page, ".hit:nth-child(1)")
     assert "Both editions found" in found and "Ellis · 1894" in found
-    assert "40 chapters each — they agree" in found
+    assert "40 chapters each, so they agree" in found
     assert "Nobody has read this one through" in found
     missing = text(page, ".hit:nth-child(2)")
     assert "no free English translation" in missing
@@ -825,7 +825,9 @@ def test_taking_a_second_library_edition_records_where_it_came_from(page):
     assert found["otherPage"] == "/ebooks/emile-zola/the-dream/eliza-chase"
     assert found["translator"] == "Eliza Chase"
     card = text(page, ".card[data-slug='found:Le Rêve']")
-    assert "English from Standard Ebooks" in card
+    # Which library the English came from is a fact about that edition, so it is
+    # said on the line naming it rather than on a badge of its own.
+    assert "The Dream · tr. Eliza Chase · Standard Ebooks" in card
     # Its chapters there are uncounted until it is fetched, so nothing is claimed.
     assert "against" not in card
 
@@ -923,7 +925,7 @@ def test_a_kept_book_is_on_the_shelf_next_time_and_can_be_taken_off(page):
 def test_a_book_divided_differently_says_so_rather_than_shrugging(page):
     """Le Père Goriot came back 4 chapters against 22 — real, and not the same
     thing as 47 against 46."""
-    assert page.evaluate("agreement(40, 40)") == "40 chapters each — they agree."
+    assert page.evaluate("agreement(40, 40)") == "40 chapters each, so they agree."
     assert page.evaluate("agreement(47, 46)").endswith("two editions counting differently.")
     assert "divided quite differently" in page.evaluate("agreement(4, 22)")
     assert page.evaluate("agreement(1, 22)").startswith("1 chapter against 22")
@@ -944,16 +946,38 @@ def test_a_book_that_has_glosses_is_not_said_to_be_missing_them(page):
     assert "no glosses" not in text(page, ".card[data-slug=micromegas]")
 
 
-def test_a_card_opens_on_what_the_book_is_about_without_moving_the_shelf(page):
-    """A summary is the thing a reader wants first and the card has no room for,
-    so it opens downward under the pointer — over the row beneath, never
-    displacing it, because a shelf that shifts as you read across it is the
-    fault this one has been fixed for twice."""
+def test_a_card_says_on_its_face_what_the_book_is(page):
+    """The one thing a reader picks a book on, in a sentence that stands alone —
+    where a row of uppercase pills used to be. Two lines at most, so a card is
+    sized by its book rather than by its blurb."""
+    page.click("[data-route=shelf]")
+    lead = page.eval_on_selector(
+        ".card[data-slug=candide] .lead",
+        "e => ({said: e.textContent, lines: Math.round(e.getBoundingClientRect().height"
+        "                                              / parseFloat(getComputedStyle(e).lineHeight))})")
+    assert lead["said"].startswith("A young man taught this is the best")
+    assert lead["lines"] <= 2, lead
+    # The pills are gone, and with them the shout: a book that is abridged says
+    # so on the line naming the edition, in the card's own voice.
+    assert page.locator(".card .mark").count() == 0
+    assert "Towle · 1873 · abridged" in text(page, ".card[data-slug='80days'] .facts")
+    # A book somebody looked up has no sentence written for it, and its card
+    # invents none.
+    assert page.locator(".card[data-slug='80days'] .lead").count() == 0
+
+
+def test_a_card_opens_on_the_rest_of_it_without_moving_the_shelf(page):
+    """The face carries one sentence; the rest opens downward under the pointer —
+    over the row beneath, never displacing it, because a shelf that shifts as you
+    read across it is the fault this one has been fixed for twice."""
     page.click("[data-route=shelf]")
     # Every card but the one under the pointer, which lifts 2px as it always has.
+    # Measured down the document rather than down the window: reaching a card
+    # near the foot of the viewport scrolls the page to it, and a scroll is not
+    # the shelf moving. Reflow under the pointer is what this is watching for.
     where = lambda: page.eval_on_selector_all(
         ".card:not([data-slug=candide])",
-        "n => n.map(c => Math.round(c.getBoundingClientRect().bottom))")
+        "n => n.map(c => Math.round(c.getBoundingClientRect().bottom + window.scrollY))")
     shut = where()
     assert page.eval_on_selector(
         ".card[data-slug=candide] .brief", "e => getComputedStyle(e).visibility") == "hidden"
@@ -964,7 +988,9 @@ def test_a_card_opens_on_what_the_book_is_about_without_moving_the_shelf(page):
         "e => ({seen: getComputedStyle(e).visibility, paint: getComputedStyle(e).backgroundColor,"
         "       said: e.textContent, over: Math.round(e.getBoundingClientRect().height)})")
     assert open_["seen"] == "visible"
-    assert "best of all possible worlds" in open_["said"]
+    # It carries on from the face rather than repeating it.
+    assert "one calamity a chapter" in open_["said"]
+    assert "best of all possible worlds" not in open_["said"]
     assert open_["over"] > 40
     # Opaque, or the card underneath reads straight through it — every other
     # surface on this page is deliberately translucent.

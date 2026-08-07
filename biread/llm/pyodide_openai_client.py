@@ -54,7 +54,7 @@ class PyodideOpenAIClient(LLMClient):
 def _error_message(xhr) -> str:
     """The API's own error text (invalid key, rate limit, no credit…), or a fallback."""
     if xhr.status == 0:
-        return "could not reach the model provider — check the connection."
+        return "could not reach the model provider. Check the connection."
     try:
         return json.loads(xhr.responseText)["error"]["message"]
     except Exception:

@@ -52,7 +52,7 @@ class PdfExtractor(Extractor):
         text = "\n\n".join(p.strip() for p in pages if p.strip())
         if not text:
             raise ExtractError(
-                f"no selectable text in {path.name} — it may be scanned images "
+                f"no selectable text in {path.name}: it may be scanned images "
                 f"rather than text. An EPUB or TXT version will read far better."
             )
         return text

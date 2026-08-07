@@ -21,7 +21,7 @@ class TxtExtractor(Extractor):
                 continue
         else:
             raise ExtractError(
-                f"could not decode {path.name} as {' or '.join(ENCODINGS)} — "
-                f"convert it to UTF-8 and try again."
+                f"could not decode {path.name} as {' or '.join(ENCODINGS)}. "
+                f"Convert it to UTF-8 and try again."
             )
         return text.replace("\r\n", "\n").replace("\r", "\n")

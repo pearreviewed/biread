@@ -40,8 +40,10 @@ const SHELF = {
       page: "Candide, ou l’Optimisme", lang: "fr", other: "en",
       chapters: 30, paragraphs: 469, minutes: 3, tokens: 95916,
       note: "Smollett put this into English in Voltaire’s own century.",
-      summary: "A young man raised to believe this the best of all possible "
-        + "worlds is thrown out of the castle and around the earth.",
+      lead: "A young man taught this is the best of all possible worlds is "
+        + "thrown out into it.",
+      summary: "Out of the castle and around the earth: one calamity a chapter, "
+        + "and home at the end of it with a garden to tend.",
       // The other published book: approved and handed over, but without glosses,
       // which the card says in two words and does not sell.
       prebuilt: {
@@ -59,13 +61,15 @@ const SHELF = {
       page: "Micromégas", lang: "fr", other: "en",
       chapters: 7, paragraphs: 74, minutes: 1, tokens: 19812,
       note: "Two English versions, and they are shaped differently.",
-      summary: "A traveller from a star of Sirius picks up a Saturnian on the "
-        + "way past and finds the Earth.",
+      lead: "A traveller from Sirius, eight leagues tall, stops off at the Earth.",
+      summary: "He picks up a Saturnian on the way past, and finds the "
+        + "inhabitants too small to see.",
       readThrough: false, coverage: null, added: false,
       english: "Phalen", abridged: false, chaptered: true, counts: [7, 7],
       translations: [
-        { page: "Micromegas (Phalen)", label: "Phalen", chapters: 7 },
-        { page: "The Works of Voltaire/Volume 3/Micromegas", label: "Fleming · 1906", chapters: 1 },
+        { page: "Micromegas (Phalen)", label: "Phalen", chapters: 7, abridged: false },
+        { page: "The Works of Voltaire/Volume 3/Micromegas", label: "Fleming · 1906",
+          chapters: 1, abridged: false },
       ],
       // The one book here that was built, read and approved. Everything in this
       // block is measured off the finished file by web/build.py; the shape is
@@ -81,12 +85,14 @@ const SHELF = {
       slug: "80days", title: "Le Tour du monde en quatre-vingts jours", author: "Verne",
       page: "Le Tour du monde en quatre-vingts jours", lang: "fr", other: "en",
       chapters: 37, paragraphs: 1892, minutes: 9, tokens: 191742,
-      // No summary: the shape of a book somebody looked up rather than curated,
-      // whose card has nothing to open on.
+      // No lead and no summary: the shape of a book somebody looked up rather
+      // than curated, whose card says nothing it has not earned and has nothing
+      // to open on.
       note: "Towle cut as he went, so some of the French will face an empty page.",
       readThrough: false, coverage: null, added: false,
       english: "Towle · 1873", abridged: true, chaptered: true, counts: [37, 37],
-      translations: [{ page: "Around the World in Eighty Days (Towle)", label: "Towle · 1873", chapters: 37 }],
+      translations: [{ page: "Around the World in Eighty Days (Towle)",
+                      label: "Towle · 1873", chapters: 37, abridged: true }],
     },
   ],
 };

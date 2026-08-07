@@ -12,6 +12,20 @@ def test_every_book_names_two_pages_and_an_author():
         assert all(t.page for t in book.translations), book.slug
 
 
+def test_every_book_says_what_it_is_in_one_sentence_a_card_can_hold():
+    """The card's face carries the lead and nothing else of the blurb, so a lead
+    that ran long would either be clipped mid-word or size the whole row. Two
+    lines of a 290px card is about ninety characters, and one sentence keeps the
+    rest where the drawer can take it."""
+    for book in shelf.SHELF:
+        assert book.lead and book.summary, book.slug
+        assert len(book.lead) <= 90, (book.slug, len(book.lead))
+        assert book.lead.endswith("."), book.slug
+        assert "." not in book.lead[:-1], book.slug
+        # The drawer carries on rather than repeating the face.
+        assert book.lead not in book.summary, book.slug
+
+
 def test_slugs_are_unique():
     slugs = [b.slug for b in shelf.SHELF]
     assert len(set(slugs)) == len(slugs)
