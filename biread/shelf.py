@@ -133,10 +133,10 @@ SHELF: tuple[Book, ...] = (
              "facing page.",
         lead="A young man taught this is the best of all possible worlds is "
              "thrown out into it.",
-        summary="Out of the castle and around the earth: the Lisbon earthquake, "
-                "the Inquisition, Eldorado, one calamity a chapter, and a small "
-                "farm outside Constantinople at the end of it, with a garden to "
-                "tend.",
+        summary="Voltaire’s answer to the philosophers who called this world the "
+                "best one possible: the Lisbon earthquake, the Inquisition, "
+                "Eldorado, one calamity a chapter, and a small farm outside "
+                "Constantinople at the end of it, with a garden to tend.",
         read_through=True, coverage=0.989,
     ),
     Book(
@@ -151,10 +151,13 @@ SHELF: tuple[Book, ...] = (
         ),
         note="The two editions break their dialogue differently, so a few hundred "
              "short retorts face an empty space. The book itself is whole.",
-        lead="A farmer’s daughter in Normandy, ruined by the life novels promised "
-             "her.",
-        summary="Married to a dull country health officer: lovers, debts kept from "
-                "him, and the draper who lent her the money at the end of them.",
+        lead="Emma Bovary lives beyond her means to escape the ennui of provincial "
+             "life.",
+        summary="A convent education on smuggled novels, a dull country health "
+                "officer for a husband, and a town Flaubert set down entire – its "
+                "chemist, its priest, its gossip – under the subtitle he gave it, "
+                "Mœurs de province. Two lovers, debts her husband knows nothing "
+                "about, and the draper who lent her the money at the end of them.",
         read_through=True, coverage=0.874,
     ),
     Book(
@@ -173,9 +176,11 @@ SHELF: tuple[Book, ...] = (
              "A second English edition of 1911 is here too, its translator unnamed.",
         lead="Phileas Fogg wagers half his fortune that he can go round the world "
              "in eighty days.",
-        summary="He leaves that same evening with a new servant and a carpet-bag, "
-                "and picks up a detective at Suez who is certain he has robbed "
-                "the Bank of England.",
+        summary="A man like a clock, crossing an empire the railways and steamers "
+                "have only just made crossable: a new servant, a detective at Suez "
+                "who is certain he has robbed the Bank of England, a widow carried "
+                "off a pyre in India, and a day gained on the way home that nobody "
+                "had counted.",
     ),
     Book(
         slug="micromegas",
@@ -192,9 +197,10 @@ SHELF: tuple[Book, ...] = (
              "follows the French chapter for chapter, Fleming’s 1906 runs as one "
              "piece, which pairs more loosely.",
         lead="A traveller from Sirius, eight leagues tall, stops off at the Earth.",
-        summary="He picks up a Saturnian on the way past, and finds the "
-                "inhabitants too small to see and quite sure they are the point "
-                "of it all.",
+        summary="One of the first stories in which the visitors come to us rather "
+                "than we to them. He picks up a Saturnian on the way past, and "
+                "finds the inhabitants of the Earth too small to see and quite "
+                "sure they are the point of it all.",
     ),
     Book(
         slug="20000",
@@ -210,8 +216,10 @@ SHELF: tuple[Book, ...] = (
              "That is two editions, not an error, and the matching takes it in stride.",
         lead="Three men hunting a sea monster are taken prisoner by it.",
         summary="A professor, his servant and a harpooner aboard the Nautilus, "
-                "whose captain shows them the whole ocean floor and will not say "
-                "what he is running from.",
+                "whose captain shows them the whole ocean floor and never says "
+                "who drove him under it. Verne first made him a Pole avenging his "
+                "family on the Russians; the publisher refused it, and the rage "
+                "survives without the reason.",
     ),
     Book(
         slug="lesmis",
@@ -230,8 +238,10 @@ SHELF: tuple[Book, ...] = (
         lead="Five years for a stolen loaf, fourteen for trying to escape, and a "
              "life outrunning both.",
         summary="Jean Valjean, and the bishop’s candlesticks that turn him: a "
-                "factory, a child bought back from an inn, and a policeman who "
-                "cannot let a freed man stay free.",
+                "factory, a child bought back from an inn, a policeman who cannot "
+                "let a freed man stay free, and a barricade in the Paris of 1832 "
+                "that the boys behind it do not come down from. Hugo stops for "
+                "Waterloo, the sewers and the argot of thieves on the way.",
         read_through=True, coverage=0.921,
     ),
     Book(
@@ -251,7 +261,9 @@ SHELF: tuple[Book, ...] = (
         lead="Paris in 1482, told from the cathedral down.",
         summary="An archdeacon who can no longer pray, a captain who means "
                 "nothing by it, the dancer they destroy between them, and the "
-                "deaf bellringer who is the only one who tries to save her.",
+                "deaf bellringer who is the only one who tries to save her. Hugo "
+                "wrote it to stop Paris pulling its Gothic down, and named it for "
+                "the building rather than the man.",
         read_through=True, coverage=0.861,
     ),
 )
