@@ -106,44 +106,91 @@ def test_chapter_numbers_normalise_across_styles(token, number):
 
 # A fake multilingual embedder, as elsewhere: a concept has one vector, so the
 # French and the English of it land together though they share no characters.
-CONCEPTS = {"chat": [1, 0, 0], "cat": [1, 0, 0], "chien": [0, 1, 0], "dog": [0, 1, 0]}
+# Eight of them rather than two, because what is under test is agreement *in a
+# row*: a fixture whose editions agree once has the shape of a title page, not of
+# a book, and every one of these tests used to have it.
+CONCEPTS = ("chat cat", "chien dog", "maison house", "riviere river",
+            "bateau boat", "montagne mountain", "jardin garden", "roman novel")
 
 
 def embed(texts):
     def vector(text):
-        for word, v in CONCEPTS.items():
-            if word in text.lower():
-                return v
-        return [0, 0, 0]
+        low = text.lower()
+        return [float(any(w in low for w in pair.split())) for pair in CONCEPTS]
     return [vector(t) for t in texts]
 
 
-def book(opening, count=20):
+FR_BOOK = ["Le chat dort sur la table.", "Le chien court dans la rue.",
+           "La maison est vide ce matin.", "La riviere passe sous le pont.",
+           "Le bateau descend vers la mer.", "La montagne se voit de loin.",
+           "Le jardin sent la pluie apres l'orage."]
+EN_BOOK = ["The cat sleeps on the table.", "The dog runs down the street.",
+           "The house is empty this morning.", "The river passes under the bridge.",
+           "The boat goes down to the sea.", "The mountain is seen from far off.",
+           "The garden smells of rain after the storm."]
+
+
+def book(lines, count=20):
     """A book long enough that a few paragraphs in front of it are front matter
-    rather than a third of the file."""
-    return [opening] + [f"And the story went on, at length, for paragraph {i}." for i in range(count)]
+    rather than a third of the file, and various enough to agree with its
+    translation paragraph after paragraph."""
+    return [*lines] + [f"And it went on, at length, for paragraph {i}." for i in range(count)]
 
 
 def test_an_introduction_only_one_edition_carries_is_dropped():
     # Nausea: the published edition opens on a critic's essay and an editors'
     # note, and the book numbers no chapters, so nothing marks where they end.
-    # What marks it is the other edition — the paragraph its own first page
-    # answers to is where this one's book begins.
-    original = [Chapter(None, None, book("Le chat dort sur la table."))]
+    # What marks it is the other edition — where the two start running together.
+    original = [Chapter(None, None, book(FR_BOOK))]
     published = [Chapter(None, None, [
         "An introduction, discussing the author at some length.",
-        "A second page of the same essay, and still not the book.",
-        "The editors note that these papers were found among others.",
-    ] + book("The cat sleeps on the table."))]
+        "A second page of the same essay, and still not the work itself.",
+        "The editors say these papers were found among others.",
+    ] + book(EN_BOOK))]
     orig, pub, dropped_orig, dropped_pub = open_together(original, published, embed)
     assert (dropped_orig, dropped_pub) == (0, 3)
-    assert pub[0].paragraphs[0] == "The cat sleeps on the table."
-    assert orig[0].paragraphs[0] == "Le chat dort sur la table."
+    assert pub[0].paragraphs[0] == EN_BOOK[0]
+    assert orig[0].paragraphs[0] == FR_BOOK[0]
+
+
+def test_a_title_page_both_editions_carry_is_not_where_the_book_begins():
+    # The fault this rule was rewritten for. Two editions of one book carry the
+    # same apparatus, so each names the author on its first page and the two title
+    # pages are each other's best match — mutual, and nothing to do with the novel.
+    # On the real pair it was `JEAN-PAUL SARTRE LA NAUSÉE` against `Jean-Paul
+    # Sartre` at 0.64, and the cut stopped there and dropped nothing at all.
+    original = [Chapter(None, None, [
+        "Le roman, par un auteur connu.",
+        "Une epigraphe, tiree d'un tout autre livre.",
+    ] + book(FR_BOOK))]
+    published = [Chapter(None, None, [
+        "The novel, by a well-known author.",
+        "A note from the translator, on his choices.",
+    ] + book(EN_BOOK))]
+    orig, pub, dropped_orig, dropped_pub = open_together(original, published, embed)
+    assert (dropped_orig, dropped_pub) == (2, 2)
+    assert orig[0].paragraphs[0] == FR_BOOK[0]
+    assert pub[0].paragraphs[0] == EN_BOOK[0]
+
+
+def test_a_paragraph_the_translator_merged_does_not_break_the_run():
+    # One side skipping a paragraph is a translator joining two into one, or a
+    # scan setting a footnote among the prose; the run carries across it. Only a
+    # skip on *both* sides at once ends a run, because only then is there matter
+    # neither edition answers to.
+    merged = [EN_BOOK[0], f"{EN_BOOK[1]} {EN_BOOK[2]}", *EN_BOOK[3:]]
+    original = [Chapter(None, None, [
+        "Une preface, ecrite bien plus tard, sur l'auteur et son temps.",
+    ] + book(FR_BOOK))]
+    published = [Chapter(None, None, book(merged))]
+    orig, _, dropped_orig, dropped_pub = open_together(original, published, embed)
+    assert (dropped_orig, dropped_pub) == (1, 0)
+    assert orig[0].paragraphs[0] == FR_BOOK[0]
 
 
 def test_two_editions_that_open_on_the_book_are_left_alone():
-    original = [Chapter(None, None, book("Le chat dort sur la table."))]
-    published = [Chapter(None, None, book("The cat sleeps on the table."))]
+    original = [Chapter(None, None, book(FR_BOOK))]
+    published = [Chapter(None, None, book(EN_BOOK))]
     orig, pub, dropped_orig, dropped_pub = open_together(original, published, embed)
     assert (dropped_orig, dropped_pub) == (0, 0)
     assert len(pub[0].paragraphs) == len(published[0].paragraphs)
@@ -152,22 +199,34 @@ def test_two_editions_that_open_on_the_book_are_left_alone():
 def test_an_introduction_worth_a_quarter_of_the_file_is_not_believed():
     # The same ceiling trimming uses. One confident wrong match must not be able
     # to take the book with it, and a short book is all opening.
-    original = [Chapter(None, None, ["Le chat dort.", "Le chien court."])]
+    original = [Chapter(None, None, ["Le chat dort.", "Le chien court.", "La maison est vide."])]
     published = [Chapter(None, None, ["A long essay standing in front of a very short book indeed.",
-                                      "The cat sleeps.", "The dog runs."])]
+                                      "The cat sleeps.", "The dog runs.", "The house is empty."])]
     _, pub, _, dropped_pub = open_together(original, published, embed)
-    assert dropped_pub == 0 and len(pub[0].paragraphs) == 3
+    assert dropped_pub == 0 and len(pub[0].paragraphs) == 4
 
 
 def test_the_original_may_be_the_side_carrying_the_introduction():
     original = [Chapter(None, None, [
         "Une preface, ecrite bien plus tard, sur l'auteur et son temps.",
         "Une seconde page de la meme preface, qui n'est pas le livre.",
-    ] + book("Le chat dort sur la table."))]
-    published = [Chapter(None, None, book("The cat sleeps on the table."))]
+    ] + book(FR_BOOK))]
+    published = [Chapter(None, None, book(EN_BOOK))]
     orig, _, dropped_orig, dropped_pub = open_together(original, published, embed)
     assert (dropped_orig, dropped_pub) == (2, 0)
-    assert orig[0].paragraphs[0] == "Le chat dort sur la table."
+    assert orig[0].paragraphs[0] == FR_BOOK[0]
+
+
+def test_a_lone_agreement_is_not_enough_to_cut_on():
+    # Where the two editions have exactly one paragraph in common and nothing
+    # around it, nothing is dropped. A book left with its introduction reads; a
+    # book cut on a coincidence does not.
+    original = [Chapter(None, None, book(["Le chat dort sur la table.", *FR_BOOK[1:]]))]
+    published = [Chapter(None, None, ["An introduction, at some length, about the author.",
+                                      "The cat sleeps on the table."]
+                                     + [f"Quite unrelated matter, paragraph {i}." for i in range(20)])]
+    _, _, dropped_orig, dropped_pub = open_together(original, published, embed)
+    assert (dropped_orig, dropped_pub) == (0, 0)
 
 
 def test_trim_drops_the_matter_that_brackets_a_book():

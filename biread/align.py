@@ -807,18 +807,20 @@ def open_together(
     the aligner then poured over Sartre's first pages, because the pivot must
     place every published paragraph somewhere.
 
-    What marks the boundary is where the two editions first say the same thing.
-    Everything in front of that is carried by one side alone, whichever side that
-    is, and one-sided is the whole definition of apparatus here. Read against a
-    real multilingual model, La Nausée and its translation first agree on the
-    editors' note — three paragraphs into the French, thirty into the English,
-    which is Hayden Carruth's essay exactly.
+    What marks the boundary is where the two editions start saying the same thing
+    and keep saying it. Everything in front of that is carried by one side alone,
+    whichever side that is, and one-sided is the whole definition of apparatus
+    here.
 
     Asking instead which paragraph answers to the *other edition's first page*
-    was the earlier rule, and it assumed one edition opens on the book. Both of
+    was the first rule, and it assumed one edition opens on the book. Both of
     these open on apparatus: the probe was a title page on one side and an
     introduction on the other, so it found nothing and dropped nothing, and the
     reader met `GALLIMARD Au CASTOR` facing a paragraph of Existentialism.
+
+    Cutting at the *first* agreement was the second, and it lasted until a scan
+    of the same book arrived carrying its own title page — see
+    `_where_they_first_agree`.
     """
     skip_orig, skip_pub = _where_they_first_agree(original, published, embed)
     return _drop_leading(original, skip_orig), _drop_leading(published, skip_pub), skip_orig, skip_pub
@@ -837,19 +839,37 @@ def _head(chapters: list[Chapter]) -> tuple[list[str], list[str]]:
 def _where_they_first_agree(
     original: list[Chapter], published: list[Chapter], embed: Embed
 ) -> tuple[int, int]:
-    """The first paragraph each edition has in common with the other.
+    """Where each edition starts running with the other, and keeps running.
 
     The match has to be mutual — each side's best read of the other — because a
     one-sided best is what an introduction full of the book's own themes produces
     in quantity, and Carruth's essay discusses Roquentin by name for pages.
     Mutual, it is two editions agreeing rather than one of them guessing.
 
+    Mutual is still not enough on its own, and taking the *first* mutual match was
+    the fault this rule was rewritten for. Two editions of one book carry the same
+    apparatus: a 1938 Gallimard La Nausée opens `JEAN-PAUL SARTRE LA NAUSÉE` and a
+    scan of the 1949 New Directions translation opens `Jean-Paul Sartre`, which a
+    real multilingual model reads at 0.64 against a floor of 0.57 — mutual, over
+    the floor, and nothing at all to do with where the novel begins. The rule
+    cut at paragraph zero and dropped nothing, and the reader met a title page
+    facing a title page and an editors' note facing a translator's note. Candide
+    failed the same way and less visibly: `CANDIDE` matched `CANDIDE` seven
+    paragraphs into the Modern Library edition, so Philip Littell's introduction
+    and the table of contents were kept as though they were the book.
+
+    What separates the two is that apparatus agrees once and the book goes on
+    agreeing. So the cut is made at the head of the first *run* of agreements
+    (`AGREEING_RUN` of them, by `_continues`), never at a lone one. On the pair
+    that prompted this the run opens at `Ces cahiers ont été trouvés` against
+    `These notebooks were found`, four paragraphs into each.
+
     Bounded exactly as before, and the bounds are what make a wrong answer
     survivable. Only the first `OPENING_WINDOW` paragraphs are searched, so a
     match found deep in the book is never acted on; and what is dropped is held
     on each side to the share `trim_matter` allows front matter, so one confident
     wrong match cannot take a short book whole — Micromégas is thirty-four
-    paragraphs long. Where nothing stands out against the window's own median,
+    paragraphs long. Where no run stands out against the window's own median,
     nothing is dropped: a book left with its introduction reads, and a book cut
     on a bad match does not.
     """
@@ -864,12 +884,57 @@ def _where_they_first_agree(
     flat = [score for row in grid for score in row]
     floor = median(flat) + NEAREST_MARGIN
 
-    best_for_pub = [max(range(len(grid)), key=lambda i: grid[i][j]) for j in range(len(pub_vecs))]
+    start = _sustained(_agreements(grid, floor))
+    if start is None:
+        return 0, 0
+    return _held(start[0], orig_body), _held(start[1], pub_body)
+
+
+def _agreements(grid: list[list[float]], floor: float) -> list[tuple[int, int]]:
+    """Every paragraph paired with the one the other edition reads it as, where
+    both sides agree on the reading and it stands out from the window."""
+    best_for_pub = [max(range(len(grid)), key=lambda i: grid[i][j]) for j in range(len(grid[0]))]
+    found = []
     for i, row in enumerate(grid):
         j = max(range(len(row)), key=row.__getitem__)
         if row[j] >= floor and best_for_pub[j] == i:
-            return (_held(i, orig_body), _held(j, pub_body))
-    return 0, 0
+            found.append((i, j))
+    return found
+
+
+#: How many agreements in a row make a book rather than a coincidence. Three,
+#: because two editions share a title page and can share a half-title under it,
+#: and because a run this short still survives a book whose opening the translator
+#: rearranged. Where no run is this long nothing is dropped, which is the failure
+#: the reader can live with.
+AGREEING_RUN = 3
+
+
+def _continues(one: tuple[int, int], then: tuple[int, int]) -> bool:
+    """Whether two agreements belong to the same run.
+
+    Both editions must move on, and at most one of them may skip a paragraph: one
+    side passing over a paragraph is a translator merging two into one, or a scan
+    setting a footnote among the prose, and a run survives either. Passed over on
+    *both* sides at once, what lies between is matter neither edition answers to —
+    which is what apparatus is, and where the run ends. That is the whole of what
+    tells La Nausée's title page from its first page: the title pages agree and
+    then four paragraphs go by on each side with nothing in common.
+    """
+    steps = [b - a for a, b in zip(one, then)]
+    return min(steps) == 1
+
+
+def _sustained(agreed: list[tuple[int, int]]) -> tuple[int, int] | None:
+    """The head of the first run of agreements long enough to be the book."""
+    start = 0
+    for at in range(1, len(agreed) + 1):
+        if at < len(agreed) and _continues(agreed[at - 1], agreed[at]):
+            continue
+        if at - start >= AGREEING_RUN:
+            return agreed[start]
+        start = at
+    return None
 
 
 def _held(at: int, body: list[str]) -> int:
