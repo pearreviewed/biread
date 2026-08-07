@@ -184,6 +184,23 @@ def _blocks(text: str) -> tuple[list[list[str]], list[Removal]]:
             lines.append(line)
         if not lines:
             continue
+        # Punctuation alone is not prose. A scan leaves stray marks standing as
+        # paragraphs of their own — a colon, `;;`, `: :`, `."` — and each takes an
+        # alignment slot facing a real paragraph of the other edition. A
+        # typographic break (`* * *`) goes with them, being a mark and not a
+        # sentence, and like every other removal it is named on the terminal
+        # rather than dropped quietly.
+        #
+        # Deliberately not "nothing with a letter in it", which reads better and
+        # takes real text: that rule dropped a line of Roquentin's dates
+        # (`1924, 1925,`) and the `(1857)` off Bovary's title page, and on the
+        # Internet Archive Nausea it took 105 paragraphs where this takes 35. What
+        # it would additionally catch there is `44 44`, which is OCR reading a
+        # quotation mark as the page number beside it — untidy, and not worth a
+        # rule that cannot tell it from a year.
+        if not any(c.isalnum() for c in "".join(lines)):
+            removed.append(Removal("Not prose", " ".join(lines)))
+            continue
         # Only while nothing real has been kept yet: a citation belongs to the
         # transcription's header, and the same shape appearing mid-book would be
         # the author's own.
@@ -428,6 +445,27 @@ WORD_RE = re.compile(r"[A-Za-zÀ-ÿ]+")
 #: is that a heading is not spoken.
 SPOKEN_RE = re.compile(r"^[—–\"“«]")
 
+#: The other end of the same line, because a scan loses the first mark and keeps
+#: the last. OCR read the opening quotation of `“No, Tuesday, you know because of
+#: the …”` as the page number stamped beside it and handed over `44No, Tuesday,
+#: you know because of the . ..”`, which opens on a digit and passes `SPOKEN_RE`
+#: untouched. The mark that closes the speech came through intact.
+CLOSES_SPEECH_RE = re.compile(r"[\"”»]\s*$")
+
+#: What a line above a heading looks like when the paragraph it belongs to has
+#: ended. A printed page marks a heading with space above and below it, and a scan
+#: hands over only the space below: a heading set at the top of a page arrives with
+#: the foot of the previous page's last paragraph directly above it, and that lost
+#: 7 of the 20 entries in the Internet Archive scan of the 1949 Nausea. Reading the
+#: sentence instead is the same evidence `normalize._stands_alone` reads, in the
+#: same order.
+FINISHED_RE = re.compile(r"[.!?:;][\"”»']?$")
+
+#: How many words a dateline may put in front of its day. One: "Shrove Tuesday:",
+#: "MARDI GRAS". A sentence about a day puts the day further in — "The usual Sunday
+#: sauerkraut ?" is the third word, and it was being read as a chapter heading.
+DAY_AT_MOST = 2
+
 
 def _dated_headings(lines: list[str]) -> list[tuple[int, str]]:
     """Headings for a book divided by date rather than by number.
@@ -444,24 +482,41 @@ def _dated_headings(lines: list[str]) -> list[tuple[int, str]]:
     twenty wrapped lines carrying "dimanche" or "samedi" mid-sentence against
     twenty-two real headings — enough to sink the spine on shape alone.
 
-    What separates them is that a heading is *set apart*: it stands as a block of
-    its own, a blank line either side of it, which a line in the middle of a
-    paragraph never does. That mark comes from the file rather than from us —
-    it is the compositor's, the same evidence `normalize._stands_alone` reads.
-    On top of it the usual company: the line is short, several of them run
+    What separates them is that a heading is *set apart*: space below it, and
+    above it either space or a paragraph that has finished. That mark comes from
+    the file rather than from us — it is the compositor's, the same evidence
+    `normalize._stands_alone` reads, in the same order. Demanding a blank line on
+    *both* sides is what a clean file offers and a scan does not: a heading set at
+    the top of a page arrives with the previous page's last line directly above
+    it, and that lost seven of the twenty entries in a scan of the 1949 Nausea.
+    On top of it the usual company: the line is short, it is not spoken at either
+    end, it opens on its day rather than merely naming one, several of them run
     through the book, and a chapter's worth of prose *begins* under each rather
     than carrying on past it (`_opens_a_chapter`).
     """
-    def alone(i: int) -> bool:
-        return ((i == 0 or not lines[i - 1].strip())
-                and (i + 1 >= len(lines) or not lines[i + 1].strip()))
+    def blank(i: int) -> bool:
+        return not 0 <= i < len(lines) or not lines[i].strip()
 
+    def set_apart(i: int) -> bool:
+        return blank(i + 1) and (blank(i - 1) or bool(FINISHED_RE.search(lines[i - 1].strip())))
+
+    def dateline(text: str) -> bool:
+        return any(w.lower() in WEEKDAYS for w in WORD_RE.findall(text)[:DAY_AT_MOST])
+
+    # Measured as the file sets it, printed as the book reads it. A dated heading
+    # is the one heading that keeps its own words, so it is the one place a scan's
+    # spacing reaches the page — `Tuesday,    30  January:` is how OCR reads a
+    # printed line, and the body escapes it only because `_blocks` collapses runs
+    # of spaces on its way past. The length bound stays on the raw line, because
+    # collapsing first loosens it by however far the scanner spaced the page out:
+    # a 74-character line of newspaper small ads came under 60 that way and was
+    # read as a chapter of the novel.
     candidates = [
-        (i, s)
+        (i, " ".join(s.split()))
         for i, line in enumerate(lines)
-        if (s := line.strip()) and len(s) <= DATED_HEADING_MAX_LEN
-        and alone(i) and not SPOKEN_RE.match(s)
-        and any(word.lower() in WEEKDAYS for word in WORD_RE.findall(s))
+        if (s := line.strip()) and len(s) <= DATED_HEADING_MAX_LEN and set_apart(i)
+        and not SPOKEN_RE.match(s) and not CLOSES_SPEECH_RE.search(s)
+        and dateline(s)
     ]
     run = _with_text_under_them(candidates, lines)
     if len(run) < 3 or not _opens_a_chapter(run, lines):

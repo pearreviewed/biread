@@ -105,3 +105,26 @@ def _pdf_pages(path: Path) -> int | None:
         return len(PdfReader(str(path)).pages)
     except Exception:  # pypdf absent, or the file is not a readable PDF
         return None
+
+
+#: Bytes of file per character of text, above which the file is carrying pictures
+#: of its pages and not only their glyphs. Every PDF in the corpus that was
+#: typeset digitally sits between 1.1 and 4.1 — Gutenberg, Wikisource, a converted
+#: EPUB alike — and the Internet Archive scan of the 1949 Nausea sits at 80.6, so
+#: the exact figure is immaterial and only the order of magnitude is real.
+#: Measured against the text rather than the page count on purpose: a PDF printed
+#: as seven enormous pages reads as 330 KB a page and is not a scan at all.
+SCANNED_BYTES_PER_CHAR = 20
+
+
+def looks_scanned(path: Path, text: str) -> bool:
+    """Whether a file is a photograph of a book rather than a copy of its text.
+
+    A scan stores an image of every page beside the characters OCR read off it,
+    which is one thing about a file that cannot be faked and needs no model to
+    see. It matters because OCR misreads words — `lloquentin` for Roquentin,
+    `itwas`, a quotation mark as the page number beside it — and biread does not
+    correct them: what the file says is what the reader gets, so the reader is
+    told which kind of file this is instead.
+    """
+    return bool(text) and path.stat().st_size / len(text) > SCANNED_BYTES_PER_CHAR

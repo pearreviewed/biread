@@ -456,6 +456,63 @@ def test_a_day_named_in_dialogue_is_not_a_heading():
     ]
 
 
+def test_a_heading_at_the_top_of_a_scanned_page_keeps_its_blank_line_below_only():
+    # A printed page marks a heading with space above and below it. A scan hands
+    # over only the space below: an entry beginning a page arrives with the foot
+    # of the previous page's last paragraph directly above it, and seven of the
+    # twenty entries in a scan of the 1949 Nausea were lost that way. What stands
+    # above has still finished, which is the mark that is left to read.
+    scanned = DIARY.replace("\n\nWEDNESDAY", "\nWEDNESDAY")
+    assert [c.title for c in clean(scanned)[0]] == [
+        "MONDAY, 29 JANUARY 1932", "TUESDAY, 30 JANUARY", "WEDNESDAY", "THURSDAY",
+    ]
+
+
+def test_a_line_the_scan_ran_into_is_not_a_heading():
+    # The other side of the same relaxation: where the paragraph above has *not*
+    # finished, the line is inside it and no amount of space below makes it a
+    # heading.
+    running = DIARY.replace(
+        "illness does, not like an ordinary certainty.\n\nTUESDAY, 30 JANUARY",
+        "illness does, not like an ordinary certainty. It was a\nTUESDAY, 30 JANUARY",
+    )
+    assert [c.title for c in clean(running)[0] if c.title] == [
+        "MONDAY, 29 JANUARY 1932", "WEDNESDAY", "THURSDAY",
+    ]
+
+
+def test_speech_whose_opening_mark_the_scan_lost_is_still_speech():
+    # OCR read the opening quotation of “No, Tuesday, you know because of the …”
+    # as the page number stamped beside it, and handed over `44No, Tuesday, you
+    # know because of the . ..”`. The mark that closes the speech survived.
+    spoken = DIARY.replace("WEDNESDAY\n", "44No,   Tuesday,    you   know   because    of the  . ..”\n")
+    assert [c.title for c in clean(spoken)[0] if c.title] == [
+        "MONDAY, 29 JANUARY 1932", "TUESDAY, 30 JANUARY", "THURSDAY",
+    ]
+
+
+def test_a_sentence_about_a_day_is_not_a_dateline():
+    # A dateline opens on its day, or puts one word in front of it: "Shrove
+    # Tuesday", "MARDI GRAS". "The usual Sunday sauerkraut ?" puts the day third,
+    # and was being read as a chapter of Nausea.
+    aside = DIARY.replace("WEDNESDAY\n", "The   usual   Sunday    sauerkraut   ?\n")
+    assert [c.title for c in clean(aside)[0] if c.title] == [
+        "MONDAY, 29 JANUARY 1932", "TUESDAY, 30 JANUARY", "THURSDAY",
+    ]
+    shrove = DIARY.replace("WEDNESDAY\n", "SHROVE TUESDAY\n")
+    assert "SHROVE TUESDAY" in [c.title for c in clean(shrove)[0]]
+
+
+def test_a_scans_spacing_does_not_reach_the_heading_on_the_page():
+    # A dated heading is the one heading that keeps its own words, so it is the
+    # one place OCR spacing would show. The body escapes it because `_blocks`
+    # collapses runs of spaces; the heading has to be collapsed on its own. The
+    # length bound is still read off the line as the file sets it, or a scan that
+    # spaces a page out would slip a longer line under the limit.
+    spaced = DIARY.replace("WEDNESDAY", "Wednesday,     30   January:")
+    assert "Wednesday, 30 January:" in [c.title for c in clean(spaced)[0]]
+
+
 def test_two_dates_are_too_few_to_be_a_spine():
     # Two of anything is a coincidence. Three is the book saying how it is built.
     chapters, _ = clean(DIARY.split("WEDNESDAY")[0])

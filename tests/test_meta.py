@@ -4,7 +4,7 @@ import zipfile
 from pathlib import Path
 
 from biread.cleanup import Chapter
-from biread.meta import describe
+from biread.meta import describe, looks_scanned
 
 CONTAINER = (
     '<?xml version="1.0"?><container version="1.0" '
@@ -129,3 +129,27 @@ def test_a_pdf_that_says_nothing_about_itself_claims_nothing(tmp_path):
     info = describe(path)
     assert (info.title, info.author) == (None, None)
     assert info.pages == 1
+
+
+def test_a_file_carrying_pictures_of_its_pages_is_a_scan(tmp_path):
+    """A scan stores an image of every page beside the characters OCR read off
+    it, which is one thing about a file that cannot be faked. Every digitally
+    typeset PDF in the corpus sits between 1.1 and 4.1 bytes per character of
+    text; the Internet Archive scan of the 1949 Nausea sits at 80.6."""
+    path = tmp_path / "scan.pdf"
+    path.write_bytes(b"\x00" * 200_000)
+    assert looks_scanned(path, "a page of text" * 100)
+
+
+def test_a_file_that_is_only_its_text_is_not_a_scan(tmp_path):
+    path = tmp_path / "book.pdf"
+    text = "a page of text" * 1_000
+    path.write_bytes(text.encode() * 3)
+    assert not looks_scanned(path, text)
+
+
+def test_an_empty_file_is_not_called_a_scan(tmp_path):
+    # Nothing to divide by, and "we could not read this" is a different message.
+    path = tmp_path / "empty.pdf"
+    path.write_bytes(b"\x00" * 5_000)
+    assert not looks_scanned(path, "")

@@ -21,6 +21,7 @@ from .gloss import estimate as estimate_gloss
 from .gloss import gloss_book
 from .llm import get_client
 from .export import write_epub, write_pdf
+from .meta import looks_scanned
 from .render import download_name, render_book, slugify
 from .segment import unsegmented
 from .targets import DEFAULT_LANG, TARGETS, get_target
@@ -111,10 +112,31 @@ def truncate(text: str, limit: int) -> str:
     return text if len(text) <= limit else text[:limit] + "…"
 
 
-def load_book(path: Path) -> tuple[list[Chapter], list[Removal]]:
+def load_book(path: Path) -> tuple[list[Chapter], list[Removal], bool]:
+    """The book, what was stripped from it, and whether the file is a scan."""
     if not path.exists():
         raise BireadError(f"input file not found: {path}")
-    return clean(get_extractor(path).extract(path), from_pdf=path.suffix.lower() == ".pdf")
+    raw = get_extractor(path).extract(path)
+    chapters, removals = clean(raw, from_pdf=path.suffix.lower() == ".pdf")
+    return chapters, removals, looks_scanned(path, raw)
+
+
+def report_scan(names: list[str]) -> None:
+    """Say a file is a photograph of a book, once, before anything is paid for.
+
+    Terminal only, like every other figure that would clutter a page someone is
+    reading. What it is for is the decision in front of the reader: OCR misreads
+    words, biread does not correct them because correcting them means writing
+    into the book, and a second edition of the same title usually reads clean.
+    """
+    if not names:
+        return
+    print(f"\n{' and '.join(names)} arrived as a scan: an image of every page, with "
+          f"the text read off it by OCR. Expect misread words in that column "
+          f"(`lloquentin` for Roquentin, `itwas`, a quotation mark read as a page "
+          f"number). They are left exactly as the file has them, because correcting "
+          f"them would mean writing words into the book that its author did not. A "
+          f"digital edition of the same title reads clean.")
 
 
 def report_removals(removals: list[Removal]) -> None:
@@ -137,9 +159,14 @@ def report_structure(chapters: list[Chapter]) -> None:
     total = sum(len(c.paragraphs) for c in chapters)
     print(f"\nDetected {len(chapters)} chapter(s), {total} paragraph(s) total:")
     for chapter in chapters:
-        label = f"Chapitre {chapter.number}" if chapter.number else "(untitled leading section)"
-        title = f' — "{chapter.title}"' if chapter.title else ""
-        print(f"  {label}{title}: {len(chapter.paragraphs)} paragraph(s)")
+        # A diary's entries carry a title and no number, and calling those
+        # "untitled" printed `(untitled leading section) — "MARDI 30 JANVIER."`
+        # twenty-one times down a build of Nausea.
+        if chapter.number:
+            label = f'Chapitre {chapter.number}{f" — {chapter.title}" if chapter.title else ""}'
+        else:
+            label = chapter.title or "(untitled leading section)"
+        print(f"  {label}: {len(chapter.paragraphs)} paragraph(s)")
 
     first = next((c for c in chapters if c.paragraphs), None)
     if first:
@@ -306,11 +333,16 @@ def run_translation(chapters: list[Chapter], cache: Cache, cfg: Config, target_n
 
 
 def run(args: argparse.Namespace) -> None:
-    chapters, removals = load_book(args.input)
+    chapters, removals, scanned = load_book(args.input)
     # Both files are read before either is judged: where one lost its paragraph
     # breaks and the other kept them, the other's shape is what puts them back,
     # and a refusal issued file by file would never find that out.
-    published_chapters = load_book(args.published)[0] if args.published else None
+    published_chapters = None
+    scans = [args.input.name] if scanned else []
+    if args.published:
+        published_chapters, _, published_scanned = load_book(args.published)
+        if published_scanned:
+            scans.append(args.published.name)
     chapters, published_chapters, cut = recut(chapters, published_chapters)
     # A side still flat has no other edition to take its breaks from, and the
     # model can read it for them at build time — so it is refused here only when
@@ -333,6 +365,8 @@ def run(args: argparse.Namespace) -> None:
         recut_chapters = published_chapters if cut == "published" else chapters
         print(f"\nThe {cut} edition arrived with no paragraph breaks. Cut to the other "
               f"edition's shape: {sum(len(c.paragraphs) for c in recut_chapters):,} paragraphs.")
+
+    report_scan(scans)
 
     print(f"Cleaned '{args.input.name}':\n")
     report_removals(removals)
