@@ -109,7 +109,7 @@ def to_settings(page, route="translate", body=BOOK, key="sk-or-v1-test"):
 def test_the_door_asks_for_the_book_first(page):
     """Who does the work is a question about a book, so the book comes first."""
     assert showing(page, "books")
-    assert text(page, ".hero h1").startswith("The original on one page")
+    assert text(page, ".hero h1").startswith("The original on the left")
     assert page.eval_on_selector_all("#route button", "n => n.length") == 3
     assert page.locator("#engine").count() == 1
     assert not showing(page, "settings")
