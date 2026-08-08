@@ -317,9 +317,15 @@
   .leaf .head { display: flex; flex-direction: column; gap: 7px; }
   .leaf .head i { font: italic 10.5px/1.3 'Charis SIL', Charter, Georgia, serif; letter-spacing: .04em; color: var(--page-muted); text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .leaf .head .rule { height: 1px; background: var(--page-edge); opacity: .5; }
-  .leaf p { margin: 0; font-size: 11.5px; line-height: 1.68; color: var(--page-ink); }
+  /* Separated the way the reader separates them, at the reader's own
+     proportions: an indented first line and a half-line after. The sample is a
+     miniature of the book it is selling, so a page that ran its paragraphs
+     together was describing a book that does not exist. */
+  .leaf p { margin: 0 0 .5em; font-size: 11.5px; line-height: 1.68; color: var(--page-ink); text-indent: 1.4em; }
+  .leaf p:last-child { margin-bottom: 0; }
   .leaf .folio { margin-top: auto; padding-top: 14px; font: italic 10px/1 'Charis SIL', Charter, Georgia, serif; color: var(--page-muted); text-align: center; }
-  .leaf .waiting { color: rgba(51,42,28,.34); }
+  /* Apparatus, not prose: it takes neither the indent nor the book's ink. */
+  .leaf .waiting { color: rgba(51,42,28,.34); text-indent: 0; }
   .caret { display: inline-block; width: 7px; height: 11px; margin-left: 2px; vertical-align: -1px; background: rgba(51,42,28,.45); animation: blink 1.1s step-end infinite; }
   @keyframes blink { 50% { opacity: 0; } }
 
@@ -1687,10 +1693,7 @@ function paintProof() {
         ? "Nothing in this edition answers to this page."
         : "Nothing in this edition answers to part of this page."));
     }
-    lines.forEach((text, i) => {
-      box.appendChild(el("p", null, text || ""));
-      if (i < lines.length - 1) box.appendChild(el("div", null, ""));
-    });
+    for (const text of lines) box.appendChild(el("p", null, text || ""));
   }
   $("proof-l-folio").textContent = s.index * 2 + 1;
   $("proof-r-folio").textContent = s.index * 2 + 2;
