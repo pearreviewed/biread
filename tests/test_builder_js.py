@@ -342,6 +342,9 @@ def test_the_price_is_scaled_from_the_page_that_was_read(page):
     """The whole reason the sample is weighed: a constant fitted to one model ran
     1.8× light on the first model it had not seen."""
     to_settings(page)
+    # Both halves weighed, which is the whole-book regime: with only the opening
+    # glossed, the page read is the wrong ruler for the hover and stands aside.
+    page.click("[data-scope=whole]")
     page.wait_for_function("document.getElementById('fig').textContent.indexOf('$') !== -1")
     counted = text(page, "#fig")
     page.click(".empty .ghost")
@@ -352,6 +355,24 @@ def test_the_price_is_scaled_from_the_page_that_was_read(page):
     # (0.0009 + 0.0055) translating and glossing 3102 chars, over a 38974-char book.
     assert text(page, "#fig") == "≈ $0.08"
     assert text(page, "#fig") != counted, "the measured figure should replace the counted one"
+
+
+def test_the_hover_is_made_for_the_opening_by_default(page):
+    """Glossing costs about four times translating and runs after both pages are
+    written, so on a long book it is the whole of the wait. The book carries the
+    protocol instead and fills itself in as it is read."""
+    to_settings(page)
+    assert page.get_attribute("[data-scope=opening]", "aria-pressed") == "true"
+    assert "start reading in minutes" in text(page, "#gloss-scope-note")
+    assert page.evaluate("() => glossLimit()") == 40
+
+    page.click("[data-scope=whole]")
+    assert page.evaluate("() => glossLimit()") == 0
+    assert "longest part of a build" in text(page, "#gloss-scope-note")
+
+    # And no choice to make where there is no hover to make it about.
+    page.uncheck("#gloss")
+    assert hidden(page, "#gloss-scope")
 
 
 # ---- building, and what comes out ----------------------------------------

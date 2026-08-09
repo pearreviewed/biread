@@ -109,6 +109,9 @@ def test_a_book_comes_out_with_the_hover_it_was_asked_for(engine):
     html = page.evaluate("() => S.html")
     assert html.count('"units"') == 24, "every paragraph should carry its hover units"
     assert "Here is paragraph number 0" in html
+    # And it can finish itself: the default glosses the book's opening only, so
+    # every book built here leaves carrying the protocol and the model to ask.
+    assert '"gloss": {"enabled": true' in html
 
 
 def test_a_build_interrupted_is_a_build_resumed(engine):

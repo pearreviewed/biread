@@ -71,7 +71,7 @@ const SETUP = [
   "_JOB = {}",
   "def gloss_task():",
   "    from biread.gloss import MAX_TOKENS, plan_gloss",
-  "    plan = plan_gloss(_JOB['draft'].chapters, _JOB['cache'], _JOB['target'].name)",
+  "    plan = plan_gloss(_JOB['draft'].chapters, _JOB['cache'], _JOB['target'].name, gloss_limit or None)",
   "    _JOB['plan'] = plan",
   "    js_progress('gloss', len(plan.run.glosses), plan.run.total)",
   "    return json.dumps({'system': plan.system(0), 'retry': plan.system(1),",
@@ -98,7 +98,12 @@ const SETUP = [
   "    _JOB['run'] = plan.run",
   "def build_end():",
   "    from biread.build import finish",
-  "    res = finish(_JOB['draft'], _JOB.get('run'))",
+  // The protocol travels with the book whenever a chat model was chosen, so a
+  // book whose opening was glossed — or which was built with no hover at all —
+  // is finished by whoever reads it, on their own key. It costs a few kilobytes
+  // and saves the hours a full gloss pass would have taken before page one.
+  "    offer = {'provider': provider, 'model': MODEL, 'lang': _JOB['target'].name} if _JOB.get('client') else None",
+  "    res = finish(_JOB['draft'], _JOB.get('run'), offer)",
   "    tr = res.translation.cost if res.translation else None",
   "    gl = res.gloss.cost if res.gloss else None",
   "    spent = None if tr is None and gl is None else (tr or 0.0) + (gl or 0.0)",
@@ -293,7 +298,7 @@ const ESTIMATE = [
   "    e = est_tr(orig_chapters, cache, cfg, target.name)",
   "    out.update(paragraphs=e.total, pending=e.pending, translate_cost=e.cost)",
   "if want_gloss:",
-  "    g = est_gl(orig_chapters, cache, cfg.for_glossing(), target.name)",
+  "    g = est_gl(orig_chapters, cache, cfg.for_glossing(), target.name, gloss_limit or None)",
   "    out.update(gloss_cost=g.cost or 0.0, gloss_done=g.cached, gloss_total=g.total)",
   "out['cost'] = (out['translate_cost'] or 0.0) + (out['gloss_cost'] or 0.0)",
   "json.dumps(out)",
@@ -380,6 +385,9 @@ self.onmessage = async (e) => {
     // another language are another translation.
     pyodide.globals.set("work_key", m.workKey || "loose");
     pyodide.globals.set("want_gloss", !!m.gloss);
+    // How much of the hover the build itself makes. Null is the whole book; a
+    // number is its opening, with the rest left to the reader.
+    pyodide.globals.set("gloss_limit", m.glossLimit || 0);
     pyodide.globals.set("api_key", m.key || "");
     pyodide.globals.set("title", m.title || "book");
     pyodide.globals.set("model_id", m.model || "claude-sonnet-5");

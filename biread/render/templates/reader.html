@@ -18,7 +18,17 @@
     <button class="btn-pill" id="blur-toggle" data-i18n="blur">Blur translation</button>
     <!-- Only on a book published without glosses, and only once it says where to
          ask for them. Hidden by default so every other book is untouched. -->
-    <button class="btn-pill" id="gloss-btn" data-i18n="glossAdd" hidden>Add glosses</button>
+    <!-- Every label this button can wear is laid out inside it, all but one of
+         them hidden, so the pill is as wide as its widest word in any language
+         and pressing it cannot resize the header. A control that changes its own
+         width up here forces a repagination, and a repagination wipes whatever
+         the control was saying. -->
+    <button class="btn-pill ghosted" id="gloss-btn" hidden>
+      <span id="gloss-label">Add glosses</span>
+      <i data-i18n="glossAdd" aria-hidden="true">Add glosses</i>
+      <i data-i18n="glossAdding" aria-hidden="true">Adding glosses…</i>
+      <i data-i18n="glossKeepingUp" aria-hidden="true">Glossing as you read</i>
+    </button>
     <div class="segmented-row">
       <div class="segmented" role="group" aria-label="Translation source">
         <button id="seg-translation" data-i18n="translation" aria-pressed="true">AI translation</button>

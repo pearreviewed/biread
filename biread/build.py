@@ -64,11 +64,21 @@ class Draft:
     alignment: AlignmentReport | None = None
 
 
-def finish(draft: Draft, gloss_run: GlossRun | None = None) -> BuildResult:
-    """The draft set in type, with whatever glosses were made for it."""
+def finish(
+    draft: Draft, gloss_run: GlossRun | None = None, gloss_on_demand: dict | None = None
+) -> BuildResult:
+    """The draft set in type, with whatever glosses were made for it.
+
+    `gloss_on_demand` puts the glossing protocol in the book, so a book built
+    with its opening glossed — or with none at all — is finished by whoever reads
+    it, on their own key, while they read. Glossing costs about four times
+    translating and is the whole of a long build's wait; this is the way out of
+    waiting for it.
+    """
     html = render_html(
         draft.title, draft.chapters, draft.translations, draft.published, draft.note,
         gloss_run.glosses if gloss_run else None, None, draft.target, solo=draft.solo,
+        gloss_on_demand=gloss_on_demand,
     )
     return BuildResult(
         html=html, translation=draft.translation, alignment=draft.alignment,

@@ -128,6 +128,8 @@
   var keyPanel = null;
   var bought = {};      // glosses this reader paid for, by paragraph hash
   var glossBusy = false;
+  var glossAhead = false;   // finishing the book's glosses while it is read
+  var glossFailures = 0;
   var reviseTarget = null;
   var reviseBusy = false;
   var undoStack = []; // this session's corrections, for Cmd/Ctrl+Z
@@ -1065,6 +1067,10 @@
         PAIRS[i].units = displayableUnits(PAIRS[i].fr, bought[PAIRS[i].h]);
       }
     }
+    // A reader who turned the pass on last time is not asked again: it picks the
+    // book up where it stopped, which is the whole point of it.
+    var ahead = lsGet('glossAhead');
+    glossAhead = !!(ahead && ahead.on && GLOSS && GLOSS.endpoint && !S.mobile);
   }
 
   // Paragraphs on the French page in front of the reader that have no units yet.
@@ -1079,15 +1085,97 @@
     return want;
   }
 
+  // Everything in the book with no hover on it yet, from a given pair onward.
+  // Body paragraphs only: a pair without a hash is not one this reader may keep
+  // a gloss against, and there is nothing else in PAIRS.
+  function unglossedFrom(start) {
+    var want = [];
+    for (var i = start; i < PAIRS.length; i++) {
+      if (!PAIRS[i].units && PAIRS[i].h && PAIRS[i].fr.trim()) want.push(i);
+    }
+    return want;
+  }
+
+  // One request's worth: several short paragraphs cost a fraction of several
+  // requests, and the model reads them as the continuous prose they are. Bounded
+  // by characters rather than by count, as the engine's own batches are, because
+  // what the model has to write back runs several times its input.
+  var AHEAD_CHARS = 2000;
+  function nextBatch() {
+    // What is in front of the reader comes first, always: a page being looked at
+    // is worth more than a page forty spreads away.
+    var here = unglossedHere();
+    var pool = here.length ? here : unglossedFrom(0);
+    var take = [], chars = 0;
+    for (var i = 0; i < pool.length; i++) {
+      if (take.length && chars + PAIRS[pool[i]].fr.length > AHEAD_CHARS) break;
+      take.push(pool[i]);
+      chars += PAIRS[pool[i]].fr.length;
+    }
+    return take;
+  }
+
   function updateGlossButton() {
     var btn = document.getElementById('gloss-btn');
     if (!btn) return;
-    // Shown only where there is something to gloss and somewhere to ask. A page
-    // already glossed offers nothing, which is the honest state of that page.
-    var pending = GLOSS && !S.mobile && GLOSS.endpoint ? unglossedHere() : [];
-    btn.hidden = !pending.length;
-    btn.disabled = glossBusy;
-    btn.textContent = i18n(glossBusy ? 'glossAdding' : 'glossAdd');
+    // Shown while there is anything left to gloss and somewhere to ask. Once the
+    // whole book carries its hover there is nothing to offer, which is the
+    // honest state of a finished book.
+    var left = GLOSS && !S.mobile && GLOSS.endpoint ? unglossedFrom(0) : [];
+    btn.hidden = !left.length;
+    document.getElementById('gloss-label').textContent =
+      i18n(glossBusy ? 'glossAdding' : glossAhead ? 'glossKeepingUp' : 'glossAdd');
+    btn.setAttribute('aria-pressed', glossAhead ? 'true' : 'false');
+  }
+
+  // Glossing the rest of the book while it is being read.
+  //
+  // A book published without glosses is not a book that must stay that way: the
+  // reader has a key, the protocol is in the file, and the hours the builder
+  // would have spent are hours nobody has to wait for. So the page in front of
+  // the reader is glossed first and the rest follows behind it, one request at a
+  // time — one, because this runs under somebody who is reading, and six would
+  // be a build wearing a book's clothes.
+  //
+  // It never starts by itself. Turning it on is a press, and it stays on for
+  // this book in this browser until it is pressed again.
+  function glossAlong() {
+    if (!GLOSS || glossBusy || !glossAhead) return;
+    var indices = nextBatch();
+    if (!indices.length) { glossAhead = false; return updateGlossButton(); }
+    if (!apiKey) { glossAhead = false; updateGlossButton(); return openKeyPanel(GLOSS, glossPage); }
+    glossBusy = true;
+    updateGlossButton();
+    // Output runs several times the input here, so the ceiling is generous.
+    providerRequest(GLOSS, apiKey, GLOSS.prompt, glossPrompt(indices), 8192).then(
+      function (out) {
+        glossBusy = false;
+        var landed = applyGlosses(indices, out);
+        // A paragraph the model will not segment must not be asked for forever:
+        // it is left plain, which is what it would have been anyway.
+        if (!landed) for (var i = 0; i < indices.length; i++) PAIRS[indices[i]].units = [];
+        glossFailures = landed ? 0 : glossFailures + 1;
+        settle(landed);
+      },
+      function () { glossBusy = false; glossFailures++; settle(false); }  // same order
+    );
+
+    function settle(landed) {
+      // Three refusals in a row is a key or a provider that is not going to
+      // answer, and going on would be spending a reader's money on nothing.
+      if (glossFailures >= 3) glossAhead = false;
+      updateGlossButton();
+      if (!landed && !glossAhead) showGlossError();
+      if (glossAhead) setTimeout(glossAlong, 200);
+    }
+  }
+
+  function toggleGlossing() {
+    glossAhead = !glossAhead;
+    glossFailures = 0;
+    try { lsSet('glossAhead', { v: STORE_VERSION, on: glossAhead }); } catch (e) {}
+    updateGlossButton();
+    if (glossAhead) glossAlong();
   }
 
   // One call for the page: five short paragraphs cost a fifth of five calls, and
@@ -1100,25 +1188,14 @@
     return lines.join('\n\n');
   }
 
+  // What the button in the header does: ask for a key the first time, then turn
+  // the pass on or off.
   function glossPage() {
-    if (!GLOSS || glossBusy) return;
-    var indices = unglossedHere();
-    if (!indices.length) return;
-    if (!apiKey) { openKeyPanel(GLOSS, glossPage); return; }
-    glossBusy = true;
-    updateGlossButton();
-    // Output runs several times the input here, so the ceiling is generous.
-    providerRequest(GLOSS, apiKey, GLOSS.prompt, glossPrompt(indices), 8192).then(
-      function (out) {
-        glossBusy = false;
-        var landed = applyGlosses(indices, out);
-        // Settle the button before saying anything on it: updateGlossButton
-        // rewrites the label, so reporting first would erase the report.
-        updateGlossButton();
-        if (!landed) showGlossError();
-      },
-      function () { glossBusy = false; updateGlossButton(); showGlossError(); }  // same order
-    );
+    if (!GLOSS) return;
+    if (!glossAhead && !apiKey) {
+      return openKeyPanel(GLOSS, function () { if (!glossAhead) toggleGlossing(); });
+    }
+    toggleGlossing();
   }
 
   // Split the reply on its paragraph markers and locate each block in the
@@ -1142,14 +1219,25 @@
     }
     if (!any) return false;
     lsSet('glosses', { v: STORE_VERSION, byHash: bought });
-    paint();
+    // Only where the page in front of the reader actually changed. The pass runs
+    // on through the whole book, and repainting the spread every ten seconds for
+    // a paragraph forty pages away would take the tooltip out from under the
+    // pointer of somebody who is reading.
+    if (touchesThisSpread(indices)) paint();
     return true;
+  }
+
+  function touchesThisSpread(indices) {
+    var spread = spreads[S.spreadIndex], hit = false;
+    if (!spread) return false;
+    eachPart(spread, function (p) { if (indices.indexOf(p) !== -1) hit = true; });
+    return hit;
   }
 
   function showGlossError() {
     var btn = document.getElementById('gloss-btn');
     if (!btn) return;
-    btn.textContent = i18n('glossFailed');
+    document.getElementById('gloss-label').textContent = i18n('glossFailed');
     setTimeout(updateGlossButton, 3200);
   }
 
@@ -1434,7 +1522,10 @@
     rule.className = 'info-rule';
     var body = document.createElement('div');
     body.className = 'info-body';
-    body.textContent = reviseText('reviseKeyBody', cfg);
+    // Glossing says what it will go on doing. A key given for one page and then
+    // spent on a whole book would be a thing the reader was not told.
+    body.textContent = reviseText('reviseKeyBody', cfg)
+      + (cfg === GLOSS ? ' ' + i18n('glossKeyBody') : '');
     panel.appendChild(title);
     panel.appendChild(rule);
     panel.appendChild(body);
@@ -2744,6 +2835,9 @@
     lastBox = { width: Math.round(stage.clientWidth), height: Math.round(stage.clientHeight) };
     watchLayout();
     syncStart();
+    // The page in front of the reader is glossed first, so a book resumed with
+    // the pass on is readable before the rest of it catches up.
+    if (glossAhead) glossAlong();
   }
 
   // A page closed mid-debounce would otherwise lose the last page turn, which is

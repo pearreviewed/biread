@@ -116,6 +116,9 @@
   .seg button::after { content: attr(data-label); font-weight: 700; visibility: hidden; }
   .seg button:hover:not([aria-pressed="true"]) { background: var(--tint); color: var(--ink); }
   .seg button[aria-pressed="true"] { background: var(--page); box-shadow: 0 1px 3px rgba(90,70,40,.1); font-weight: 700; color: var(--ink); }
+  /* The same control, sized for a panel rather than for a front door. */
+  .seg.small { grid-template-columns: repeat(2, 1fr); padding: 4px; border-radius: 15px; }
+  .seg.small button { padding: 9px 6px; font-size: 14px; border-radius: 11px; }
   :root[data-theme="night"] .seg { border-radius: 14px; }
   :root[data-theme="night"] .seg button { border-radius: 11px; }
   :root[data-theme="night"] .seg button[aria-pressed="true"] { background: rgba(200,184,145,.9); color: #241b12; }
@@ -621,7 +624,19 @@
         <div class="note">A multilingual embedding model reads both editions and pairs them paragraph by paragraph.</div>
       </div>
 
-      <label class="check" id="gloss-block"><input type="checkbox" id="gloss" checked><span>Hover-to-translate<span style="color:var(--muted)" id="gloss-when">, charged once at build</span></span></label>
+      <div class="field" id="gloss-block">
+        <label class="check"><input type="checkbox" id="gloss" checked><span>Hover-to-translate<span style="color:var(--muted)" id="gloss-when">, charged once at build</span></span></label>
+        <!-- Glossing costs about four times translating and runs after both
+             pages are written, so it is the whole of a long build's wait. The
+             book can carry the protocol instead and finish itself while it is
+             read, which is why the opening is the default: you start reading in
+             minutes rather than hours. -->
+        <div class="seg small" id="gloss-scope">
+          <button data-scope="opening" aria-pressed="true" data-label="The opening now"><span>The opening now</span></button>
+          <button data-scope="whole" aria-pressed="false" data-label="The whole book now"><span>The whole book now</span></button>
+        </div>
+        <div class="note" id="gloss-scope-note"></div>
+      </div>
 
       <div class="lang"><span class="note">Into</span><select id="lang"><option value="en">English</option></select></div>
     </div>
@@ -717,6 +732,8 @@ const S = {
   // `cloud` is the key-holding provider to come back to when the reader tries
   // their own machine and thinks better of it.
   route: "translate", provider: "openrouter", cloud: "openrouter", local: false,
+  // how much of the hover the build makes: the opening, or all of it
+  glossScope: "opening",
   tier: "balanced", prices: {}, langs: null,
   orig: null, pub: null, info: { orig: null, pub: null },
   sample: null, sampleIndex: 0, sampleSpend: 0,
@@ -1577,6 +1594,7 @@ async function payload(extra) {
     // The same paragraphs in another language are another translation, so the
     // work already paid for is filed under both.
     workKey: S.book ? S.book + "." + $("lang").value : "loose",
+    glossLimit: glossLimit(),
     local: S.local,
     shelfKey: S.pick && S.route === "shelf" ? S.pick.key : null,
     provider: S.local ? "openrouter" : S.provider,
@@ -1639,6 +1657,34 @@ for (const b of $("tiers").children) {
 }
 $("any-model").addEventListener("input", () => { paintTiers(); priceIt(); });
 $("gloss").addEventListener("change", () => { setProvider(S.provider); priceIt(); });
+// How much of the hover the build itself makes. Glossing is four times the cost
+// of translating and runs after both pages are written, so on a long book it is
+// the whole of the wait — and the book can carry the protocol instead and finish
+// itself while it is read, on the same key, a page ahead of the reader.
+const GLOSS_OPENING = 40;   // paragraphs: the first several spreads
+function paintGlossScope() {
+  const want = $("gloss").checked;
+  $("gloss-scope").hidden = !want;
+  $("gloss-scope-note").hidden = !want;
+  for (const b of $("gloss-scope").children) {
+    b.setAttribute("aria-pressed", b.dataset.scope === S.glossScope ? "true" : "false");
+  }
+  $("gloss-scope-note").textContent = S.glossScope === "whole"
+    ? "Every paragraph is glossed before you get the book. It is much the longest part of a build."
+    : "The first pages are glossed now and the book fills in the rest as you read it, on this same key. "
+      + "You can start reading in minutes.";
+}
+for (const b of $("gloss-scope").children) {
+  b.addEventListener("click", () => {
+    S.glossScope = b.dataset.scope;
+    paintGlossScope();
+    S.sample = null; S.estimate = null;
+    priceIt();
+  });
+}
+function glossLimit() {
+  return S.glossScope === "whole" ? 0 : GLOSS_OPENING;
+}
 
 /* --- step two ------------------------------------------------------------ */
 const PROV_NOTE = {
@@ -1675,7 +1721,8 @@ function setProvider(prov) {
   $("model-block").hidden = S.local || (aligning() && !$("gloss").checked);
   $("model-why").hidden = !aligning();
   $("embed-block").hidden = S.local || !aligning();
-  $("gloss-when").textContent = S.local ? ", done once at build" : ", charged once at build";
+  $("gloss-when").textContent = "";
+  paintGlossScope();
   $("setup").textContent =
     'OLLAMA_ORIGINS="' + location.origin + '" ollama serve\nollama pull ' + $("local-chat").value.trim() +
     (aligning() ? "\nollama pull " + $("local-embed").value.trim() : "");
@@ -1852,7 +1899,10 @@ function measured() {
     ? (e.gloss_total - (e.gloss_done || 0)) / e.gloss_total : 1;
   return {
     translate: s.cost == null ? null : s.cost * scale * owing,
-    glosses: s.glossCost == null ? null : s.glossCost * scale * glossOwing,
+    // The page read is a rate over the whole book, which is the wrong ruler for
+    // a build glossing only the opening. There the counted estimate already
+    // measures the job as asked for, so it is left to speak.
+    glosses: s.glossCost == null || glossLimit() ? null : s.glossCost * scale * glossOwing,
   };
 }
 // What an earlier session already bought, said plainly and only when there is
@@ -1934,7 +1984,11 @@ function paintPrice() {
   // above the paragraph count on the file card and should not look like it.
   const count = e ? e.paragraphs.toLocaleString() + " passages" : "The book";
   const parts = [count + " translated (" + money(translate) + ")"];
-  if (glosses != null) parts.push("glosses (" + money(glosses) + ")");
+  // Named for what is actually being bought: with the opening glossed and the
+  // rest left to the reader, a bare "glosses" would read as the whole book's.
+  if (glosses != null) {
+    parts.push((glossLimit() ? "glosses for the opening (" : "glosses (") + money(glosses) + ")");
+  }
   const resumed = alreadyDone();
   $("fig-detail").textContent = parts.join(" plus ") + ", charged to your key."
     + (weighed ? " Scaled from the page you read, on this very model." : "")

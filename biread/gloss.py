@@ -357,11 +357,13 @@ def build_prompt(units: list[Unit], indices: list[int]) -> str:
     return "Divide each paragraph below into hover units:\n\n" + numbered
 
 
-def estimate(chapters: list[Chapter], cache: Cache, cfg: Config, gloss_lang: str = "English"):
+def estimate(chapters: list[Chapter], cache: Cache, cfg: Config,
+             gloss_lang: str = "English", limit: int | None = None):
     from .translate import Estimate
 
     units = body_units(chapters)
-    pending = [i for i, u in enumerate(units) if cache_key(u.hash) not in cache]
+    wanted = len(units) if limit is None else min(limit, len(units))
+    pending = [i for i, u in enumerate(units[:wanted]) if cache_key(u.hash) not in cache]
     batches = list(batch(units, pending, max_chars=BATCH_CHARS))
     body_chars = sum(len(units[i].text) for i in pending)
 
@@ -372,8 +374,10 @@ def estimate(chapters: list[Chapter], cache: Cache, cfg: Config, gloss_lang: str
     # actual bill.
     output_tokens = int(body_chars * 5.3) // CHARS_PER_TOKEN
     return Estimate(
-        total=len(units),
-        cached=len(units) - len(pending),
+        # The job as asked for: with the book's opening glossed and the rest left
+        # to the reader, the total is what the build will actually do.
+        total=wanted,
+        cached=wanted - len(pending),
         pending=len(pending),
         input_tokens=input_tokens,
         output_tokens=output_tokens,
@@ -476,12 +480,21 @@ class GlossPlan:
         return build_prompt(self.units, self.groups[n])
 
 
-def plan_gloss(chapters: list[Chapter], cache: Cache, gloss_lang: str = "English") -> GlossPlan:
-    """What is already glossed, and what is left to ask for."""
+def plan_gloss(
+    chapters: list[Chapter], cache: Cache, gloss_lang: str = "English", limit: int | None = None
+) -> GlossPlan:
+    """What is already glossed, and what is left to ask for.
+
+    `limit` glosses only the book's opening. Glossing costs about four times
+    translating and runs after both pages are written, so a reader who wants the
+    hover can have the first pages of it now and the rest as they read — the book
+    carries the protocol and finishes itself on their own key.
+    """
     units = body_units(chapters)
     glosses = {u.hash: decode(cache.get(cache_key(u.hash)))
                for u in units if cache_key(u.hash) in cache}
-    pending = [i for i, u in enumerate(units) if u.hash not in glosses]
+    wanted = len(units) if limit is None else min(limit, len(units))
+    pending = [i for i, u in enumerate(units[:wanted]) if u.hash not in glosses]
     return GlossPlan(
         units=units,
         groups=list(batch(units, pending, max_chars=BATCH_CHARS)),
@@ -568,6 +581,7 @@ def gloss_book(
     cfg: Config,
     on_progress: Callable[[int, int], None] | None = None,
     gloss_lang: str = "English",
+    limit: int | None = None,
 ) -> GlossRun:
     """Gloss every uncached body paragraph, one request after another.
 
@@ -575,7 +589,7 @@ def gloss_book(
     with text the model altered. It reads as ordinary prose with no hover
     targets, and is named in the run so it can be looked at.
     """
-    plan = plan_gloss(chapters, cache, gloss_lang)
+    plan = plan_gloss(chapters, cache, gloss_lang, limit)
     run = plan.run
     if not plan.groups:
         return run

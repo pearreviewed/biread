@@ -1321,11 +1321,15 @@ def stub_model(page, reply):
 
 #: A reply that segments the test book's repeated French sentence.
 BAR = "¦"
-GLOSS_REPLY = "@@@1@@@\n" + "\n".join([
+GLOSS_UNITS = "\n".join([
     BAR.join(["Une phrase", "noun phrase", "a sentence"]),
     BAR.join(["française", "adjective", "French"]),
     BAR.join(["assez courte", "adjective", "short enough"]),
 ])
+GLOSS_REPLY = "@@@1@@@\n" + GLOSS_UNITS
+#: The same, answering a whole batch: the pass asks for several paragraphs at a
+#: time, and a reply carrying one marker would gloss one of them per request.
+GLOSS_REPLY_BATCH = "\n".join(f"@@@{n}@@@\n{GLOSS_UNITS}" for n in range(1, 13))
 
 
 def test_a_book_built_with_glosses_offers_no_way_to_buy_them(reader):
@@ -1343,7 +1347,7 @@ def test_the_offer_appears_only_where_a_page_lacks_glosses(browser, gloss_path):
     page.close()
 
 
-def test_glossing_a_page_asks_for_a_key_then_calls_only_the_provider(browser, gloss_path):
+def test_glossing_asks_for_a_key_then_calls_only_the_provider(browser, gloss_path):
     page = _fresh(browser, gloss_path)
     page.evaluate("() => localStorage.clear()")
     rewind(page)
@@ -1352,17 +1356,120 @@ def test_glossing_a_page_asks_for_a_key_then_calls_only_the_provider(browser, gl
     page.click("#gloss-btn")
     page.wait_for_selector(".revise-key", timeout=3000)
     assert "glosses" in page.inner_text(".revise-key .info-title")
+    # And it says what it will go on doing: a key given for one page and then
+    # spent on a whole book would be a thing the reader was not told.
+    assert "rest of the book while you read" in page.inner_text(".revise-key .info-body")
     assert page.evaluate("() => window.__calls.length") == 0, "no call before a key"
 
     page.fill(".revise-key-input", "sk-reader-key")
     page.click('.revise-key .revise-btn:text-is("Save")')
     page.wait_for_selector("#stage-wrap .page-left .unit", timeout=5000)
 
-    calls = page.evaluate("() => window.__calls")
-    assert len(calls) == 1, "one call for the page, not one per paragraph"
-    assert calls[0]["url"] == OPENROUTER_ENDPOINT
-    assert calls[0]["headers"]["authorization"] == "Bearer sk-reader-key"
-    assert "deepseek/deepseek-chat-v3.1" in calls[0]["body"]
+    first = page.evaluate("() => window.__calls[0]")
+    assert first["url"] == OPENROUTER_ENDPOINT
+    assert first["headers"]["authorization"] == "Bearer sk-reader-key"
+    assert "deepseek/deepseek-chat-v3.1" in first["body"]
+    # Several paragraphs to a call, never one call per paragraph.
+    assert first["body"].count("@@@") > 2
+    page.close()
+
+
+#: Kept glosses, by paragraph hash — the reader's own record of what it bought.
+KEPT = ("() => { const slug = JSON.parse(document.getElementById('book-data').textContent).slug;"
+        " const raw = localStorage.getItem('biread:' + slug + ':glosses');"
+        " return raw ? Object.keys(JSON.parse(raw).byHash).length : 0; }")
+AHEAD = ("() => { const slug = JSON.parse(document.getElementById('book-data').textContent).slug;"
+         " const raw = localStorage.getItem('biread:' + slug + ':glossAhead');"
+         " return raw ? JSON.parse(raw).on : null; }")
+
+
+def test_the_pass_finishes_the_book_while_it_is_being_read(browser, gloss_path):
+    """The reader's own answer to a build that would have taken an afternoon:
+    the page in front of you first, then the rest of the book behind it, one
+    request at a time because somebody is reading."""
+    page = _fresh(browser, gloss_path)
+    page.evaluate("() => localStorage.clear()")
+    page.evaluate("() => localStorage.setItem('biread:revise-key:openrouter', 'sk-x')")
+    page.reload()
+    page.wait_for_function(
+        "() => { const c = document.getElementById('counter');"
+        "return c && c.textContent && !c.textContent.includes('+'); }", timeout=15000)
+    stub_model(page, GLOSS_REPLY_BATCH)
+    rewind(page)
+
+    page.click("#gloss-btn")
+    assert page.inner_text("#gloss-btn") in ("Glossing as you read", "Adding glosses…")
+    # Every body paragraph in the book, not only the ones on this spread, and
+    # nothing left to buy once they are all there.
+    page.wait_for_selector("#gloss-btn", state="hidden", timeout=25000)
+    assert page.evaluate(KEPT) == 26
+    assert page.evaluate("() => window.__calls.length") > 1
+    page.close()
+
+
+def test_the_button_holds_its_width_through_every_label_it_wears(browser, gloss_path):
+    """A header control that resizes when pressed resizes the stage, which
+    repaginates the book, which wipes whatever the control was saying. It cost
+    the scrubber its life once; this pill wears three labels and one width."""
+    page = _fresh(browser, gloss_path)
+    page.evaluate("() => localStorage.clear()")
+    page.evaluate("() => localStorage.setItem('biread:revise-key:openrouter', 'sk-x')")
+    page.reload()
+    page.wait_for_function(
+        "() => { const c = document.getElementById('counter');"
+        "return c && c.textContent && !c.textContent.includes('+'); }", timeout=15000)
+    page.evaluate("() => { window.fetch = function () { return new Promise(function () {}); }; }")
+    rewind(page)
+
+    width = page.eval_on_selector("#gloss-btn", "e => e.getBoundingClientRect().width")
+    assert page.inner_text("#gloss-btn") == "Add glosses"
+    page.click("#gloss-btn")
+    assert page.inner_text("#gloss-btn") == "Adding glosses…"
+    assert page.eval_on_selector("#gloss-btn", "e => e.getBoundingClientRect().width") == width
+    page.close()
+
+
+def test_the_pass_is_stopped_by_pressing_it_again(browser, gloss_path):
+    page = _fresh(browser, gloss_path)
+    page.evaluate("() => localStorage.clear()")
+    page.evaluate("() => localStorage.setItem('biread:revise-key:openrouter', 'sk-x')")
+    page.reload()
+    page.wait_for_function(
+        "() => { const c = document.getElementById('counter');"
+        "return c && c.textContent && !c.textContent.includes('+'); }", timeout=15000)
+    # A provider that never answers: the pass stays on until it is stopped, and
+    # never has a second request in the air.
+    page.evaluate("() => { window.__calls = []; window.fetch = function () {"
+                  " window.__calls.push(1); return new Promise(function () {}); }; }")
+    rewind(page)
+
+    page.click("#gloss-btn")
+    page.wait_for_function("() => window.__calls.length === 1", timeout=5000)
+    assert page.evaluate(AHEAD) is True
+    page.wait_for_timeout(600)
+    assert page.evaluate("() => window.__calls.length") == 1, "one request at a time"
+
+    page.click("#gloss-btn")
+    assert page.evaluate(AHEAD) is False
+    assert page.get_attribute("#gloss-btn", "aria-pressed") == "false"
+    page.close()
+
+
+def test_the_pass_is_picked_up_again_next_time_the_book_is_opened(browser, gloss_path):
+    """Left on, it carries on: a book half glossed is finished by reading it."""
+    page = _fresh(browser, gloss_path)
+    page.evaluate("() => localStorage.clear()")
+    page.evaluate("() => localStorage.setItem('biread:revise-key:openrouter', 'sk-x')")
+    page.evaluate("() => { const slug = JSON.parse("
+                  "document.getElementById('book-data').textContent).slug;"
+                  " localStorage.setItem('biread:' + slug + ':glossAhead',"
+                  " JSON.stringify({v: 2, on: true})); }")
+    # Before the book boots, so the pass it starts on its own is caught.
+    page.add_init_script(
+        "window.__calls = [];"
+        "window.fetch = function () { window.__calls.push(1); return new Promise(function () {}); };")
+    page.reload()
+    page.wait_for_function("() => window.__calls && window.__calls.length === 1", timeout=15000)
     page.close()
 
 
@@ -1432,16 +1539,17 @@ def test_bought_glosses_survive_reopening_the_book(browser, gloss_path):
     rewind(page)
     page.click("#gloss-btn")
     page.wait_for_selector("#stage-wrap .page-left .unit", timeout=5000)
+    page.click("#gloss-btn")   # stopped, so nothing runs on the way back in
 
-    # Reopened, with no stub in place: a second call would fail outright, so the
-    # glosses on the page can only have come from what was kept.
+    # Reopened, with no stub in place: a call would fail outright, so the glosses
+    # on the page can only have come from what was kept.
     page.reload()
     page.wait_for_function(
         "() => { const c = document.getElementById('counter');"
         "return c && c.textContent && !c.textContent.includes('+'); }", timeout=15000)
     rewind(page)
     page.wait_for_selector("#stage-wrap .page-left .unit", timeout=5000)
-    assert page.locator("#gloss-btn").is_hidden(), "a page already glossed offers nothing"
+    assert page.inner_text("#gloss-btn") == "Add glosses", "the pass is off, and offered"
     page.close()
 
 

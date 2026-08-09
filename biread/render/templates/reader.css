@@ -114,6 +114,15 @@ button:focus-visible { outline: 2px solid rgba(200,175,130,.85); outline-offset:
 .edits-btn.copied::after { content: 'Edits link copied'; }
 
 .btn-pill { font-size: 14px; color: var(--ink); background: var(--fill); border: 1px solid var(--rule); border-radius: 999px; padding: 7px 16px; }
+/* A pill that changes its own label holds the room for every label it can wear,
+   stacked in one grid cell with all but the live one hidden. Otherwise pressing
+   it resizes the header, which resizes the stage, which repaginates the book. */
+.btn-pill.ghosted { display: inline-grid; place-items: center; }
+/* A class setting `display` outranks the browser's own rule for [hidden], and a
+   header control that will not go away is worse than one that cannot hold still. */
+.btn-pill.ghosted[hidden] { display: none; }
+.btn-pill.ghosted > * { grid-area: 1 / 1; }
+.btn-pill.ghosted > i { visibility: hidden; font-style: normal; white-space: nowrap; }
 .segmented-row { display: flex; align-items: center; gap: 6px; }
 .segmented { display: flex; align-items: stretch; border: 1px solid var(--rule); border-radius: 999px; overflow: hidden; }
 .segmented button { font-size: 14px; border: none; padding: 7px 15px; background: transparent; color: var(--ink-soft); transition: background .2s ease, color .2s ease; }
