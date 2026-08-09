@@ -365,6 +365,29 @@ def test_the_progress_spread_fills_with_the_book_being_made(page):
     assert page.eval_on_selector_all("#bind-r .caret", "n => n.length") == 1
 
 
+def test_matching_shows_the_counterpart_it_placed(page):
+    """The right page used to be empty for the whole of an aligning run: the route
+    seeded the spread with the French and an empty string for every counterpart,
+    so the left page turned and the right never did anything at all."""
+    to_settings(page, route="align")
+    page.click("#build")
+    page.wait_for_function(
+        "document.getElementById('bind-r').textContent.indexOf('Dutch') !== -1", timeout=15000)
+    assert "hollandais" in text(page, "#bind-l")
+    assert page.eval_on_selector_all("#bind-r .waiting", "n => n.length") == 0
+
+
+def test_matching_says_what_the_right_page_is_waiting_for(page):
+    """Until the first chapter lands there is no pair to show, so the left page
+    turns on the count alone and the right says why it is empty."""
+    page.evaluate(
+        "show('binding');"
+        "tookSeed([['Il ne parle que hollandais.', ''], ['Et pourtant.', '']]);"
+        "paintBinding({stage: 'align', done: 5, total: 22})")
+    assert "hollandais" in text(page, "#bind-l")
+    assert "answers to it" in text(page, "#bind-r")
+
+
 def test_the_finished_book_is_offered_with_its_cover_and_its_bill(page):
     to_settings(page)
     page.click("#build")
@@ -435,6 +458,47 @@ def test_the_time_left_is_not_guessed_from_a_clock_that_never_started(page):
     page.evaluate("show('binding'); paintBinding({stage: 'translate', done: 412, total: 1842})")
     assert text(page, "#bind-eta") == "The tab can sit in the background."
     assert "412 of 1,842" in text(page, "#bind-at")
+
+
+def test_a_stage_is_timed_from_its_own_start(page):
+    """Glossing runs last, so a clock kept from the build's start charged the
+    reading and the translating to the first few glosses: seven real minutes
+    over four paragraphs quoted 'About 2806 minutes left' on a book that had
+    well under an hour to go."""
+    to_settings(page)
+    page.evaluate(
+        "show('binding');"
+        "S.started = Date.now() - 7 * 60 * 1000;"
+        "S.clock = { stage: 'translate', at: Date.now() - 6 * 60 * 1000, from: 0, rung: 10 };"
+        "$('bind-eta').textContent = 'About 10 minutes left. The tab can sit in the background.';"
+        "paintBinding({stage: 'gloss', done: 4, total: 1518})")
+    # And the figure the last stage left behind goes with it: held over, it
+    # quotes ten minutes for a pass nobody has timed.
+    assert text(page, "#bind-eta") == "The tab can sit in the background."
+    assert "4 of 1,518" in text(page, "#bind-at")
+
+
+def test_the_wait_is_quoted_in_rungs_once_the_rate_holds_still(page):
+    """Thirty paragraphs glossed in fifty-five seconds, with nine hundred to go,
+    is a wait of about half an hour: said as half an hour, and said the same on
+    the next message rather than counting down."""
+    page.evaluate(
+        "show('binding');"
+        "S.clock = { stage: 'gloss', at: Date.now() - 55000, from: 0 };"
+        "paintBinding({stage: 'gloss', done: 30, total: 930})")
+    assert text(page, "#bind-eta") == "About 30 minutes left. The tab can sit in the background."
+    page.evaluate("paintBinding({stage: 'gloss', done: 31, total: 930})")
+    assert text(page, "#bind-eta") == "About 30 minutes left. The tab can sit in the background."
+
+
+def test_glossing_says_the_two_pages_are_already_written(page):
+    """The longest wait of the build comes after the book itself is made, and a
+    reader watching a counter crawl through fifteen hundred paragraphs has no
+    way of knowing that."""
+    page.evaluate("show('binding'); paintBinding({stage: 'gloss', done: 4, total: 1518})")
+    assert "Both pages are finished" in text(page, "#bind-note")
+    page.evaluate("paintBinding({stage: 'translate', done: 4, total: 1518})")
+    assert text(page, "#bind-note") == ""
 
 
 # ---- the shelf -----------------------------------------------------------

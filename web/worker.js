@@ -261,10 +261,11 @@ const ALIGN = [
   "if want_gloss:",
   indent(CHAT_CLIENT),
   "    gloss_client = client",
-  // The left page of the progress spread turns through the real book, so what it
-  // shows at "paragraph 812 of 3,684" is the paragraph actually being matched.
-  "js_text(json.dumps([[p, ''] for c in orig_chapters for p in c.paragraphs][:400]))",
-  "res = build_aligned(title=title, chapters=orig_chapters, published_chapters=pub_chapters, embed=embedder.embed, target=target, gloss=bool(want_gloss), gloss_client=gloss_client, gloss_cfg=cfg.for_glossing(), on_progress=lambda s, d, t: js_progress(s, d, t))",
+  // Until the first chapter lands there is no match to show, so the left page
+  // turns through the real book on the count alone and the right says it is
+  // waiting. From the first chapter on, the spread shows the pairs themselves.
+  "js_seed(json.dumps([[p, ''] for c in orig_chapters for p in c.paragraphs][:400]))",
+  "res = build_aligned(title=title, chapters=orig_chapters, published_chapters=pub_chapters, embed=embedder.embed, target=target, gloss=bool(want_gloss), gloss_client=gloss_client, gloss_cfg=cfg.for_glossing(), on_progress=lambda s, d, t: js_progress(s, d, t), on_text=lambda pairs: js_text(json.dumps(pairs)))",
   "json.dumps({'html': res.html, 'spent': (res.gloss.cost or 0.0) if res.gloss else None})",
 ].join("\n");
 
@@ -316,6 +317,9 @@ self.onmessage = async (e) => {
     // Finished prose, batch by batch, so the progress spread fills with the book
     // being made rather than a placeholder.
     pyodide.globals.set("js_text", (pairs) => postMessage({ type: "text", pairs: JSON.parse(pairs) }));
+    // The book before any of it is matched: what the left page turns through
+    // while the first chapter is still being read.
+    pyodide.globals.set("js_seed", (pairs) => postMessage({ type: "seed", pairs: JSON.parse(pairs) }));
 
     if (m.type === "shelf") {
       postMessage({ type: "inspected", data: JSON.parse(await pyodide.runPythonAsync(SHELF)) });

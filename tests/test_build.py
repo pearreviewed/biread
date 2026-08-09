@@ -67,6 +67,20 @@ def test_an_aligned_book_can_still_be_glossed(book, published, config, make_clie
     assert result.translation is None
 
 
+def test_matching_streams_the_pairs_it_places(book, published):
+    """The align route had nothing to hand its progress screen, so the spread was
+    fed the French with an empty counterpart and the right page stayed blank for
+    the whole run. Matching reports a chapter at a time, which is what its own
+    counter is already counting."""
+    seen = []
+    build_aligned(
+        title="Micromégas", chapters=book, published_chapters=published, embed=one_vector,
+        on_text=lambda pairs: seen.extend(pairs),
+    )
+    assert [french for french, _ in seen] == [p for c in book[1:] for p in c.paragraphs]
+    assert any(english for _, english in seen)
+
+
 def test_an_aligned_book_builds_without_a_gloss_client(book, published):
     # Asking for glosses with nothing to make them is not worth refusing a book
     # over: the reader gets the same spread, minus the hover.

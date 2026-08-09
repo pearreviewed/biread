@@ -389,6 +389,9 @@
   @media (prefers-reduced-motion: reduce) { .track.wait > span { animation: none; width: 100%; opacity: .35; } }
   .meter .at { font-size: 15px; line-height: 1.4; color: var(--body); }
   .meter .eta { font-size: 13.5px; color: var(--muted); min-height: 1.3em; }
+  /* Its room is kept whether or not it speaks, so a line arriving partway
+     through a build does not shift the meter under a reader's eyes. */
+  .meter .note { font-size: 13.5px; color: var(--muted); min-height: 1.3em; max-width: min(56ch, 86vw); }
   .done { display: flex; align-items: center; justify-content: center; gap: 48px; padding: 40px 0; flex-wrap: wrap; }
   .cover { width: 158px; height: 216px; flex: none; border-radius: 4px 16px 16px 4px; display: flex; flex-direction: column; justify-content: center; gap: 10px; padding: 24px 22px;
     background: linear-gradient(140deg, #54412a, #2b2013); box-shadow: 0 22px 44px rgba(70,52,28,.28); border-left: 5px solid #d8c8a4; }
@@ -655,6 +658,7 @@
       <div class="track"><span id="bar"></span></div>
       <div class="at" id="bind-at">Reading the book…</div>
       <div class="eta" id="bind-eta">The tab can sit in the background.</div>
+      <div class="note" id="bind-note"></div>
     </div>
   </div>
 </section>
@@ -1825,13 +1829,14 @@ $("build").addEventListener("click", async () => {
     if (!S.local && $("remember").checked) localStorage.setItem("or_key", $("key").value.trim());
     else localStorage.removeItem("or_key");
   } catch (e) {}
-  S.started = Date.now();
-  S.pairs = [];
+  S.started = Date.now(); S.clock = null;
+  S.pairs = []; S.matched = false;
   $("bind-l").innerHTML = ""; $("bind-r").innerHTML = "";
   $("bar").style.width = "";
   $("bar").parentElement.classList.add("wait");
   $("bind-at").textContent = "Reading the book…";
   $("bind-eta").textContent = "The tab can sit in the background.";
+  $("bind-note").textContent = "";
   show("binding");
   const model = chosenModel();
   const price = S.local ? [0, 0] : S.prices[model.id] || [0, 0];
@@ -1854,38 +1859,78 @@ function paintBinding(m) {
   $("bar").parentElement.classList.remove("wait");
   $("bar").style.width = Math.min(pct, reading ? 100 : 98) + "%";
   $("bind-at").textContent = (STAGE[m.stage] || "Working") + " · " + m.done.toLocaleString() + " of " + m.total.toLocaleString();
-  if (!reading && m.done > 2 && S.started) {
-    const each = (Date.now() - S.started) / m.done;
-    const left = Math.round(each * (m.total - m.done) / 1000);
-    $("bind-eta").textContent = left > 90
-      ? "About " + Math.round(left / 60) + " minutes left. The tab can sit in the background."
-      : "Nearly there.";
+  // Every stage is clocked from its own first report. One clock for the whole
+  // build charged the reading and the translating to the first few glosses, so
+  // a book forty minutes from finishing said "About 2806 minutes left" at its
+  // fourth paragraph. Starting at the first report rather than at the stage
+  // itself also leaves out the warm-up, which belongs to no paragraph.
+  if (!S.clock || S.clock.stage !== m.stage) {
+    S.clock = { stage: m.stage, at: Date.now(), from: m.done };
+    // The last stage's figure belonged to the last stage. Held over, it says
+    // ten minutes about a pass that has not been timed yet.
+    $("bind-eta").textContent = "The tab can sit in the background.";
   }
-  // The aligner works through the original in order, so the left page turning
-  // with it shows the paragraph actually being matched.
-  if (m.stage === "align" && S.pairs && S.pairs.length) {
+  const done = m.done - S.clock.from, elapsed = Date.now() - S.clock.at;
+  // Nothing is quoted until the rate holds still: an estimate off its first
+  // sample is mostly the warm-up, and a figure that halves twice reads as a
+  // build in trouble.
+  if (!reading && done >= 4 && elapsed >= 15000) {
+    $("bind-eta").textContent = roughly(elapsed / done * (m.total - m.done) / 60000, S.clock);
+  }
+  // Glossing is the last pass and the longest, and it runs after both pages are
+  // written. A reader meeting a long wait here should know what is already made.
+  $("bind-note").textContent = m.stage === "gloss"
+    ? "Both pages are finished. This last pass adds the hover translations." : "";
+  // The aligner works through the original in order, so until the first chapter
+  // is matched the left page turns with the count. After that the real pairs
+  // arrive and drive both pages, so this stands aside.
+  if (m.stage === "align" && !S.matched && S.pairs && S.pairs.length) {
     const at = Math.min(Math.floor(m.done / m.total * S.pairs.length), S.pairs.length - 1);
-    showPair($("bind-l"), [S.pairs[at][0]]);
-    $("bind-r").innerHTML = "";
-    const p = el("p", "waiting", "");
-    p.appendChild(el("span", "caret"));
-    $("bind-r").appendChild(p);
+    paintSpread(S.pairs[at][0], "");
   }
 }
-function showPair(box, lines) {
-  box.innerHTML = "";
-  for (const line of lines) box.appendChild(el("p", null, line));
+// A wait is quoted in rungs, never in a figure that counts down: a number
+// moving every second is a thing to watch, and this screen is asking to be left
+// alone. Coarse also means an estimate a few minutes out is simply right.
+const RUNGS = [2, 5, 10, 15, 20, 30, 45, 60, 90];
+function roughly(minutes, clock) {
+  if (minutes <= 1.5) return "Nearly there.";
+  const step = RUNGS.find((r) => minutes <= r) || 0;
+  // A rung is climbed only where the estimate clears the one it is on by a
+  // tenth, so an estimate resting on a boundary does not flip between thirty
+  // minutes and forty-five message after message. Falling is free: a wait
+  // shortens as it is waited, and a reader watching it shorten is reassured.
+  const at = clock.rung && step > clock.rung && minutes <= clock.rung * 1.1 ? clock.rung : step;
+  clock.rung = at;
+  const said = !at ? "Over " + Math.floor(minutes / 60) + (minutes < 120 ? " hour" : " hours")
+    : at === 60 ? "About an hour"
+    : at === 90 ? "About an hour and a half"
+    : "About " + at + " minutes";
+  return said + " left. The tab can sit in the background.";
 }
-function tookText(pairs) {
-  if (S.busy === "align") { S.pairs = pairs; return; }
-  // The last pair finished, so the spread shows the book actually being made.
-  const last = pairs[pairs.length - 1];
-  if (!last) return;
-  showPair($("bind-l"), [last[0]]);
+// One paragraph and its counterpart, the caret marking the side still being
+// written. A right page with nothing on it says so: a blank one reads as a
+// stalled build, which is what it looked like for the whole of a run.
+function paintSpread(source, target) {
+  $("bind-l").innerHTML = "";
+  $("bind-l").appendChild(el("p", null, source));
   $("bind-r").innerHTML = "";
-  const p = el("p", null, last[1]);
+  const p = target
+    ? el("p", null, target)
+    : el("p", "waiting", "Looking for the paragraph that answers to it");
   p.appendChild(el("span", "caret"));
   $("bind-r").appendChild(p);
+}
+function tookSeed(pairs) { S.pairs = pairs; }
+function tookText(pairs) {
+  // The last pair finished, so the spread shows the book actually being made.
+  // Matching reports a whole chapter at once and a paragraph in it may have
+  // found nothing, so take the last one that did: an unmatched paragraph is
+  // honest on the page and tells a reader nothing here.
+  const last = [...pairs].reverse().find((p) => p[1]) || pairs[pairs.length - 1];
+  if (!last) return;
+  S.matched = true;
+  paintSpread(last[0], last[1]);
 }
 
 /* --- done ------------------------------------------------------------------ */
@@ -1936,6 +1981,7 @@ worker.onmessage = (e) => {
   }
   if (m.type === "progress") return paintFetching(m);
   if (m.type === "text") return tookText(m.pairs);
+  if (m.type === "seed") return tookSeed(m.pairs);
   if (m.type === "hits") return tookHits(m.hits, m.more);
   if (m.type === "probe") return tookProbe(m.data);
 

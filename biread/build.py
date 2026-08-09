@@ -220,6 +220,7 @@ def build_aligned(
     gloss_cache: Cache | None = None,
     gloss_cfg: Config | None = None,
     on_progress: ProgressFn | None = None,
+    on_text: BatchFn | None = None,
 ) -> BuildResult:
     """Set a brought published translation beside the French by *meaning*, using a
     multilingual embedding model, with no translation of our own.
@@ -247,7 +248,8 @@ def build_aligned(
     check_usable(chapters, "The original")
     check_usable(published_chapters, "The published translation")
     aligned, report = align_published(
-        chapters, published_chapters, embed=embed, on_progress=_stage(on_progress, "align")
+        chapters, published_chapters, embed=embed,
+        on_progress=_stage(on_progress, "align"), on_pairs=on_text,
     )
     report.cut = cut
     for count, side in ((dropped_orig, "original"), (dropped_pub, "edition you brought")):

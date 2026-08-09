@@ -265,9 +265,15 @@ self.onmessage = (e) => {
 
   if (m.type === "build" || m.type === "align") {
     // Progress and prose in the order the real engine sends them, so the page
-    // fills exactly as it would on a paid run.
-    postMessage({ type: "text", pairs: [[SOURCE[0], TARGET[0]]] });
-    for (const [stage, done, total] of s.progress) {
+    // fills exactly as it would on a paid run. Matching seeds the book unmatched
+    // first, having no pair to show until a whole chapter has landed.
+    if (m.type === "align") postMessage({ type: "seed", pairs: SOURCE.map((t) => [t, ""]) });
+    else postMessage({ type: "text", pairs: [[SOURCE[0], TARGET[0]]] });
+    // Matching neither translates nor glosses, and its counter is chapters.
+    const stages = m.type === "align" && s.progress === DEFAULTS.progress
+      ? [["read-orig", 1, 1], ["read-pub", 1, 1], ["align", 5, 22]]
+      : s.progress;
+    for (const [stage, done, total] of stages) {
       postMessage({ type: "progress", stage, done, total });
     }
     postMessage({ type: "text", pairs: [[SOURCE[1], TARGET[1]]] });

@@ -1110,6 +1110,7 @@ def _chapter_pairs(
 def _by_embeddings(
     french: list[Chapter], published: list[Chapter], embed: Embed, report: AlignmentReport,
     progress: Callable[[int, int], None] | None = None,
+    on_pairs: Callable[[list[tuple[str, str]]], None] | None = None,
 ) -> dict[str, str]:
     """Match two editions in a shared semantic space — the trustworthy no-key path.
 
@@ -1117,7 +1118,9 @@ def _by_embeddings(
     each, French and published paragraphs are embedded and matched by cosine, so the
     columns line up by meaning rather than by the sparse words two languages share.
     `progress(done, total)` is called per chapter, so a long book is not silent while
-    it embeds."""
+    it embeds; `on_pairs` hands the chapter's finished matches up as they land, so a
+    caller watching the work sees the counterpart actually placed rather than an
+    empty page."""
     report.method = "pivot"
     pairs = _chapter_pairs(french, published, embed)
     aligned: dict[str, str] = {}
@@ -1136,6 +1139,8 @@ def _by_embeddings(
         report.exact += 1
         for paragraph, text in zip(fr.paragraphs, texts):
             aligned[hash_text(paragraph)] = text
+        if on_pairs:
+            on_pairs(list(zip(fr.paragraphs, texts)))
     if progress:
         progress(len(pairs), len(pairs))
     return aligned
@@ -1147,6 +1152,7 @@ def align_published(
     translations: dict[str, str] | None = None,
     embed: Embed | None = None,
     on_progress: Callable[[int, int], None] | None = None,
+    on_pairs: Callable[[list[tuple[str, str]]], None] | None = None,
 ) -> tuple[dict[str, str], AlignmentReport]:
     """Map French paragraph hash -> published English text.
 
@@ -1157,7 +1163,9 @@ def align_published(
     of the French. The same 59% with a tenth of the English placed would be a
     fault. Only this ratio separates them.
     """
-    aligned, report = _align_published(french, published, translations, embed, on_progress)
+    aligned, report = _align_published(
+        french, published, translations, embed, on_progress, on_pairs
+    )
     report.published_chars = sum(len(p) for c in published for p in c.paragraphs)
     # Distinct text: where one English paragraph faces several French ones it is
     # the same English twice, and summing it twice would report more of the
@@ -1172,6 +1180,7 @@ def _align_published(
     translations: dict[str, str] | None = None,
     embed: Embed | None = None,
     on_progress: Callable[[int, int], None] | None = None,
+    on_pairs: Callable[[list[tuple[str, str]]], None] | None = None,
 ) -> tuple[dict[str, str], AlignmentReport]:
     """Map French paragraph hash -> published English text.
 
@@ -1207,7 +1216,9 @@ def _align_published(
     # locally, or a cloud model) matches the two editions by meaning, so the columns
     # line up even where they share no words at all.
     if embed is not None:
-        return _by_embeddings(fr_bodies, pub_bodies, embed, report, on_progress), report
+        return _by_embeddings(
+            fr_bodies, pub_bodies, embed, report, on_progress, on_pairs
+        ), report
 
     # With no generated translation to pivot through, the editions are matched on
     # what survives translation: the names and numbers they share.
