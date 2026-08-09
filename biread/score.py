@@ -28,12 +28,14 @@ import argparse
 import gzip
 import hashlib
 import json
+import re
 import sys
 import time
 from dataclasses import dataclass, field
+from difflib import SequenceMatcher
 from pathlib import Path
 
-from .align import Embed, align_published, open_together, similarity, tokenize
+from .align import Embed, align_published, open_together
 from .build import recut
 from .cleanup import Chapter, clean
 from .errors import BireadError
@@ -41,13 +43,56 @@ from .extract import get_extractor
 from .llm.embed import BATCH
 from .translate import hash_text
 
-#: How alike two readings of the same passage must be to count as the same
-#: reading. `similarity` is containment, so it already forgives one side carrying
-#: more of the passage than the other, which is exactly how two files of one
-#: translation differ once their paragraph breaks disagree. What it must not
-#: forgive is a different passage, and a third of the shorter text in common is
-#: the bar the rest of the aligner uses for that.
-SAME_PASSAGE = 0.34
+#: How much of the shorter reading must be found inside the longer before the two
+#: are the same passage. Generous, because these are two copies of one English
+#: translation: what stands between them is OCR misreading a word here and there,
+#: and one file carrying more of the passage than the other where their paragraph
+#: breaks disagree. A different passage shares only its commonest words.
+SAME_PASSAGE = 0.6
+
+#: Enough of a passage to recognise it by. Comparison is quadratic in the length
+#: of what it is shown, and a French paragraph can be handed a page of English
+#: where a translator split it; the opening of each is plenty to tell two
+#: passages apart.
+COMPARE_WORDS = 120
+
+_NOISE = re.compile(r"[^0-9a-z]+")
+
+
+def _plain(text: str) -> list[str]:
+    """A reading reduced to what neither OCR nor typography can change about it:
+    its words, lowercased, stripped of punctuation and quotation marks."""
+    return _NOISE.sub(" ", text.lower()).split()[:COMPARE_WORDS]
+
+
+def same_passage(left: str, right: str) -> float:
+    """How much of the shorter reading is found, in order, inside the longer.
+
+    Deliberately not `align.similarity`, and that mistake is worth keeping written
+    down: it drops stopwords and words under three letters and then demands two
+    content words in common, which is right for deciding whether a French
+    paragraph and an English one are the same passage, and nonsense here. `"It's
+    hot."` reduces to a single content word, so under that measure a short line of
+    dialogue could never agree with an identical copy of itself, and the first run
+    of this instrument reported eighty-one disagreements of which most were a line
+    of speech against its own reflection.
+
+    Compared word by word and not character by character, which was the second
+    attempt and worse: over characters, `The dog runs.` and `The mountain is far
+    off.` share two thirds of the shorter one in scattered letters and pass for
+    the same sentence. Words are what a passage is made of, and a wrong passage
+    shares only the commonest of them.
+
+    What this cannot see is a one-word paragraph whose one word OCR mangled —
+    `Touche!` arriving as `44 ” Touch*!`. It reads as a disagreement, which is the
+    safe direction for an instrument to be wrong in: it under-reports agreement
+    and so never flatters the matcher it is grading.
+    """
+    a, b = _plain(left), _plain(right)
+    if not a or not b:
+        return 0.0
+    blocks = SequenceMatcher(None, a, b, autojunk=False).get_matching_blocks()
+    return sum(block.size for block in blocks) / min(len(a), len(b))
 
 
 @dataclass
@@ -122,7 +167,7 @@ def compare(french: list[Chapter], a: dict[str, str], b: dict[str, str], keep: i
         left, right = a.get(key, ""), b.get(key, "")
         score.total += 1
         if left and right:
-            if similarity(tokenize(left), tokenize(right)) >= SAME_PASSAGE:
+            if same_passage(left, right) >= SAME_PASSAGE:
                 score.agreed += 1
             else:
                 score.disagreed += 1

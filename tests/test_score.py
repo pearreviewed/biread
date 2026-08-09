@@ -13,7 +13,7 @@ import pytest
 from biread.cleanup import Chapter
 from biread.errors import BireadError
 from biread.llm.embed import BATCH
-from biread.score import ATTEMPTS, Score, _Cached, compare, place
+from biread.score import ATTEMPTS, Score, _Cached, compare, place, same_passage
 from biread.translate import hash_text
 
 FRENCH = [Chapter(None, None, [
@@ -57,6 +57,60 @@ def test_the_same_passage_read_off_a_scan_still_agrees():
         placed("The cat sleeps on the tabIe. He was afraid.", "The dog runs.", "The house is empty."),
     )
     assert (score.agreed, score.disagreed) == (3, 0)
+
+
+def test_a_short_line_of_speech_agrees_with_itself():
+    """The fault the first real run of this instrument found, in itself. Judged by
+    `align.similarity` these reduce to one content word, fail its two-word floor,
+    and score zero against an identical copy — eighty-one of Nausea's paragraphs
+    were reported as disagreements on that basis, most of them speech."""
+    for line in ('"It\'s hot."', '"No, no."', '"Ha ha!"', '"You are mad."'):
+        assert same_passage(line, line) == 1.0
+    assert same_passage('"It\'s hot."', '\u201c It\'s hot.\u201d') >= 0.6
+
+
+def test_a_word_ocr_misread_does_not_lose_the_passage():
+    assert same_passage("among the papers of Antoine Roquentin",
+                        "among the papers of Antoine lloquentin") >= 0.6
+
+
+def test_a_genuinely_different_passage_does_not_agree():
+    assert same_passage("The cat sleeps on the table.", "The mountain is seen from far off.") < 0.6
+    assert same_passage("", "The cat sleeps.") == 0.0
+
+
+def test_a_short_different_line_is_not_read_as_the_same_one():
+    """Why the comparison is over words and not characters. Letter for letter
+    these two share two thirds of the shorter, purely by coincidence, and the
+    character version of this measure called them the same sentence."""
+    assert same_passage("The dog runs.", "The mountain is far off.") < 0.6
+    assert same_passage("He went down to the harbour and watched the boats.",
+                        "She had been reading in the garden since the morning.") < 0.6
+
+
+def test_two_short_lines_that_open_alike_cannot_be_told_apart():
+    """The instrument's noise floor, stated rather than tuned away. `"It's hot."`
+    and `"It's no good."` are two thirds the same by any measure there is, and a
+    threshold strict enough to separate them stops matching a line of speech to
+    its own reflection across two files. Short paragraphs are weak evidence in
+    both directions; they are still counted, because dialogue is where alignment
+    is hardest and dropping it would flatter the matcher."""
+    assert same_passage('"It\'s hot."', '"It\'s no good."') >= 0.6
+
+
+def test_a_one_word_paragraph_its_scan_mangled_reads_as_a_disagreement():
+    """Stated rather than fixed. `Touche!` arrives as `44 " Touch*!` and there is
+    no word left to recognise it by. An instrument that is wrong should be wrong
+    by under-reporting agreement, never by flattering the matcher it grades."""
+    assert same_passage("Touche!", '44 \u201d Touch*!') < 0.6
+
+
+def test_one_side_carrying_more_of_the_passage_still_agrees():
+    # Two files of one translation break their paragraphs differently, so one
+    # side routinely holds the passage plus its neighbour.
+    assert same_passage("The house is empty this morning.",
+                        "The house is empty this morning. He went down to the harbour "
+                        "and watched the boats for an hour.") >= 0.6
 
 
 def test_a_paragraph_only_one_edition_answered_is_not_evidence():
