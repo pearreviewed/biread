@@ -403,6 +403,10 @@ CI so it stops depending on anyone remembering.
 
 | A build that says it needs two days? | **Clock each stage from its own start, quote the wait in rungs, and say what is already finished.** One clock ran from the press of Build and the estimate divided *all* of it by the items the *current* stage had done, so glossing — which runs last — was charged with the whole of the reading and the translating: 7.4 real minutes over four glosses read **"About 2806 minutes left"** on a book with well under an hour to go, then collapsed through hours to minutes as the count climbed, which reads as a build in trouble twice over. Each stage now times itself from its **first report**, which also leaves out the warm-up, and nothing is quoted until the rate has held for four items and fifteen seconds. What is then said is a rung — 2, 5, 10, 15, 20, 30, 45 minutes, an hour, an hour and a half — never a figure counting down, because a number moving every second is a thing to watch and this screen is asking to be left alone; a rung is climbed only where the estimate clears the one it is on by a tenth, so an estimate resting on a boundary does not flip between thirty minutes and forty-five. And glossing says the one thing that makes its length bearable: *Both pages are finished. This last pass adds the hover translations.* Deliberately **not** built, and offered: a "stop here and take the book" button, a build-time quote on the price screen, and a shelf card whose `about N min` counts the glossing it currently ignores. |
 
+| Why does glossing take an afternoon? | **Because none of the waiting overlapped, and now six of them do.** The engine's browser client is a *synchronous* XHR, chosen so the whole pipeline could be written straight through and reused unchanged — which is right everywhere except the one pass that is nothing but network. 1,518 paragraphs of Nausea batch into about 150 requests, each of them a minute or so of a model writing, one after another. The judgement stays where it was and the transport moved out: `gloss.plan_gloss` hands over every batch it means to send, `absorb` takes a reply and anchors it, `written_off` puts what would not anchor to the rescue pass, and `web/gloss-pool.js` makes the calls **six at a time**. What may be kept is still gloss.py's and only gloss.py's, whoever is driving, and a test glosses one book both ways — batches answered in order, and answered backwards — and requires the two to land on the same glosses. A model on the reader's own machine gets **one** hand, because a second request there queues on the same card rather than overlapping. Two things fell out of it: a batch may now be retried through a provider's 429 instead of being lost to it, and the gloss bill on the browser is right for the first time — one client did both stages, so `gloss.cost` was the running total of *both* and the translation was charged twice in what the finished screen reported. The CLI, which has always made a second client, was never wrong. Splitting the build in two is what allows any of it: `build.Draft` is a book made but not glossed, `finish` sets it in type, and both routes go through them. |
+| A build that ends with a closed laptop lid? | **It carries on, because every paragraph paid for was written down as it landed.** Nothing survived the tab: the browser's cache was `Cache(None)`, in memory, so three hours of glossing and a machine switched off came to nothing and the same book began again at full price. `Cache` now takes an `on_write` hook — a caller with no filesystem is not a caller with nothing to persist — and the page keeps each entry in IndexedDB under a hash of the book's own text, one record per entry rather than one per book, since rewriting a megabyte after every batch would have the storage doing more work than the model. Coming back, the reader picks the same file (a browser cannot hold one across a shutdown, and a shelf book is refetched for nothing) and the engine is handed what is held **before the estimate runs**, so the price screen quotes what is left and says why: *1,204 passages of this book are already made from an earlier session, and are not charged again.* The page read prices the remainder too, being a rate and not a total. Filed per language, because the same paragraphs in German are not the translation bought in English. This is not biread holding anybody's book: the keys are hashes, the values are the reader's own text, and all of it is in the reader's own browser. |
+| A book that jumps about while it is being made? | **It keeps the book's own 7:5 and never moves.** The progress spread was sized by whatever paragraph had just landed — 236px, 337px, 236px on three consecutive turns, measured — so the one screen a reader watches for an hour was the one that would not sit still. A page that overruns is faded out at the foot, which is nearer to what a page does than slicing a line of type in half. And it now turns during the **glossing** pass, which is the longest and had nothing repainting it at all: every finished pair is kept in order as it arrives, so the last pass turns through the book that has just been made, with folio numbers under each page, since a spread that changes only its words does not read as a page being turned. |
+
 ## Reversals
 
 Recorded because the reasoning matters more than the outcome.
@@ -481,6 +485,11 @@ Recorded because the reasoning matters more than the outcome.
   90%; its `Book` record and its published row were taken out on 2026-08-06 and
   its built file left in `web/books/`, unlisted. Restoring it is one `Book` back
   in `shelf.py` and one row back in `published.json` — both whole in the history.
+- **Glossing still runs one book at a time on the CLI.** The six-at-once pass is
+  the browser's; `gloss_book` is unchanged and sequential, which is what
+  `python -m biread.publish` uses. Putting the shelf's remaining books through it
+  is the case for lifting the same trick into the CLI, where a thread pool is a
+  far easier thing to write than it was in a worker.
 - **Glossing costs roughly four times translating, and that governs the budget.**
   Priced off Candide's real French (469 paragraphs, 184,197 characters) against
   live OpenRouter rates: on DeepSeek v3.1 the translation is $0.077 and the
@@ -631,7 +640,9 @@ biread/
   anchor.py       vestigial: two editions pinned by the names and numbers they
                   share — the removed surface-token path. Reachable only from
                   tests; kept until it is deleted outright
-  build.py        the pipeline shared by the CLI and the in-browser builder
+  build.py        the pipeline shared by the CLI and the in-browser builder;
+                  `Draft` is a book made but not glossed, `finish` sets it in
+                  type, and the browser runs the pass between them its own way
   gloss.py        per-paragraph hover units; width judged at render, not cache
   language.py     what glossing needs to know about the source language
   render/         book -> one HTML file (templates/ holds the real reader)
@@ -639,7 +650,8 @@ biread/
   llm/            one thin client per provider
   publish.py      shelf book -> a file ready to hand out, then approved by hand
   check.py        a finished book looked at where books break: opening, middle, end
-  cache.py        content-hash JSON cache, merges on write
+  cache.py        content-hash JSON cache, merges on write; `on_write` is how a
+                  caller with no filesystem (the browser) keeps one anyway
   config.py       environment, models, pricing
 ```
 
@@ -658,7 +670,8 @@ selector must be scoped to `#stage-wrap`.
 pip install -e ".[dev]" && pytest              # ~438 Python tests, no network
 pip install -e ".[browser]" && playwright install chromium webkit
 pytest tests/test_reader_js.py                 # 58 tests × 2 engines, the reader
-pytest tests/test_builder_js.py                # 63 tests × 2 engines, the builder
+pytest tests/test_builder_js.py                # 66 tests × 2 engines, the builder
+pytest tests/test_gloss_pool_js.py             # 8 tests × 2 engines, the gloss pool
 BIREAD_ENGINES=chromium pytest tests/test_reader_js.py   # one engine, when it must be quick
 ```
 
@@ -689,6 +702,29 @@ and fast (14s) instead of booting Pyodide from a CDN. A test steers the stub by
 what it puts *inside* the uploaded file: text beginning `SCENARIO:` followed by
 JSON overrides any reply, so error paths and odd metadata are reachable without a
 control the reader could ever meet.
+
+`test_gloss_pool_js.py` drives `web/gloss-pool.js` with a stub in place of both
+Pyodide and the network, which is why that file is a script of its own rather
+than more of `worker.js`: what is worth testing there is how many requests are in
+flight, what a 429 costs, and that a batch nothing anchors in still reaches the
+rescue pass, and none of that needs a Python runtime to be wrong.
+
+The Python written *inside* `worker.js` — half the browser's engine lives in JS
+string arrays — is compiled by `test_web_build.py`, because a typo there is
+invisible until a reader is halfway through paying for a book.
+
+`test_engine_js.py` is the one test that runs the **real** engine: Pyodide, the
+wheel, the gloss plan, the pool and the finished book, with the provider
+intercepted so it costs nothing. It boots from a CDN and reads `web/dist`, so it
+is opt-in and skips by default:
+
+```sh
+python web/build.py && BIREAD_ENGINE_SMOKE=1 pytest tests/test_engine_js.py
+```
+
+It is what proved the resume: a book built, the page reloaded, the same file
+brought back, and the second build asking the provider for **nothing** while
+producing a byte-identical file.
 
 The EPUB and PDF export tests also need `[browser]` — the exporters paginate and
 print in headless Chromium — and skip themselves without it.

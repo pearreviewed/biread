@@ -377,7 +377,18 @@
 
   /* --- binding and done --- */
   .centre { display: flex; flex-direction: column; align-items: center; gap: 24px; padding: 34px 0 10px; }
-  .centre .spread { width: 580px; max-width: 100%; }
+  /* The book being made keeps the book's own 7:5, and keeps it whatever lands on
+     the page. Sized by its content it grew and shrank with every paragraph —
+     236px, 337px, 236px on three consecutive turns — so the thing a reader is
+     watching for minutes on end jumped under their eyes. A page that overruns is
+     cut at the foot, which is what a page does. */
+  .centre .spread { width: 580px; max-width: 100%; aspect-ratio: 7 / 5; }
+  .centre .leaf { min-height: 0; overflow: hidden; }
+  /* A page that overruns is faded out at the foot rather than sliced through a
+     line of type, which no page is. */
+  .centre .leaf > div:first-child { overflow: hidden; min-height: 0;
+    -webkit-mask-image: linear-gradient(#000 calc(100% - 26px), transparent);
+    mask-image: linear-gradient(#000 calc(100% - 26px), transparent); }
   .meter { display: flex; flex-direction: column; align-items: center; gap: 7px; text-align: center; }
   .meter .track { width: 340px; max-width: 70vw; height: 1px; background: var(--rule); position: relative; }
   .meter .track > span { position: absolute; inset: 0; width: 0; background: var(--solid); transition: width .4s ease; }
@@ -711,6 +722,11 @@ const S = {
   sample: null, sampleIndex: 0, sampleSpend: 0,
   estimate: null, ready: false, busy: null,
   html: null, spent: null, started: 0,
+  // the book as it is made: every finished pair, in order, so the last pass has
+  // something to turn through
+  made: [], pairs: [], matched: false,
+  // the hash of the book's own text, which names its slot of paid-for work
+  book: null, restored: null,
   // the shelf: a catalogue, whichever book is picked, and how it is narrowed
   shelf: null, pick: null, filter: null, page: 0, query: "",
   hits: null, looked: "", more: 0, lookOffset: 0,
@@ -727,6 +743,75 @@ function bookName() {
 }
 
 const worker = new Worker("worker.js");
+
+/* --- what has already been paid for --------------------------------------
+   A build spends real money paragraph by paragraph, and a closed tab used to
+   spend it all again: three hours of glossing ended with a laptop lid and
+   nothing to show. Every finished translation and gloss is written here as it
+   lands, under a hash of the book's own text, so the same book picked up again
+   carries on from where it stopped and is charged only for the rest.
+
+   It is the reader's own browser and nowhere else. biread holds no copy of
+   anybody's book, and this does not make it one: the entries are the reader's
+   own text, in the reader's own storage, and the page only hands them back to
+   the engine that made them. */
+const WORK_DB = "biread-work";
+let opened = null;
+function shelfDb() {
+  if (!opened) {
+    opened = new Promise((ok, no) => {
+      const req = indexedDB.open(WORK_DB, 1);
+      req.onupgradeneeded = () => req.result.createObjectStore("work", { keyPath: "id" });
+      req.onsuccess = () => ok(req.result);
+      req.onerror = () => no(req.error);
+    });
+  }
+  return opened;
+}
+// One record per entry rather than one per book: a book's worth of translation
+// runs to megabytes, and rewriting the whole of it after every batch would have
+// the storage doing more work than the model.
+function heldFor(key) {
+  return shelfDb().then((db) => new Promise((ok) => {
+    const req = db.transaction("work").objectStore("work")
+      .getAll(IDBKeyRange.bound(key + "|", key + "|￿"));
+    req.onsuccess = () => {
+      const out = {};
+      for (const row of req.result) out[row.id.slice(key.length + 1)] = row.v;
+      ok(out);
+    };
+    req.onerror = () => ok({});
+  })).catch(() => ({}));
+}
+let owed = { key: null, entries: {} };
+let owedSoon = 0;
+function keepWork(key, entries) {
+  if (owed.key !== key) owed = { key, entries: {} };
+  Object.assign(owed.entries, entries);
+  // Written in one transaction a moment later: a batch lands as a burst of
+  // paragraphs, and each of them opening its own transaction is the slow way.
+  clearTimeout(owedSoon);
+  owedSoon = setTimeout(flushWork, 1500);
+}
+// A browser that will not keep it — private browsing, a full quota — is worth
+// saying so, once. A reader who thinks the build is safe to interrupt and finds
+// it is not has been told something false by silence.
+let unkept = false;
+function flushWork() {
+  const { key, entries } = owed;
+  const keys = Object.keys(entries);
+  if (!key || !keys.length) return Promise.resolve();
+  owed = { key, entries: {} };
+  return shelfDb().then((db) => new Promise((ok, no) => {
+    const t = db.transaction("work", "readwrite");
+    for (const k of keys) t.objectStore("work").put({ id: key + "|" + k, v: entries[k] });
+    t.oncomplete = ok;
+    t.onabort = t.onerror = () => no(t.error);
+  })).catch(() => { unkept = true; });
+}
+// A tab being closed or hidden is exactly when the last batch must not be lost.
+addEventListener("visibilitychange", flushWork);
+addEventListener("pagehide", flushWork);
 
 /* --- theme ------------------------------------------------------------- */
 function paintTheme() {
@@ -1489,6 +1574,10 @@ async function payload(extra) {
     pub: S.route === "align" && S.pub ? await bytes(S.pub) : null,
     pubName: S.route === "align" && S.pub ? S.pub.name : null,
     lang: $("lang").value, route: S.route,
+    // The same paragraphs in another language are another translation, so the
+    // work already paid for is filed under both.
+    workKey: S.book ? S.book + "." + $("lang").value : "loose",
+    local: S.local,
     shelfKey: S.pick && S.route === "shelf" ? S.pick.key : null,
     provider: S.local ? "openrouter" : S.provider,
     baseUrl: BASES[S.local ? "local" : S.provider],
@@ -1500,6 +1589,19 @@ async function payload(extra) {
 function send(type, extra) {
   S.busy = type;
   payload({ type, ...extra }).then((m) => worker.postMessage(m));
+}
+// This book has been seen before, and some of it is already made. Hand what is
+// held back to the engine before anything is priced, so the figure on the next
+// screen is what is left to pay rather than the whole book over again.
+async function resume(book) {
+  if (!book) return;
+  S.book = book;
+  const key = book + "." + $("lang").value;
+  if (S.restored === key) return;
+  S.restored = key;
+  const entries = await heldFor(key);
+  worker.postMessage({ type: "restore", key, entries });
+  if (Object.keys(entries).length && !$("s-settings").hidden) priceIt();
 }
 async function inspect() {
   if (!S.orig) return;
@@ -1741,10 +1843,25 @@ function measured() {
   const s = S.sample;
   if (!s || !s.chars || !s.bookChars) return null;
   const scale = s.bookChars / s.chars;
+  // A book part-built in an earlier session is charged for what is left of it.
+  // The page read is a rate, not a total, so the share still owing is what it is
+  // multiplied by — otherwise resuming would quote the whole book again.
+  const e = S.estimate;
+  const owing = e && e.paragraphs ? (e.pending == null ? 1 : e.pending / e.paragraphs) : 1;
+  const glossOwing = e && e.gloss_total
+    ? (e.gloss_total - (e.gloss_done || 0)) / e.gloss_total : 1;
   return {
-    translate: s.cost == null ? null : s.cost * scale,
-    glosses: s.glossCost == null ? null : s.glossCost * scale,
+    translate: s.cost == null ? null : s.cost * scale * owing,
+    glosses: s.glossCost == null ? null : s.glossCost * scale * glossOwing,
   };
+}
+// What an earlier session already bought, said plainly and only when there is
+// some: a price that has quietly halved is worth a sentence.
+function alreadyDone() {
+  const e = S.estimate;
+  if (!e) return 0;
+  const text = e.pending == null ? 0 : (e.paragraphs || 0) - e.pending;
+  return Math.max(text, e.gloss_done || 0);
 }
 function priceIt() {
   if (!S.ready || !haveBook()) return;
@@ -1818,8 +1935,11 @@ function paintPrice() {
   const count = e ? e.paragraphs.toLocaleString() + " passages" : "The book";
   const parts = [count + " translated (" + money(translate) + ")"];
   if (glosses != null) parts.push("glosses (" + money(glosses) + ")");
+  const resumed = alreadyDone();
   $("fig-detail").textContent = parts.join(" plus ") + ", charged to your key."
-    + (weighed ? " Scaled from the page you read, on this very model." : "");
+    + (weighed ? " Scaled from the page you read, on this very model." : "")
+    + (resumed ? " " + resumed.toLocaleString() + " passages of this book are already made"
+                 + " from an earlier session, and are not charged again." : "");
 }
 
 /* --- building -------------------------------------------------------------- */
@@ -1830,8 +1950,9 @@ $("build").addEventListener("click", async () => {
     else localStorage.removeItem("or_key");
   } catch (e) {}
   S.started = Date.now(); S.clock = null;
-  S.pairs = []; S.matched = false;
+  S.pairs = []; S.made = []; S.matched = false;
   $("bind-l").innerHTML = ""; $("bind-r").innerHTML = "";
+  $("bind-l-folio").textContent = ""; $("bind-r-folio").textContent = "";
   $("bar").style.width = "";
   $("bar").parentElement.classList.add("wait");
   $("bind-at").textContent = "Reading the book…";
@@ -1879,14 +2000,24 @@ function paintBinding(m) {
   }
   // Glossing is the last pass and the longest, and it runs after both pages are
   // written. A reader meeting a long wait here should know what is already made.
-  $("bind-note").textContent = m.stage === "gloss"
+  $("bind-note").textContent = unkept
+    ? "This browser will not keep what has been made, so stopping now would mean starting over."
+    : m.stage === "gloss"
     ? "Both pages are finished. This last pass adds the hover translations." : "";
   // The aligner works through the original in order, so until the first chapter
   // is matched the left page turns with the count. After that the real pairs
   // arrive and drive both pages, so this stands aside.
   if (m.stage === "align" && !S.matched && S.pairs && S.pairs.length) {
     const at = Math.min(Math.floor(m.done / m.total * S.pairs.length), S.pairs.length - 1);
-    paintSpread(S.pairs[at][0], "");
+    paintSpread(S.pairs[at][0], "", at);
+  }
+  // Glossing walks the finished book paragraph by paragraph, in the order the
+  // pages were made, and it is the longest pass of the build. Nothing turned the
+  // spread while it ran, so the screen a reader waits at longest was the one
+  // frozen on whatever the last stage happened to leave there.
+  if (m.stage === "gloss" && S.made.length) {
+    const at = Math.min(Math.max(m.done - 1, 0), S.made.length - 1);
+    paintSpread(S.made[at][0], S.made[at][1], at);
   }
 }
 // A wait is quoted in rungs, never in a figure that counts down: a number
@@ -1911,7 +2042,11 @@ function roughly(minutes, clock) {
 // One paragraph and its counterpart, the caret marking the side still being
 // written. A right page with nothing on it says so: a blank one reads as a
 // stalled build, which is what it looked like for the whole of a run.
-function paintSpread(source, target) {
+//
+// `at` is the paragraph's place in the book, printed as a folio, because a
+// spread that changes its words and nothing else does not read as a page being
+// turned — it reads as text being replaced.
+function paintSpread(source, target, at) {
   $("bind-l").innerHTML = "";
   $("bind-l").appendChild(el("p", null, source));
   $("bind-r").innerHTML = "";
@@ -1920,17 +2055,26 @@ function paintSpread(source, target) {
     : el("p", "waiting", "Looking for the paragraph that answers to it");
   p.appendChild(el("span", "caret"));
   $("bind-r").appendChild(p);
+  const folio = at == null ? "" : at * 2 + 1;
+  $("bind-l-folio").textContent = folio;
+  $("bind-r-folio").textContent = at == null ? "" : at * 2 + 2;
 }
 function tookSeed(pairs) { S.pairs = pairs; }
 function tookText(pairs) {
+  // Every finished pair is kept, in order: glossing runs after both pages are
+  // written and has no prose of its own to report, so the book it turns through
+  // is this one.
+  const from = S.made.length;
+  S.made.push(...pairs);
   // The last pair finished, so the spread shows the book actually being made.
   // Matching reports a whole chapter at once and a paragraph in it may have
   // found nothing, so take the last one that did: an unmatched paragraph is
   // honest on the page and tells a reader nothing here.
-  const last = [...pairs].reverse().find((p) => p[1]) || pairs[pairs.length - 1];
-  if (!last) return;
+  let at = pairs.length - 1;
+  while (at > 0 && !pairs[at][1]) at--;
+  if (at < 0) return;
   S.matched = true;
-  paintSpread(last[0], last[1]);
+  paintSpread(pairs[at][0], pairs[at][1], from + at);
 }
 
 /* --- done ------------------------------------------------------------------ */
@@ -1971,7 +2115,11 @@ worker.onmessage = (e) => {
       if (key === m.langs.default) o.selected = true;
       sel.appendChild(o);
     }
-    sel.addEventListener("change", () => { S.sample = null; paintProof(); priceIt(); });
+    // Another language is another translation, so it has a slot of its own: what
+    // was bought in English is not what is owed in German.
+    sel.addEventListener("change", () => {
+      S.sample = null; paintProof(); resume(S.book).then(priceIt);
+    });
     S.ready = true;
     // The engine's copy of the shelf is the same list shelf.json holds, so it is
     // taken only if that file was not there to be had.
@@ -1980,6 +2128,8 @@ worker.onmessage = (e) => {
     return;
   }
   if (m.type === "progress") return paintFetching(m);
+  if (m.type === "cached") return keepWork(m.key, m.entries);
+  if (m.type === "restored") return;
   if (m.type === "text") return tookText(m.pairs);
   if (m.type === "seed") return tookSeed(m.pairs);
   if (m.type === "hits") return tookHits(m.hits, m.more);
@@ -1993,7 +2143,10 @@ worker.onmessage = (e) => {
     alert_("books-alert", "");
     if (S.pick) { S.pick.loaded = true; measurePick(); paintShelf(); }
     paintFiles();
-    if (!$("s-settings").hidden) { leafTitles(); priceIt(); }
+    // Priced after what is already made has been handed back, never before.
+    resume(m.data.key).then(() => {
+      if (!$("s-settings").hidden) { leafTitles(); priceIt(); }
+    });
   } else if (m.type === "looked") {
     // Probing is over. A hit with a counterpart and no answer is not still being
     // looked at, whatever its card says, and a spinner that never stops is the

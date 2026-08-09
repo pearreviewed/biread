@@ -501,6 +501,83 @@ def test_glossing_says_the_two_pages_are_already_written(page):
     assert text(page, "#bind-note") == ""
 
 
+def spread_height(page):
+    return page.eval_on_selector("#s-binding .spread", "e => Math.round(e.getBoundingClientRect().height)")
+
+
+def test_the_book_being_made_keeps_one_size(page):
+    """Sized by whatever paragraph had just landed, the spread went 236, 337,
+    236 on three consecutive turns — a book jumping under the eyes of somebody
+    watching it for an hour."""
+    page.evaluate("show('binding')")
+    long = "Donc, aujourd'hui, je regardais les bottes fauves d'un officier. " * 9
+    seen = set()
+    for n, source in enumerate(["Court.", "Une phrase de longueur ordinaire.", long, "Bref."]):
+        page.evaluate("([s, i]) => paintSpread(s, s.toUpperCase(), i)", [source, n])
+        seen.add(spread_height(page))
+    assert len(seen) == 1, f"the spread changed size: {sorted(seen)}"
+    # And it is the book's own proportions, not a box of whatever height suits.
+    width = page.eval_on_selector("#s-binding .spread", "e => e.getBoundingClientRect().width")
+    assert abs(width / seen.pop() - 7 / 5) < 0.02
+
+
+def test_the_pages_keep_turning_while_the_glosses_are_made(page):
+    """Nothing repainted the spread during glossing, which is the longest pass
+    of the build: the screen a reader waits at longest was the one frozen."""
+    page.evaluate(
+        "show('binding');"
+        "tookText([['Un.', 'One.'], ['Deux.', 'Two.'], ['Trois.', 'Three.']]);"
+        "paintBinding({stage: 'gloss', done: 1, total: 3})")
+    assert text(page, "#bind-l") == "Un."
+    assert text(page, "#bind-r") == "One."
+    page.evaluate("paintBinding({stage: 'gloss', done: 3, total: 3})")
+    assert text(page, "#bind-l") == "Trois."
+    assert text(page, "#bind-r") == "Three."
+    # A page turning is a folio changing, not only words being replaced.
+    assert text(page, "#bind-l-folio") == "5"
+    assert text(page, "#bind-r-folio") == "6"
+
+
+def test_glossing_a_book_with_nothing_made_yet_does_not_throw(page):
+    """A resumed build can reach the glossing pass with no prose of its own to
+    report, having bought every translation in an earlier session."""
+    page.evaluate("show('binding'); S.made = []; paintBinding({stage: 'gloss', done: 8, total: 90})")
+    assert "8 of 90" in text(page, "#bind-at")
+
+
+# ---- what has already been paid for --------------------------------------
+
+def test_a_paid_for_paragraph_outlives_the_tab(page):
+    """Three hours of glossing used to end with a laptop lid and nothing to show.
+    Every entry is written to the reader's own storage as it lands, under a hash
+    of the book, and handed back to the engine next time."""
+    page.evaluate("keepWork('abc.en', {one: 'un', two: 'deux'})")
+    page.evaluate("() => flushWork()")
+    page.reload()
+    page.wait_for_selector("[data-route=translate]")
+    held = page.evaluate("() => heldFor('abc.en')")
+    assert held == {"one": "un", "two": "deux"}
+    # Another language is another translation, and does not read the first's.
+    assert page.evaluate("() => heldFor('abc.de')") == {}
+
+
+def test_the_price_is_what_is_left_to_pay(page):
+    """A book half built in an earlier session must not be quoted at the whole of
+    itself, and the reader is told why the figure fell."""
+    to_settings(page)
+    page.evaluate(
+        "S.estimate = {paragraphs: 100, pending: 40, translate_cost: 0.4, gloss_cost: 0.0,"
+        " gloss_total: 100, gloss_done: 60, cost: 0.4};"
+        "S.sample = null; paintPrice()")
+    assert "60 passages of this book are already made" in text(page, "#fig-detail")
+    # And the page read prices the remainder, not the book: a rate times what is
+    # owed, where before it was a rate times everything.
+    page.evaluate(
+        "S.sample = {cost: 0.01, glossCost: 0.02, chars: 1000, bookChars: 100000};"
+        "paintPrice()")
+    assert page.evaluate("() => measured().translate") == pytest.approx(0.4, rel=1e-6)
+
+
 # ---- the shelf -----------------------------------------------------------
 
 def to_shelf(page, slug="candide"):

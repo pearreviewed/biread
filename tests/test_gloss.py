@@ -535,3 +535,84 @@ def test_a_pronoun_in_the_surface_no_longer_hides_an_echo():
     (unit,) = parse_units(f"Il avait{FIELD}verb{FIELD}had{FIELD}inf=avoir{FIELD}pc=avait")
     assert unit["perfect"] == ""
     assert unit["infinitive"] == "avoir"
+
+
+# ---------- driven from outside: the browser's several-at-once pass ----------
+
+def _long_book(count=14):
+    return [Chapter("I", None, [
+        f"Paragraphe {n} du texte, et puis une suite un peu plus longue pour occuper "
+        f"la place qu'il faut pour remplir plusieurs lots." for n in range(count)
+    ])]
+
+
+def _reply_for(plan, n):
+    """A well-formed answer for one batch: the opening clause of each paragraph."""
+    blocks = []
+    for i, index in enumerate(plan.groups[n]):
+        head = plan.units[index].text.split(",")[0]
+        blocks.append((i, [line(head, "noun phrase", "a paragraph")]))
+    return response(*blocks).text
+
+
+def test_batches_answered_out_of_order_gloss_the_same_book(tmp_path, config, make_client):
+    """The browser sends six batches at once and the network settles them in
+    whatever order it likes. What may be kept is gloss.py's judgement whoever is
+    driving, so the two paths cannot be allowed to disagree."""
+    from biread.gloss import absorb, plan_gloss, rescue_failures, written_off
+
+    book = _long_book()
+    straight = Cache.load(tmp_path / "a.json")
+    order = plan_gloss(book, straight)
+    assert len(order.groups) > 1, "the fixture must run to several batches"
+    expected = gloss_book(
+        book, make_client(script=[Completion(_reply_for(order, n), False)
+                                  for n in range(len(order.groups))]),
+        straight, config(),
+    )
+
+    backwards = Cache.load(tmp_path / "b.json")
+    plan = plan_gloss(book, backwards)
+    for n in reversed(range(len(plan.groups))):
+        absorb(plan, n, _reply_for(plan, n), backwards)
+        written_off(plan, n)
+    rescue_failures(plan, make_client(), backwards)
+
+    assert plan.run.glosses == expected.glosses
+    assert plan.run.glossed == expected.glossed
+    assert not plan.run.unglossed
+    assert len(Cache.load(tmp_path / "b.json")) == len(Cache.load(tmp_path / "a.json"))
+
+
+def test_a_batch_that_will_not_anchor_reaches_the_rescue_pass(tmp_path, config, make_client):
+    """Written off is not lost: the driven path must hand a failed batch on to
+    the same one-paragraph-at-a-time retry the sequential path makes."""
+    from biread.gloss import absorb, plan_gloss, rescue_failures, written_off
+
+    book = [Chapter("I", None, [PARAGRAPH])]
+    cache = Cache.load(tmp_path / "g.json")
+    plan = plan_gloss(book, cache)
+    assert absorb(plan, 0, "I cannot do that.", cache) == 0
+    written_off(plan, 0)
+    assert [u.text for u in plan.failed] == [PARAGRAPH]
+
+    saved = response((0, [line("Sur la table", "prep. phrase", "on the table")]))
+    rescue_failures(plan, make_client(script=[saved]), cache)
+    assert plan.run.rescued == 1
+    assert hash_text(PARAGRAPH) in plan.run.glosses
+
+
+def test_glosses_already_paid_for_are_not_asked_for_again(tmp_path, config, make_client):
+    """The resume the browser's storage buys: a plan made against a cache that
+    already holds half the book asks for the other half only."""
+    from biread.gloss import plan_gloss
+
+    book = _long_book()
+    cache = Cache.load(tmp_path / "g.json")
+    first = plan_gloss(book, cache)
+    gloss_book(book, make_client(script=[Completion(_reply_for(first, n), False)
+                                         for n in range(len(first.groups))]), cache, config())
+
+    again = plan_gloss(book, Cache.load(tmp_path / "g.json"))
+    assert again.groups == []
+    assert len(again.run.glosses) == 14

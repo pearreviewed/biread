@@ -3,6 +3,9 @@
 // run, build the book — streaming progress and finished prose as they arrive.
 // The page never blocks.
 importScripts("https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js");
+// The gloss pass's transport: `ask` and `glossInParallel`, which do the one part
+// of a build that has to happen out here rather than in the engine.
+importScripts(new URL("gloss-pool.js", self.location.href).href);
 
 // The name below is a placeholder: `web/build.py` stamps the wheel's own content
 // hash into it when the bundle is assembled, and rewrites this line to match. It
@@ -47,6 +50,60 @@ const SETUP = [
   "_SHELF = {}",
   "def ws_fetch(url):",
   "    return open_url(url).read()",
+  // What a build has already paid for, by content hash, kept for as long as the
+  // page can keep it. Nothing here is a copy of a book: the keys are hashes and
+  // the values are the translations and glosses this reader bought. `on_write`
+  // hands each one to the page as it lands, which is what survives the tab.
+  "import json",
+  // A book's own name for itself: the hash of the text it is made of. Two
+  // uploads of the same edition under different filenames are the same book and
+  // share the work already paid for; a different edition is a different book.
+  "def book_key(chapters):",
+  "    from biread.translate import hash_text",
+  "    return hash_text('\\n'.join(p for c in (chapters or []) for p in c.paragraphs))",
+  "_CACHES = {}",
+  "def cache_slot(key):",
+  "    return _CACHES.setdefault(key, {})",
+  "def restore(key, payload):",
+  "    cache_slot(key).update(json.loads(payload))",
+  "    return len(_CACHES[key])",
+  // The book between its two halves: made, not yet glossed, not yet set in type.
+  "_JOB = {}",
+  "def gloss_task():",
+  "    from biread.gloss import MAX_TOKENS, plan_gloss",
+  "    plan = plan_gloss(_JOB['draft'].chapters, _JOB['cache'], _JOB['target'].name)",
+  "    _JOB['plan'] = plan",
+  "    js_progress('gloss', len(plan.run.glosses), plan.run.total)",
+  "    return json.dumps({'system': plan.system(0), 'retry': plan.system(1),",
+  "                       'maxTokens': MAX_TOKENS,",
+  "                       'batches': [{'n': n, 'prompt': plan.prompt(n)}",
+  "                                   for n in range(len(plan.groups))]})",
+  "def gloss_take(n, text):",
+  "    from biread.gloss import absorb",
+  "    return absorb(_JOB['plan'], int(n), text, _JOB['cache'],",
+  "                  lambda d, t: js_progress('gloss', d, t))",
+  "def gloss_off(n):",
+  "    from biread.gloss import written_off",
+  "    written_off(_JOB['plan'], int(n))",
+  // A batch nothing could be anchored in is retried here one paragraph at a
+  // time, on the blocking client — there are few of them, and they are the calls
+  // that need the model's whole attention rather than the network's.
+  "def gloss_end(tokens_in, tokens_out):",
+  "    from biread.gloss import rescue_failures",
+  "    plan, client, cfg = _JOB['plan'], _JOB['client'], _JOB['cfg']",
+  "    was = (client.input_tokens, client.output_tokens)",
+  "    rescue_failures(plan, client, _JOB['cache'], lambda d, t: js_progress('gloss', d, t))",
+  "    plan.run.cost = cfg.estimate_cost(int(tokens_in) + client.input_tokens - was[0],",
+  "                                      int(tokens_out) + client.output_tokens - was[1])",
+  "    _JOB['run'] = plan.run",
+  "def build_end():",
+  "    from biread.build import finish",
+  "    res = finish(_JOB['draft'], _JOB.get('run'))",
+  "    tr = res.translation.cost if res.translation else None",
+  "    gl = res.gloss.cost if res.gloss else None",
+  "    spent = None if tr is None and gl is None else (tr or 0.0) + (gl or 0.0)",
+  "    _JOB.clear()",
+  "    return json.dumps({'html': res.html, 'spent': spent})",
 ].join("\n");
 
 const ready = (async () => {
@@ -90,6 +147,10 @@ const LOAD = [
   // a model absent from the built-in table — Qwen 3 8B, say — still prices exactly.
   "price = (price_in, price_out) if price_in else lookup_price(MODEL)",
   "cfg = Config(provider=provider, model=MODEL, model_gloss=MODEL, api_key=(api_key or None), ollama_host='', base_url=(base_url or None), max_cost_usd=10**9, price_per_mtok=price)",
+  // Everything this reader has already paid for on this book, and a hook that
+  // hands each new entry to the page to be kept. A cache key is a content hash,
+  // so an entry made a fortnight ago on the same paragraph is the same entry.
+  "cache = Cache(None, cache_slot(work_key), on_write=lambda e: js_cached(json.dumps(e)))",
 ].join("\n");
 
 const CHAT_CLIENT = [
@@ -118,7 +179,7 @@ const INSPECT = [
   "    i = describe(Path(path), chapters)",
   // Characters, so the page can price an embedding run without a second read.
   "    return {'title': i.title, 'author': i.author, 'language': i.language, 'pages': i.pages, 'paragraphs': i.paragraphs, 'chars': sum(len(p) for c in chapters for p in c.paragraphs)}",
-  "json.dumps({'orig': _info(orig_path, orig_chapters), 'pub': _info(pub_path, pub_chapters)})",
+  "json.dumps({'orig': _info(orig_path, orig_chapters), 'pub': _info(pub_path, pub_chapters), 'key': book_key(orig_chapters)})",
 ].join("\n");
 
 const indent = (code) => code.split("\n").map((line) => "    " + line).join("\n");
@@ -142,6 +203,7 @@ const SHELF = [
   "        f['lang'], f['page'], f['other'], f['otherPage'], ws_fetch, js_progress,",
   "        (f.get('title'), f.get('author'), f.get('translator')), where)",
   "_SHELF[shelf_key] = (orig_chapters, pub_chapters)",
+  "info['key'] = book_key(orig_chapters)",
   "json.dumps(info)",
 ].join("\n");
 
@@ -226,24 +288,26 @@ const ESTIMATE = [
   "if route != 'translate':",
   "    out['paragraphs'] = sum(len(c.paragraphs) for c in orig_chapters)",
   "else:",
-  "    e = est_tr(orig_chapters, Cache(None), cfg, target.name)",
+  // Against this reader's own cache, so a book half built in an earlier session
+  // is priced at what is left of it rather than at the whole.
+  "    e = est_tr(orig_chapters, cache, cfg, target.name)",
   "    out.update(paragraphs=e.total, pending=e.pending, translate_cost=e.cost)",
   "if want_gloss:",
-  "    g = est_gl(orig_chapters, Cache(None), cfg.for_glossing(), target.name)",
-  "    out['gloss_cost'] = g.cost or 0.0",
+  "    g = est_gl(orig_chapters, cache, cfg.for_glossing(), target.name)",
+  "    out.update(gloss_cost=g.cost or 0.0, gloss_done=g.cached, gloss_total=g.total)",
   "out['cost'] = (out['translate_cost'] or 0.0) + (out['gloss_cost'] or 0.0)",
   "json.dumps(out)",
 ].join("\n");
 
+// The book, up to but not including its glosses. What is left of the build is
+// run from `glossInParallel` below and finished by `build_end`.
 const BUILD = [
   "MODEL = model_id",
   LOAD,
-  "import json",
-  "from biread.build import build_reader",
+  "from biread.build import draft_reader",
   CHAT_CLIENT,
-  "res = build_reader(title=title, chapters=orig_chapters, client=client, cache=Cache(None), cfg=cfg, target=target, published_chapters=pub_chapters, gloss=bool(want_gloss), on_progress=lambda s, d, t: js_progress(s, d, t), on_text=lambda pairs: js_text(json.dumps(pairs)))",
-  "spent = (res.translation.cost or 0.0) + ((res.gloss.cost or 0.0) if res.gloss else 0.0)",
-  "json.dumps({'html': res.html, 'spent': spent})",
+  "_JOB.update(client=client, cache=cache, cfg=cfg.for_glossing(), target=target)",
+  "_JOB['draft'] = draft_reader(title=title, chapters=orig_chapters, client=client, cache=cache, cfg=cfg, target=target, published_chapters=pub_chapters, on_progress=lambda s, d, t: js_progress(s, d, t), on_text=lambda pairs: js_text(json.dumps(pairs)))",
 ].join("\n");
 
 // Align-only: no translation. Match a brought published edition to the French by
@@ -252,27 +316,52 @@ const BUILD = [
 const ALIGN = [
   "MODEL = model_id",
   LOAD,
-  "import json",
-  "from biread.build import build_aligned",
+  "from biread.build import draft_aligned",
   EMBEDDER,
   // Glossing is chat-model work the embedding key usually also reaches, so the
   // hover survives the route that translates nothing.
-  "gloss_client = None",
+  "client = None",
   "if want_gloss:",
   indent(CHAT_CLIENT),
-  "    gloss_client = client",
+  "_JOB.update(client=client, cache=cache, cfg=cfg.for_glossing(), target=target)",
   // Until the first chapter lands there is no match to show, so the left page
   // turns through the real book on the count alone and the right says it is
   // waiting. From the first chapter on, the spread shows the pairs themselves.
   "js_seed(json.dumps([[p, ''] for c in orig_chapters for p in c.paragraphs][:400]))",
-  "res = build_aligned(title=title, chapters=orig_chapters, published_chapters=pub_chapters, embed=embedder.embed, target=target, gloss=bool(want_gloss), gloss_client=gloss_client, gloss_cfg=cfg.for_glossing(), on_progress=lambda s, d, t: js_progress(s, d, t), on_text=lambda pairs: js_text(json.dumps(pairs)))",
-  "json.dumps({'html': res.html, 'spent': (res.gloss.cost or 0.0) if res.gloss else None})",
+  "_JOB['draft'] = draft_aligned(title=title, chapters=orig_chapters, published_chapters=pub_chapters, embed=embedder.embed, target=target, repair_client=client, on_progress=lambda s, d, t: js_progress(s, d, t), on_text=lambda pairs: js_text(json.dumps(pairs)))",
 ].join("\n");
+
+// The whole of a build: the book, then its glosses, then the type set.
+async function buildBook(script, m) {
+  await pyodide.runPythonAsync(script);
+  if (m.gloss && m.key) {
+    const task = JSON.parse(pyodide.runPython("gloss_task()"));
+    const used = task.batches.length
+      ? await glossInParallel(task, {
+          provider: m.provider || "anthropic", baseUrl: m.baseUrl || "",
+          key: m.key, model: m.model, local: !!m.local,
+        })
+      : { in: 0, out: 0 };
+    pyodide.runPython(`gloss_end(${used.in}, ${used.out})`);
+  }
+  return JSON.parse(pyodide.runPython("build_end()"));
+}
 
 self.onmessage = async (e) => {
   await ready;
   const m = e.data;
   try {
+    // What an earlier session already paid for on this book, handed back before
+    // anything is priced or built.
+    if (m.type === "restore") {
+      pyodide.globals.set("work_key", m.key);
+      pyodide.globals.set("restore_json", JSON.stringify(m.entries || {}));
+      postMessage({
+        type: "restored", key: m.key,
+        held: pyodide.runPython("restore(work_key, restore_json)"),
+      });
+      return;
+    }
     const names = [m.origName, m.pubName].filter(Boolean).join(" ").toLowerCase();
     if (names.includes(".pdf")) {
       await pyodide.runPythonAsync("import micropip\nawait micropip.install('pypdf')");
@@ -286,6 +375,10 @@ self.onmessage = async (e) => {
     pyodide.globals.set("orig_name", m.origName || "");
     pyodide.globals.set("pub_name", m.pubName || "");
     pyodide.globals.set("lang_key", m.lang || "en");
+    // Which slot of paid-for work this book uses. The page names it after the
+    // book's own text and the language wanted, since the same paragraphs in
+    // another language are another translation.
+    pyodide.globals.set("work_key", m.workKey || "loose");
     pyodide.globals.set("want_gloss", !!m.gloss);
     pyodide.globals.set("api_key", m.key || "");
     pyodide.globals.set("title", m.title || "book");
@@ -317,6 +410,10 @@ self.onmessage = async (e) => {
     // Finished prose, batch by batch, so the progress spread fills with the book
     // being made rather than a placeholder.
     pyodide.globals.set("js_text", (pairs) => postMessage({ type: "text", pairs: JSON.parse(pairs) }));
+    // Each entry the build pays for, as it lands, for the page to keep. A build
+    // that is interrupted — a closed tab, a machine switched off — then resumes
+    // from here rather than buying the same paragraphs twice.
+    pyodide.globals.set("js_cached", (entries) => postMessage({ type: "cached", key: m.workKey || "loose", entries: JSON.parse(entries) }));
     // The book before any of it is matched: what the left page turns through
     // while the first chapter is still being read.
     pyodide.globals.set("js_seed", (pairs) => postMessage({ type: "seed", pairs: JSON.parse(pairs) }));
@@ -332,9 +429,9 @@ self.onmessage = async (e) => {
     } else if (m.type === "estimate") {
       postMessage({ type: "estimate", data: JSON.parse(await pyodide.runPythonAsync(ESTIMATE)) });
     } else if (m.type === "build") {
-      postMessage({ type: "done", ...JSON.parse(await pyodide.runPythonAsync(BUILD)) });
+      postMessage({ type: "done", ...(await buildBook(BUILD, m)) });
     } else if (m.type === "align") {
-      postMessage({ type: "done", ...JSON.parse(await pyodide.runPythonAsync(ALIGN)) });
+      postMessage({ type: "done", ...(await buildBook(ALIGN, m)) });
     }
   } catch (err) {
     postMessage({ type: "error", error: cleanError(err), during: m.type });

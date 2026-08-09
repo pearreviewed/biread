@@ -108,3 +108,27 @@ def test_flush_ignores_an_unreadable_file_rather_than_losing_work(tmp_path):
     path.write_text("{corrupt")
     cache.update({"a": "kept"})
     assert Cache.load(path).get("a") == "kept"
+
+
+def test_an_entry_is_handed_out_as_it_lands(tmp_path):
+    """What the browser keeps a build by. With no file to write to, `on_write`
+    is the only way a paid-for paragraph outlives the tab that bought it."""
+    seen = []
+    cache = Cache(None, on_write=seen.append)
+    cache.update({"a": "un"})
+    cache.update({"b": "deux", "c": "trois"})
+    cache.update({})
+
+    assert seen == [{"a": "un"}, {"b": "deux", "c": "trois"}]
+    assert cache.get("c") == "trois"
+
+
+def test_entries_handed_in_are_the_cache(tmp_path):
+    """A resumed build reads what an earlier one wrote, and adding to it adds to
+    the caller's own store — the dict is shared, not copied."""
+    held = {"a": "un"}
+    cache = Cache(None, held)
+    cache.update({"b": "deux"})
+
+    assert "a" in cache
+    assert held == {"a": "un", "b": "deux"}

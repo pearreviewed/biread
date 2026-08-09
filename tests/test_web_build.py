@@ -228,3 +228,34 @@ def test_a_shelf_that_has_published_nothing_yet_builds_fine(build, monkeypatch, 
     shelf = json.loads(json.dumps(SHELF))
     build.gather_published(shelf)
     assert "prebuilt" not in shelf["books"][0]
+
+
+def test_the_python_the_worker_carries_is_python():
+    """Half the engine's browser side is Python written inside JavaScript string
+    arrays, where a typo is invisible until a reader is halfway through paying
+    for a book. Every block of it is compiled here."""
+    import re
+
+    root = Path(__file__).resolve().parent.parent
+    worker = (root / "web" / "worker.js").read_text(encoding="utf-8")
+    blocks = re.findall(r"^const ([A-Z_]+) = \[\n(.*?)^\]\.join", worker, re.S | re.M)
+    assert {name for name, _ in blocks} >= {"SETUP", "LOAD", "BUILD", "ALIGN", "SAMPLE", "ESTIMATE"}
+
+    for name, block in blocks:
+        lines = []
+        for line in block.splitlines():
+            line = line.strip()
+            if line.startswith("//") or not line:
+                continue
+            # One block splices another in by name, sometimes indented into a
+            # suite. It is compiled on its own turn; here it stands as a body.
+            spliced = re.fullmatch(r"(indent\()*[A-Z_]+\)*,", line)
+            if spliced:
+                lines.append("    " * line.count("indent(") + "pass")
+                continue
+            quoted = re.fullmatch(r'"(.*)",?', line) or re.fullmatch(r"`(.*)`,?", line)
+            assert quoted, f"{name}: not a plain Python line — {line}"
+            text = quoted.group(1).replace('\\"', '"').replace("\\\\", "\\")
+            # A JS template hole is a value the page fills in; any value compiles.
+            lines.append(re.sub(r"\$\{[^}]*\}", "0", text))
+        compile("\n".join(lines), f"worker.js:{name}", "exec")

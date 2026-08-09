@@ -448,35 +448,117 @@ def rescue(client: LLMClient, text: str, gloss_lang: str = "English") -> list[Gl
     return out or None
 
 
-def _gloss_batch(
-    client: LLMClient, units: list[Unit], indices: list[int], gloss_lang: str = "English"
-) -> dict[int, list[GlossUnit]]:
-    """One batch, retried once when a segmentation cannot be anchored."""
-    prompt = build_prompt(units, indices)
-    for attempt in range(2):
-        system = gloss_system_prompt(gloss_lang) + (RETRY_NOTE if attempt else "")
-        try:
-            completion = client.complete(system, prompt, MAX_TOKENS)
-        except Exception as e:
-            raise GlossError(f"gloss request failed: {e}") from e
-        if completion.truncated:
-            raise GlossError(
-                f"the model hit its {MAX_TOKENS}-token limit mid-paragraph. "
-                f"Lower BATCH_CHARS in gloss.py and re-run."
-            )
-        try:
-            blocks = parse_response(completion.text)
-        except ValueError:
-            continue
+@dataclass
+class GlossPlan:
+    """Every request a gloss run has to make, and somewhere to put the answers.
 
-        anchored: dict[int, list[GlossUnit]] = {}
-        for n, index in enumerate(indices):
-            located = anchor(units[index].text, parse_units(blocks.get(n, "")))
-            if located:
-                anchored[n] = located
-        if anchored:
-            return anchored
-    return {}
+    Split out of `gloss_book` so a caller can make those requests its own way.
+    The browser's client blocks the worker until each one is answered, which is
+    right for one request and is why a book of 1,500 paragraphs took an
+    afternoon: nothing overlapped. With the plan in hand the page runs several at
+    once and hands each reply back here.
+
+    The judgement stays in one place. What to send, how to read a reply, what may
+    be kept and what must be written off are this module's, whoever is driving.
+    """
+    units: list[Unit]
+    #: Indices into `units`, batched to `BATCH_CHARS`. The uncached ones only.
+    groups: list[list[int]]
+    run: GlossRun
+    gloss_lang: str = "English"
+    #: Paragraphs no batch could anchor, waiting for the rescue pass.
+    failed: list[Unit] = field(default_factory=list)
+
+    def system(self, attempt: int = 0) -> str:
+        return gloss_system_prompt(self.gloss_lang) + (RETRY_NOTE if attempt else "")
+
+    def prompt(self, n: int) -> str:
+        return build_prompt(self.units, self.groups[n])
+
+
+def plan_gloss(chapters: list[Chapter], cache: Cache, gloss_lang: str = "English") -> GlossPlan:
+    """What is already glossed, and what is left to ask for."""
+    units = body_units(chapters)
+    glosses = {u.hash: decode(cache.get(cache_key(u.hash)))
+               for u in units if cache_key(u.hash) in cache}
+    pending = [i for i, u in enumerate(units) if u.hash not in glosses]
+    return GlossPlan(
+        units=units,
+        groups=list(batch(units, pending, max_chars=BATCH_CHARS)),
+        run=GlossRun(glosses=glosses, total=len(units)),
+        gloss_lang=gloss_lang,
+    )
+
+
+def absorb(
+    plan: GlossPlan,
+    n: int,
+    text: str,
+    cache: Cache,
+    on_progress: Callable[[int, int], None] | None = None,
+) -> int:
+    """One batch's reply, anchored and kept. Returns how many paragraphs it glossed.
+
+    A reply that will not parse glosses nothing, which is not the same as a
+    failure: the caller decides whether to ask again. Nothing is written off here.
+    """
+    try:
+        blocks = parse_response(text)
+    except ValueError:
+        return 0
+    kept = 0
+    for i, index in enumerate(plan.groups[n]):
+        unit = plan.units[index]
+        if unit.hash in plan.run.glosses:
+            continue
+        located = anchor(unit.text, parse_units(blocks.get(i, "")))
+        if located:
+            _keep(plan, cache, unit, located, on_progress)
+            kept += 1
+    return kept
+
+
+def written_off(plan: GlossPlan, n: int) -> None:
+    """Stop asking for this batch: whatever is still unglossed in it goes to the
+    rescue pass, which tries each paragraph with less to keep track of."""
+    for index in plan.groups[n]:
+        unit = plan.units[index]
+        if unit.hash not in plan.run.glosses:
+            plan.failed.append(unit)
+
+
+def rescue_failures(
+    plan: GlossPlan,
+    client: LLMClient,
+    cache: Cache,
+    on_progress: Callable[[int, int], None] | None = None,
+    capped: Callable[[], bool] | None = None,
+) -> None:
+    """Every paragraph a batch lost, retried alone and then sentence by sentence."""
+    for unit in plan.failed:
+        located = None if plan.run.stopped_at_cap else rescue(client, unit.text, plan.gloss_lang)
+        if located:
+            _keep(plan, cache, unit, located, on_progress)
+            plan.run.rescued += 1
+        else:
+            plan.run.unglossed.append(unit.text[:60])
+        if capped and capped():
+            plan.run.stopped_at_cap = True
+    plan.failed = []
+
+
+def _keep(
+    plan: GlossPlan,
+    cache: Cache,
+    unit: Unit,
+    located: list[GlossUnit],
+    on_progress: Callable[[int, int], None] | None,
+) -> None:
+    plan.run.glosses[unit.hash] = located
+    cache.update({cache_key(unit.hash): encode(located)})
+    plan.run.glossed += 1
+    if on_progress:
+        on_progress(len(plan.run.glosses), plan.run.total)
 
 
 def gloss_book(
@@ -487,54 +569,40 @@ def gloss_book(
     on_progress: Callable[[int, int], None] | None = None,
     gloss_lang: str = "English",
 ) -> GlossRun:
-    """Gloss every uncached body paragraph.
+    """Gloss every uncached body paragraph, one request after another.
 
     A paragraph whose segmentation will not anchor is left out rather than shown
     with text the model altered. It reads as ordinary prose with no hover
     targets, and is named in the run so it can be looked at.
     """
-    units = body_units(chapters)
-    glosses = {u.hash: decode(cache.get(cache_key(u.hash)))
-               for u in units if cache_key(u.hash) in cache}
-    run = GlossRun(glosses=glosses, total=len(units))
-
-    pending = [i for i, u in enumerate(units) if u.hash not in glosses]
-    if not pending:
+    plan = plan_gloss(chapters, cache, gloss_lang)
+    run = plan.run
+    if not plan.groups:
         return run
 
     def capped() -> bool:
         run.cost = cfg.estimate_cost(client.input_tokens, client.output_tokens)
         return run.cost is not None and run.cost >= cfg.max_cost_usd
 
-    def keep(unit: Unit, located: list[GlossUnit]) -> None:
-        glosses[unit.hash] = located
-        cache.update({cache_key(unit.hash): encode(located)})
-        run.glossed += 1
-        if on_progress:
-            on_progress(len(glosses), run.total)
-
-    failed: list[Unit] = []
-    for group in batch(units, pending, max_chars=BATCH_CHARS):
-        anchored = _gloss_batch(client, units, group, gloss_lang)
-        for n, index in enumerate(group):
-            located = anchored.get(n)
-            if located:
-                keep(units[index], located)
-            else:
-                failed.append(units[index])
+    for n in range(len(plan.groups)):
+        for attempt in range(2):
+            try:
+                completion = client.complete(plan.system(attempt), plan.prompt(n), MAX_TOKENS)
+            except Exception as e:
+                raise GlossError(f"gloss request failed: {e}") from e
+            if completion.truncated:
+                raise GlossError(
+                    f"the model hit its {MAX_TOKENS}-token limit mid-paragraph. "
+                    f"Lower BATCH_CHARS in gloss.py and re-run."
+                )
+            if absorb(plan, n, completion.text, cache, on_progress):
+                break
+        written_off(plan, n)
 
         if capped():
             run.stopped_at_cap = True
-            run.unglossed = [u.text[:60] for u in failed]
+            run.unglossed = [u.text[:60] for u in plan.failed]
             return run
 
-    for unit in failed:
-        located = rescue(client, unit.text, gloss_lang) if not run.stopped_at_cap else None
-        if located:
-            keep(unit, located)
-            run.rescued += 1
-        else:
-            run.unglossed.append(unit.text[:60])
-        run.stopped_at_cap = run.stopped_at_cap or capped()
-
+    rescue_failures(plan, client, cache, on_progress, capped)
     return run

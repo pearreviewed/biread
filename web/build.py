@@ -177,7 +177,7 @@ def fingerprint(wheel: Path) -> Path:
 #: Everything a bundle consists of. Anything else at the top of DIST is left
 #: over from a previous shape of the project — three pages from an abandoned
 #: type experiment were sitting there, and a deploy would have published them.
-BUNDLED = {"builder.html", "worker.js", "shelf.json", *FONT_FILES}
+BUNDLED = {"builder.html", "worker.js", "gloss-pool.js", "shelf.json", *FONT_FILES}
 
 
 def main() -> None:
@@ -210,6 +210,7 @@ def main() -> None:
     stamped = fingerprint(wheel)
 
     shutil.copy2(WEB / "builder.html", DIST / "builder.html")
+    shutil.copy2(WEB / "gloss-pool.js", DIST / "gloss-pool.js")
     (DIST / "worker.js").write_text(
         worker.replace(wheel.name, stamped.name), encoding="utf-8")
     for font in FONT_FILES:

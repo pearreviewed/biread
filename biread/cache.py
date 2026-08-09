@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Callable
 
 from .errors import CacheError, CacheSchemaError
 
@@ -16,10 +17,19 @@ SCHEMA_VERSION = 1
 
 
 class Cache:
-    def __init__(self, path: Path | None, entries: dict[str, str] | None = None):
-        # path=None is an in-memory cache (a browser build): nothing is persisted.
+    def __init__(
+        self,
+        path: Path | None,
+        entries: dict[str, str] | None = None,
+        on_write: Callable[[dict[str, str]], None] | None = None,
+    ):
+        # path=None writes nothing *here*; `on_write` is how a caller with no
+        # filesystem keeps it anyway. The browser holds the cache in the reader's
+        # own storage, which is what lets a build that was interrupted — a closed
+        # tab, a machine switched off — carry on instead of paying twice.
         self.path = path
         self._entries: dict[str, str] = entries if entries is not None else {}
+        self.on_write = on_write
 
     @classmethod
     def load(cls, path: Path) -> "Cache":
@@ -59,6 +69,8 @@ class Cache:
         if not entries:
             return
         self._entries.update(entries)
+        if self.on_write is not None:
+            self.on_write(entries)
         self.flush()
 
     def _on_disk(self) -> dict[str, str]:

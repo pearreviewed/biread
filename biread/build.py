@@ -40,6 +40,42 @@ class BuildResult:
     gloss: GlossRun | None = None
 
 
+@dataclass
+class Draft:
+    """A book made but not yet glossed, and not yet set in type.
+
+    Glossing is the last pass and much the longest, and in the browser its
+    requests block the worker one at a time — which is what made a book of 1,500
+    paragraphs an afternoon's wait. Holding the finished book here between the
+    two halves is what lets a caller run that pass its own way, several requests
+    at once, and come back with the glosses to `finish`.
+
+    Both routes produce one of these, so neither of them has a second copy of
+    what a finished book is made of.
+    """
+    title: str
+    chapters: list[Chapter]
+    translations: dict[str, str]
+    target: Target
+    published: dict[str, str] | None = None
+    note: str = ""
+    solo: bool = False
+    translation: TranslationRun | None = None
+    alignment: AlignmentReport | None = None
+
+
+def finish(draft: Draft, gloss_run: GlossRun | None = None) -> BuildResult:
+    """The draft set in type, with whatever glosses were made for it."""
+    html = render_html(
+        draft.title, draft.chapters, draft.translations, draft.published, draft.note,
+        gloss_run.glosses if gloss_run else None, None, draft.target, solo=draft.solo,
+    )
+    return BuildResult(
+        html=html, translation=draft.translation, alignment=draft.alignment,
+        published_note=draft.note, gloss=gloss_run,
+    )
+
+
 def build_reader(
     *,
     title: str,
@@ -56,6 +92,36 @@ def build_reader(
     on_progress: ProgressFn | None = None,
     on_text: BatchFn | None = None,
 ) -> BuildResult:
+    draft = draft_reader(
+        title=title, chapters=chapters, client=client, cache=cache, cfg=cfg, target=target,
+        published_chapters=published_chapters, on_progress=on_progress, on_text=on_text,
+    )
+    gloss_run = None
+    if gloss:
+        gloss_run = gloss_book(
+            draft.chapters,
+            gloss_client or client,
+            gloss_cache if gloss_cache is not None else Cache(None),
+            gloss_cfg or cfg.for_glossing(),
+            _stage(on_progress, "gloss"),
+            target.name,
+        )
+    return finish(draft, gloss_run)
+
+
+def draft_reader(
+    *,
+    title: str,
+    chapters: list[Chapter],
+    client: LLMClient,
+    cache: Cache,
+    cfg: Config,
+    target: Target = ENGLISH,
+    published_chapters: list[Chapter] | None = None,
+    on_progress: ProgressFn | None = None,
+    on_text: BatchFn | None = None,
+) -> Draft:
+    """Everything but the glossing and the typesetting."""
     # Checked before a single call is paid for: a book that never broke into
     # paragraphs would otherwise be translated in vast blocks, at vast cost.
     chapters, published_chapters, cut = recut(chapters, published_chapters)
@@ -81,21 +147,9 @@ def build_reader(
         alignment.cut = cut
         note = published_note(alignment)
 
-    gloss_run = glosses = None
-    if gloss:
-        gloss_run = gloss_book(
-            chapters,
-            gloss_client or client,
-            gloss_cache if gloss_cache is not None else Cache(None),
-            gloss_cfg or cfg.for_glossing(),
-            _stage(on_progress, "gloss"),
-            target.name,
-        )
-        glosses = gloss_run.glosses
-
-    html = render_html(title, chapters, run.translations, published, note, glosses, None, target)
-    return BuildResult(
-        html=html, translation=run, alignment=alignment, published_note=note, gloss=gloss_run
+    return Draft(
+        title=title, chapters=chapters, translations=run.translations, target=target,
+        published=published, note=note, translation=run, alignment=alignment,
     )
 
 
@@ -234,6 +288,35 @@ def build_aligned(
     its own; the embedding key usually reaches one. Without them the book reads the
     same, minus the hover.
     """
+    draft = draft_aligned(
+        title=title, chapters=chapters, published_chapters=published_chapters, embed=embed,
+        target=target, repair_client=gloss_client, on_progress=on_progress, on_text=on_text,
+    )
+    gloss_run = None
+    if gloss and gloss_client is not None and gloss_cfg is not None:
+        gloss_run = gloss_book(
+            draft.chapters,
+            gloss_client,
+            gloss_cache if gloss_cache is not None else Cache(None),
+            gloss_cfg,
+            _stage(on_progress, "gloss"),
+            target.name,
+        )
+    return finish(draft, gloss_run)
+
+
+def draft_aligned(
+    *,
+    title: str,
+    chapters: list[Chapter],
+    published_chapters: list[Chapter],
+    embed: Embed,
+    target: Target = ENGLISH,
+    repair_client: LLMClient | None = None,
+    on_progress: ProgressFn | None = None,
+    on_text: BatchFn | None = None,
+) -> Draft:
+    """Everything but the glossing and the typesetting."""
     # Before the cut, because a flat edition cut to a counterpart that still
     # carries an introduction is cut to the wrong shape by the whole length of it.
     chapters, published_chapters, dropped_orig, dropped_pub = open_together(
@@ -243,8 +326,8 @@ def build_aligned(
     # Only a chat model can read a book for its paragraphs, and the align route
     # has one only when the reader wanted glosses. Without it the refusal stands,
     # which is the same answer as before and an honest one.
-    if gloss_client is not None:
-        chapters, published_chapters, _ = repair_flat(chapters, published_chapters, gloss_client)
+    if repair_client is not None:
+        chapters, published_chapters, _ = repair_flat(chapters, published_chapters, repair_client)
     check_usable(chapters, "The original")
     check_usable(published_chapters, "The published translation")
     aligned, report = align_published(
@@ -262,23 +345,10 @@ def build_aligned(
     # is rendered, so no call is paid for on a paragraph the reader never sees.
     body = [c for c in trim_matter(chapters) if c.paragraphs] or chapters
 
-    gloss_run = None
-    if gloss and gloss_client is not None and gloss_cfg is not None:
-        gloss_run = gloss_book(
-            body,
-            gloss_client,
-            gloss_cache if gloss_cache is not None else Cache(None),
-            gloss_cfg,
-            _stage(on_progress, "gloss"),
-            target.name,
-        )
-
-    note = published_note(report)
-    html = render_html(
-        title, body, aligned, published=None, published_note=note,
-        glosses=gloss_run.glosses if gloss_run else None, target=target, solo=True,
+    return Draft(
+        title=title, chapters=body, translations=aligned, target=target,
+        note=published_note(report), solo=True, alignment=report,
     )
-    return BuildResult(html=html, alignment=report, published_note=note, gloss=gloss_run)
 
 
 def published_note(report: AlignmentReport) -> str:
