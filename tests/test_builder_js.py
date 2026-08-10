@@ -431,6 +431,105 @@ def test_the_book_downloads_under_its_own_name(page):
     assert caught.value.suggested_filename == "livre - bilingual reader.html"
 
 
+# ---- the books this browser built ----------------------------------------
+
+def built(page, route="translate", body=BOOK):
+    """A finished build, back on the front door with the book kept."""
+    to_settings(page, route=route, body=body)
+    page.click("#build")
+    page.wait_for_function("!document.getElementById('s-done').hidden", timeout=15000)
+    page.wait_for_function("S.kept !== null", timeout=5000)
+
+
+def test_a_book_you_built_stands_on_a_row_of_your_own(page):
+    built(page)
+    page.click("#again")
+    page.wait_for_selector("#mine:not([hidden])")
+    assert text(page, "#mine h2") == "Books you built"
+    assert page.locator("#mine-cards .card").count() == 1
+    assert text(page, "#mine-cards .card .name") == "Micromégas"
+    assert "Translated into English" in text(page, "#mine-cards .card .say")
+
+
+def test_your_own_books_say_they_are_yours_and_not_the_shelf(page):
+    """The whole of what a reader must not have to work out: the band below is
+    published, and these are one person's own."""
+    built(page)
+    page.click("#again")
+    page.wait_for_selector("#mine:not([hidden])")
+    assert text(page, "#mine .caps") == "Yours only"
+    assert text(page, "#mine-cards .card .caps") == "Yours · this browser"
+    assert "this browser" in text(page, "#mine-said")
+    # It is nowhere among the published books, whichever way the shelf is read.
+    page.click("[data-route=shelf]")
+    page.wait_for_selector("#shelf:not([hidden])")
+    titles = page.eval_on_selector_all("#shelf-cards .name", "n => n.map(e => e.textContent)")
+    assert "Micromégas" in titles          # the shelf's own, which is a different book
+    assert page.locator("#mine-cards .card").count() == 1
+    assert page.eval_on_selector("#mine", "e => !e.hidden")
+
+
+def test_a_book_you_built_is_still_there_after_the_tab_is_closed(page):
+    built(page)
+    page.reload()
+    page.wait_for_selector("#mine:not([hidden])")
+    assert text(page, "#mine-cards .card .name") == "Micromégas"
+
+
+def test_a_book_you_built_can_be_taken_off_again(page):
+    built(page)
+    page.click("#again")
+    page.wait_for_selector("#mine:not([hidden])")
+    page.click("#mine-cards .card .forget")
+    page.wait_for_function("document.getElementById('mine').hidden")
+    page.reload()
+    page.wait_for_selector("[data-route=translate]")
+    page.wait_for_timeout(200)
+    assert hidden(page, "#mine")
+
+
+def test_the_finished_screen_says_where_the_copy_is_and_offers_to_drop_it(page):
+    built(page)
+    assert "this browser only" in text(page, "#kept-line")
+    page.click("#kept-line .link")
+    page.wait_for_function("S.kept === null")
+    page.click("#again")
+    page.wait_for_timeout(200)
+    assert hidden(page, "#mine")
+
+
+def test_your_own_book_opens_from_its_card(page):
+    built(page)
+    page.click("#again")
+    page.wait_for_selector("#mine:not([hidden])")
+    with page.expect_popup() as caught:
+        page.click("#mine-cards .card")
+    # The tab is opened empty inside the press and filled when the book comes
+    # back out of storage, so what is asserted is the book, once it is there.
+    tab = caught.value
+    tab.wait_for_function(
+        "document.title.indexOf('Microm') !== -1", timeout=10000)
+    assert tab.url.startswith("blob:")
+
+
+def test_your_own_book_hands_over_the_file_it_kept(page):
+    built(page)
+    page.click("#again")
+    page.wait_for_selector("#mine:not([hidden])")
+    with page.expect_download() as caught:
+        page.click("#mine-cards .card .own")
+    # WebKit hands the name back decomposed, which is the same name.
+    assert (unicodedata.normalize("NFC", caught.value.suggested_filename)
+            == "Micromégas - bilingual reader.html")
+
+
+def test_a_book_built_against_an_edition_you_brought_says_so(page):
+    built(page, route="align")
+    page.click("#again")
+    page.wait_for_selector("#mine:not([hidden])")
+    assert "Beside the edition you brought" in text(page, "#mine-cards .card .say")
+
+
 def test_a_build_that_fails_comes_back_and_says_why(page):
     to_settings(page, body=scenario(failOn="build", error="your key has no credit"))
     page.click("#build")

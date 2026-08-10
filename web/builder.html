@@ -96,6 +96,24 @@
   .assure { display: flex; justify-content: center; align-items: center; gap: 11px; margin-top: 24px; font-size: 14px; color: var(--muted); flex-wrap: wrap; }
   .assure span.sep { color: var(--rule-2); }
 
+  /* --- the books this browser built ---
+     They stand above the shelf and never among it. What is on the shelf was
+     published: made here, read through, and vouched for by somebody. These are
+     neither, and a reader must not have to work out which is which — so the band
+     says it once in its own words, each card is marked, and the two are set apart
+     rather than sorted together. Dashed and tinted, which is already this page's
+     mark for a book nobody has been through. */
+  .mine { max-width: 640px; margin: 34px auto 0; display: flex; flex-direction: column; gap: 13px; }
+  .mine .head { display: flex; flex-direction: column; gap: 5px; }
+  .mine h2 { font-size: 21px; line-height: 1.25; }
+  .mine .head p { margin: 0; max-width: 60ch; font-size: 14px; line-height: 1.55; color: var(--muted); }
+  .mine .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .mine .card { gap: 9px; padding: 15px 17px; border-style: dashed; background: var(--tint); }
+  .mine .card:hover { background: var(--surface-2); }
+  .mine .card .name { font-size: 17.5px; }
+  .mine .card .act { padding-top: 11px; font-size: 14.5px; }
+  .mine .card .say { font-size: 13px; }
+
   /* --- step one: route and files --- */
   .step { max-width: 640px; margin: 26px auto 0; display: flex; flex-direction: column; gap: 22px; }
   .hero + .step { margin-top: 36px; }
@@ -443,7 +461,7 @@
     .centre .spread { width: 100%; }
   }
   @media (max-width: 560px) {
-    .cards { grid-template-columns: minmax(0, 1fr); }
+    .cards, .mine .cards { grid-template-columns: minmax(0, 1fr); }
     .spread { grid-template-columns: 1fr; }
     /* No fold to keep off once the pages stack, so the two halves stack too —
        one to a page, and the pages are held open far enough to take them,
@@ -474,6 +492,19 @@
          left is the part nothing else on this screen says: what you walk away with. -->
     <p>Bring a book, or take one off the shelf. Leave with one file.</p>
   </div>
+
+  <!-- Books this browser made. Above the shelf, never among it: the shelf is
+       published, and these are one reader's own. -->
+  <div class="mine" id="mine" hidden>
+    <div class="head">
+      <div class="caps">Yours only</div>
+      <h2>Books you built</h2>
+      <p id="mine-said">Made by you and kept in this browser. They are not on the shelf, nobody
+        else can see them, and no copy of them leaves this computer.</p>
+    </div>
+    <div class="cards" id="mine-cards"></div>
+  </div>
+
   <div class="step">
     <div style="display:flex;flex-direction:column;gap:6px">
       <div class="caps">Step one of two</div>
@@ -711,8 +742,9 @@
     </div>
     <div class="said">
       <h2>Your bilingual book is ready.</h2>
-      <p>One file. No connection needed, no account, and we keep no copy of the book you built. It opens light or dark, whichever you prefer.</p>
+      <p>One file. No connection needed, no account, and nothing of it kept on our side. There are light and dark modes, whichever you prefer.</p>
       <button class="solid" id="download">Download</button>
+      <div class="after" id="kept-line"></div>
       <div class="after"><span id="spent"></span> <button class="link" id="again">Build another</button></div>
     </div>
   </div>
@@ -754,6 +786,8 @@ const S = {
   made: [], pairs: [], matched: false,
   // the hash of the book's own text, which names its slot of paid-for work
   book: null, restored: null,
+  // the books this browser has built, and whether the last one could be kept
+  mine: [], kept: null,
   // the shelf: a catalogue, whichever book is picked, and how it is narrowed
   shelf: null, pick: null, filter: null, page: 0, query: "",
   hits: null, looked: "", more: 0, lookOffset: 0,
@@ -839,6 +873,68 @@ function flushWork() {
 // A tab being closed or hidden is exactly when the last batch must not be lost.
 addEventListener("visibilitychange", flushWork);
 addEventListener("pagehide", flushWork);
+
+/* --- the books this browser built -----------------------------------------
+   A finished book is a file, and a file lands in Downloads among everything else
+   a browser has ever fetched. Kept here as well, it has somewhere to be found:
+   the reader's own row above the shelf, opened again in one press.
+
+   A different storage from the work cache above, so that clearing either leaves
+   the other whole, and so a book is never migrated by a change to how a build
+   remembers what it paid for. Two stores rather than one: painting the cards
+   reads what a card says, and a book's own text is fetched only when the reader
+   asks for it, which on a long book is fifteen megabytes not read.
+
+   This is not biread holding anybody's book. The file is the reader's own, it is
+   in the reader's own browser, no server is told it exists, and one press takes
+   it off again. */
+const MINE_DB = "biread-shelf";
+let mineOpened = null;
+function mineDb() {
+  if (!mineOpened) {
+    mineOpened = new Promise((ok, no) => {
+      const req = indexedDB.open(MINE_DB, 1);
+      req.onupgradeneeded = () => {
+        req.result.createObjectStore("books", { keyPath: "id" });
+        req.result.createObjectStore("files", { keyPath: "id" });
+      };
+      req.onsuccess = () => ok(req.result);
+      req.onerror = () => no(req.error);
+    });
+  }
+  return mineOpened;
+}
+function myBooks() {
+  return mineDb().then((db) => new Promise((ok) => {
+    const req = db.transaction("books").objectStore("books").getAll();
+    req.onsuccess = () => ok(req.result || []);
+    req.onerror = () => ok([]);
+  })).catch(() => []);
+}
+function keepMine(record, html) {
+  return mineDb().then((db) => new Promise((ok, no) => {
+    const t = db.transaction(["books", "files"], "readwrite");
+    t.objectStore("books").put(record);
+    t.objectStore("files").put({ id: record.id, html });
+    t.oncomplete = () => ok(record);
+    t.onabort = t.onerror = () => no(t.error);
+  }));
+}
+function fileOfMine(id) {
+  return mineDb().then((db) => new Promise((ok) => {
+    const req = db.transaction("files").objectStore("files").get(id);
+    req.onsuccess = () => ok(req.result ? req.result.html : null);
+    req.onerror = () => ok(null);
+  })).catch(() => null);
+}
+function dropMine(id) {
+  return mineDb().then((db) => new Promise((ok) => {
+    const t = db.transaction(["books", "files"], "readwrite");
+    t.objectStore("books").delete(id);
+    t.objectStore("files").delete(id);
+    t.oncomplete = t.onabort = t.onerror = ok;
+  })).catch(() => {});
+}
 
 /* --- theme ------------------------------------------------------------- */
 function paintTheme() {
@@ -1246,6 +1342,87 @@ function paintShelf() {
     nums.appendChild(step("›", S.page + 1, S.page === pages - 1));
   }
 }
+
+/* --- your own books ---------------------------------------------------------
+   The same card, saying much less. A shelf card is selling a book somebody has
+   read; this one is a way back into a file its reader made an hour ago and
+   already knows, so it carries the title, what came out, and the press that
+   opens it. Every one of them is marked as theirs, because the shelf underneath
+   is published and the difference must not rest on a reader noticing which band
+   a card was in. */
+function whenBuilt(iso) {
+  const on = new Date(iso);
+  if (isNaN(on)) return "";
+  return on.toLocaleDateString(undefined, { day: "numeric", month: "long" });
+}
+function openMine(book) {
+  // The tab is opened inside the press and filled when the book comes back:
+  // opened afterwards, a browser takes it for a popup and blocks it.
+  const tab = window.open("", "_blank");
+  fileOfMine(book.id).then((html) => {
+    if (html == null) {
+      if (tab) tab.close();
+      return dropMine(book.id).then(loadMine);
+    }
+    const url = URL.createObjectURL(new Blob([html], { type: "text/html;charset=utf-8" }));
+    if (tab) tab.location = url;
+    else location.href = url;
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  });
+}
+function saveMine(book) {
+  fileOfMine(book.id).then((html) => {
+    if (html == null) return;
+    const url = URL.createObjectURL(new Blob([html], { type: "text/html;charset=utf-8" }));
+    const a = el("a");
+    a.href = url;
+    a.download = book.title + " - bilingual reader.html";
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+}
+function mineCard(book) {
+  const card = el("button", "card");
+  card.dataset.mine = book.id;
+  card.appendChild(el("div", "caps", "Yours · this browser"));
+  const head = el("div");
+  head.appendChild(el("div", "name", book.title));
+  if (book.author) head.appendChild(el("div", "who", book.author));
+  card.appendChild(head);
+
+  const act = el("div", "act");
+  act.appendChild(el("span", null, "Open it"));
+  act.appendChild(el("span", "arrow go", "→"));
+  card.appendChild(act);
+  card.appendChild(el("div", "say", [book.made, weight(book.bytes), whenBuilt(book.built)]
+    .filter(Boolean).join(" · ")));
+
+  const file = el("button", "own", "Download the file");
+  file.addEventListener("click", (e) => { e.stopPropagation(); saveMine(book); });
+  card.appendChild(file);
+  const drop = el("button", "forget", "Take it off my shelf");
+  drop.addEventListener("click", (e) => {
+    e.stopPropagation();
+    dropMine(book.id).then(loadMine);
+  });
+  card.appendChild(drop);
+
+  card.addEventListener("click", () => openMine(book));
+  return card;
+}
+function paintMine() {
+  $("mine").hidden = !S.mine.length;
+  const cards = $("mine-cards");
+  cards.innerHTML = "";
+  // Newest first: the book a reader came back for is the one they just made.
+  for (const book of S.mine.slice().sort((a, b) => (b.built || "").localeCompare(a.built || ""))) {
+    cards.appendChild(mineCard(book));
+  }
+}
+function loadMine() {
+  return myBooks().then((books) => { S.mine = books; paintMine(); });
+}
+loadMine();
 
 // A book found by looking arrives without figures. Once both editions are here
 // they are counted like any other, and the card fills in what it could not claim.
@@ -2189,15 +2366,65 @@ function paintDone() {
   $("spent").textContent = S.local ? "Built on your own machine, for nothing."
     : spent == null ? ""
     : money(spent) + " spent" + (S.estimate ? ", of " + money(S.estimate.cost) + " estimated." : ".");
+  paintKept();
+}
+// What kind of book this is, in the words the card underneath will use. Said at
+// the build because this is where it is known: a finished file cannot tell you
+// which route made it or how much of the hover was paid for.
+function madeHere() {
+  const parts = [S.route === "align" ? "Beside the edition you brought"
+    : S.route === "shelf" ? "Two editions, matched by meaning"
+    : "Translated into " + langName()];
+  if (!$("gloss").checked) parts.push("no hover translations");
+  else if (S.glossScope === "whole") parts.push("hover translations");
+  else parts.push("hover on the opening");
+  return parts.join(" · ");
+}
+// A finished book joins the reader's own row as it is made. This is the one
+// moment the file is certainly in hand, and a reader who would rather it were
+// not kept can say so here, where the offer is still in front of them.
+function keepBuilt() {
+  S.kept = null;
+  const info = S.info.orig || {};
+  const record = {
+    id: (S.book || "loose:" + bookName()) + "." + $("lang").value,
+    title: info.title || bookName(),
+    author: info.author || "",
+    made: madeHere(),
+    bytes: new Blob([S.html]).size,
+    built: new Date().toISOString(),
+  };
+  return keepMine(record, S.html)
+    .then(() => { S.kept = record; return loadMine(); })
+    .catch(() => { S.kept = false; })
+    .then(paintKept);
+}
+function paintKept() {
+  const line = $("kept-line");
+  line.innerHTML = "";
+  if (S.kept === false) {
+    // Private browsing, or a full quota. A reader who thinks the book is safe
+    // here and finds it is not has been told something false by silence.
+    line.textContent = "This browser would not keep a copy, so the file is the only one.";
+    return;
+  }
+  if (!S.kept) return;
+  line.appendChild(el("span", null, "On your own shelf here as well, in this browser only. "));
+  const off = el("button", "link", "Not on this computer");
+  off.addEventListener("click", () => {
+    dropMine(S.kept.id).then(() => { S.kept = null; paintKept(); return loadMine(); });
+  });
+  line.appendChild(off);
 }
 $("download").addEventListener("click", () => {
-  const url = URL.createObjectURL(new Blob([S.html], { type: "text/html" }));
+  const url = URL.createObjectURL(new Blob([S.html], { type: "text/html;charset=utf-8" }));
   const a = document.createElement("a");
   a.href = url; a.download = bookName() + " - bilingual reader.html"; a.click();
   URL.revokeObjectURL(url);
 });
 $("again").addEventListener("click", () => {
   S.sample = null; S.estimate = null; S.html = null; S.spent = null; S.sampleSpend = 0;
+  S.kept = null;
   S.pick = null; paintShelf();
   show("books");
 });
@@ -2265,6 +2492,7 @@ worker.onmessage = (e) => {
     S.spent = m.spent;
     $("bar").parentElement.classList.remove("wait");
     $("bar").style.width = "100%";
+    keepBuilt();
     setTimeout(() => { paintDone(); show("done"); }, 350);
   } else if (m.type === "error") {
     const message = "<b>Couldn't finish.</b> " + m.error;
