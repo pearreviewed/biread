@@ -97,6 +97,12 @@ def build_parser() -> argparse.ArgumentParser:
         help=f"proceed with books above {PARAGRAPH_LIMIT:,} paragraphs",
     )
     parser.add_argument(
+        "--respace", action="store_true",
+        help="where a file is a scan, ask the model to put back the spaces its OCR "
+             "lost (`isvery` for `is very`). Only spacing may change: a reply that "
+             "alters a letter is thrown away and that passage left as the file has it",
+    )
+    parser.add_argument(
         "--rebuild-cache", action="store_true",
         help="discard a cache written by an incompatible version instead of asking",
     )
@@ -137,6 +143,42 @@ def report_scan(names: list[str]) -> None:
           f"number). They are left exactly as the file has them, because correcting "
           f"them would mean writing words into the book that its author did not. A "
           f"digital edition of the same title reads clean.")
+
+
+def respace_scans(chapters, published_chapters, orig_scanned: bool,
+                  published_scanned: bool, args) -> tuple:
+    """Put back the spaces a scan's OCR lost, in the file that is a scan.
+
+    Only that file: a digitally typeset edition has nothing here to repair, and
+    asking a model to read it anyway would be paying to be told so. Nothing is
+    rewritten either way — a reply is kept only where it is the same text with
+    different spacing, and refused otherwise, so the worst case is the book
+    exactly as the file had it.
+    """
+    from .llm import get_client
+    from .spacing import respace
+
+    cfg = load_config(require_key=True)
+    client = get_client(cfg)
+
+    def report(name, run):
+        if not run.looked_at:
+            print(f"  {name}: nothing looked run together.")
+            return
+        words = ", ".join(dict.fromkeys(run.words[:6]))
+        print(f"  {name}: {run.repaired:,} of {run.looked_at:,} passages respaced"
+              + (f" ({words})" if words else "")
+              + (f"; {run.refused:,} replies refused for changing the text" if run.refused else "")
+              + (f"; {run.failed:,} calls failed and were left alone" if run.failed else "") + ".")
+
+    print("\nPutting back the spaces the scan lost:")
+    if orig_scanned:
+        chapters, run = respace(chapters, client)
+        report(args.input.name, run)
+    if published_scanned and published_chapters is not None:
+        published_chapters, run = respace(published_chapters, client)
+        report(args.published.name, run)
+    return chapters, published_chapters
 
 
 def report_removals(removals: list[Removal]) -> None:
@@ -338,6 +380,7 @@ def run(args: argparse.Namespace) -> None:
     # breaks and the other kept them, the other's shape is what puts them back,
     # and a refusal issued file by file would never find that out.
     published_chapters = None
+    published_scanned = False
     scans = [args.input.name] if scanned else []
     if args.published:
         published_chapters, _, published_scanned = load_book(args.published)
@@ -367,6 +410,11 @@ def run(args: argparse.Namespace) -> None:
               f"edition's shape: {sum(len(c.paragraphs) for c in recut_chapters):,} paragraphs.")
 
     report_scan(scans)
+    if args.respace and scans:
+        chapters, published_chapters = respace_scans(
+            chapters, published_chapters, scanned, published_scanned, args)
+    elif args.respace:
+        print("Nothing here weighs like a scan, so --respace has nothing to repair.")
 
     print(f"Cleaned '{args.input.name}':\n")
     report_removals(removals)

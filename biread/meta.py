@@ -26,9 +26,13 @@ class BookInfo:
     language: str | None
     pages: int | None  # real pages, where the format has any
     paragraphs: int | None
+    #: Whether the file is a photograph of its pages. None where nobody weighed
+    #: it — the measure needs the raw text, which only the reader of the file has.
+    scanned: bool | None = None
 
 
-def describe(path: Path, chapters: list[Chapter] | None = None) -> BookInfo:
+def describe(path: Path, chapters: list[Chapter] | None = None,
+             scanned: bool | None = None) -> BookInfo:
     title = author = language = pages = None
     suffix = path.suffix.lower()
     if suffix == ".epub":
@@ -39,6 +43,7 @@ def describe(path: Path, chapters: list[Chapter] | None = None) -> BookInfo:
     return BookInfo(
         title, author, language, pages,
         sum(len(c.paragraphs) for c in chapters) if chapters is not None else None,
+        scanned,
     )
 
 

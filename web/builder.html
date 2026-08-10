@@ -423,6 +423,10 @@
   .done p { margin: 0; font-size: 15.5px; color: var(--muted); }
   .done .solid { align-self: flex-start; margin-top: 4px; padding: 13px 32px; font-size: 16px; }
   .done .after { font-size: 13.5px; color: var(--muted); }
+  /* A caveat about the file, not a fault in it: quieter than .alert, which is
+     for something that stopped. */
+  .scan-note { margin-top: 12px; padding-left: 11px; border-left: 2px solid var(--rule-2);
+    line-height: 1.5; max-width: 62ch; }
   .alert { margin-top: 18px; padding: 13px 16px; border: 1px solid var(--rule-2); border-radius: 13px; background: var(--surface-2); font-size: 14px; color: var(--body); }
   .alert b { color: var(--ink); }
 
@@ -656,6 +660,12 @@
         </div>
       </div>
       <div class="note" id="proof-note"></div>
+      <!-- A photograph of a book, said before the money and not after. The words
+           in it were read off images, so some are misread or run together, and
+           biread leaves them exactly as the file has them: correcting them means
+           writing into somebody's book. Shown only when a file actually weighs
+           like a scan, so it never becomes a notice nobody reads. -->
+      <div class="note scan-note" id="scan-note" hidden></div>
       <div class="gate">
         <div style="display:flex;flex-direction:column;gap:4px">
           <div class="fig"><b id="fig">…</b><span id="fig-of"></span></div>
@@ -1532,7 +1542,9 @@ function describeFile(which) {
   if (info === false) return "Couldn't be read";
   if (!info) return "Reading…";
   const bits = [info.author, info.language, info.pages && info.pages.toLocaleString() + " pp",
-                info.paragraphs && info.paragraphs.toLocaleString() + " ¶"].filter(Boolean);
+                info.paragraphs && info.paragraphs.toLocaleString() + " ¶",
+                // A fact about the file, in the line where the file's facts go.
+                info.scanned && "scanned"].filter(Boolean);
   return bits.length ? bits.join(" · ") : "Ready";
 }
 function paintFiles() {
@@ -1946,7 +1958,27 @@ function priceIt() {
 function embedTokens() {
   return Math.round((((S.info.orig || {}).chars || 0) + ((S.info.pub || {}).chars || 0)) / 4);
 }
+// Which of the two files is a photograph of its pages. `scanned` is undefined on
+// a book that has not been read yet and false on one that was read and is not.
+function scannedFiles() {
+  const named = { orig: "The original", pub: "The translation you brought" };
+  return ["orig", "pub"].filter((w) => S.info[w] && S.info[w].scanned).map((w) => named[w]);
+}
+
+function paintScanNote() {
+  const which = scannedFiles();
+  $("scan-note").hidden = !which.length;
+  if (!which.length) return;
+  const subject = which.length === 2 ? "Both files are" : which[0] + " is";
+  $("scan-note").textContent = subject + " a photograph of a book: an image of "
+    + "every page, with the words read off it. Expect misread words in that "
+    + "column, and words run together. They are left exactly as your file has "
+    + "them, because correcting them would mean writing into the book. A digital "
+    + "edition of the same title reads clean, if you can find one.";
+}
+
 function paintPrice() {
+  paintScanNote();
   $("fig-wait").hidden = true;
   const e = S.estimate;
   if (aligning()) {

@@ -25,11 +25,18 @@ const SETUP = [
   "from pathlib import Path",
   "from biread.extract import get_extractor",
   "from biread.cleanup import clean",
+  "from biread.meta import looks_scanned",
   "_BOOKS = {}",
+  // Weighed here because this is the only place the raw text exists: a scan
+  // stores an image of every page beside the characters read off it, so the file
+  // is enormous against its own text. Kept as one boolean rather than the text,
+  // which the tab is already holding once as chapters.
+  "_SCANNED = {}",
   "def read_book(path, stage):",
   "    if path and path not in _BOOKS:",
   "        ext = get_extractor(Path(path))",
   "        raw = ext.extract(Path(path), on_page=lambda d, t: js_progress(stage, d, t))",
+  "        _SCANNED[path] = looks_scanned(Path(path), raw)",
   "        _BOOKS[path] = clean(raw, from_pdf=Path(path).suffix.lower() == '.pdf')[0]",
   "    return _BOOKS.get(path)",
   // Judged with both files in hand, never one at a time: where one lost its
@@ -181,9 +188,9 @@ const INSPECT = [
   "def _info(path, chapters):",
   "    if not path:",
   "        return None",
-  "    i = describe(Path(path), chapters)",
+  "    i = describe(Path(path), chapters, _SCANNED.get(path))",
   // Characters, so the page can price an embedding run without a second read.
-  "    return {'title': i.title, 'author': i.author, 'language': i.language, 'pages': i.pages, 'paragraphs': i.paragraphs, 'chars': sum(len(p) for c in chapters for p in c.paragraphs)}",
+  "    return {'title': i.title, 'author': i.author, 'language': i.language, 'pages': i.pages, 'paragraphs': i.paragraphs, 'scanned': i.scanned, 'chars': sum(len(p) for c in chapters for p in c.paragraphs)}",
   "json.dumps({'orig': _info(orig_path, orig_chapters), 'pub': _info(pub_path, pub_chapters), 'key': book_key(orig_chapters)})",
 ].join("\n");
 

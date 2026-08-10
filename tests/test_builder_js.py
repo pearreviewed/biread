@@ -1254,3 +1254,45 @@ def test_the_search_says_it_is_looking_while_it_looks(page):
     assert "Looking on Wikisource" in text(page, "#look-out")
     page.wait_for_selector(".hit .solid")
     assert text(page, "#look-go") == "Search"
+
+
+# ---- a photograph of a book ----------------------------------------------
+# The measure existed and reached the terminal only, so the browser took a scan
+# without a word and a reader paid to align OCR.
+
+SCAN = {"title": "Nausea", "author": "Jean-Paul Sartre", "language": "en",
+        "pages": 253, "paragraphs": 1313, "chars": 413707, "scanned": True}
+CLEAN = {"title": None, "author": None, "language": "fr", "pages": 233,
+         "paragraphs": 1518, "chars": 442040, "scanned": False}
+
+
+def test_a_scanned_file_says_so_before_the_price(page):
+    to_settings(page, route="align", body=scenario(inspect={"orig": CLEAN, "pub": SCAN}))
+    page.wait_for_function("!document.getElementById('scan-note').hidden")
+    note = text(page, "#scan-note")
+    assert "The translation you brought is a photograph of a book" in note
+    assert "words run together" in note
+    # And it is above the money, not under it.
+    assert page.eval_on_selector(
+        "#scan-note", "n => n.compareDocumentPosition(document.getElementById('fig'))"
+        " & Node.DOCUMENT_POSITION_FOLLOWING") > 0
+
+
+def test_both_files_scanned_is_said_once(page):
+    to_settings(page, route="align", body=scenario(inspect={"orig": SCAN, "pub": SCAN}))
+    page.wait_for_function("!document.getElementById('scan-note').hidden")
+    assert text(page, "#scan-note").startswith("Both files are a photograph of a book")
+
+
+def test_a_clean_file_is_told_nothing_about_scans(page):
+    to_settings(page, route="align", body=scenario(inspect={"orig": CLEAN, "pub": CLEAN}))
+    page.wait_for_timeout(150)
+    assert hidden(page, "#scan-note")
+
+
+def test_the_card_names_the_scan_among_the_file_s_own_facts(page):
+    upload(page, "#f-orig", "livre.txt", scenario(inspect={"orig": SCAN}))
+    page.wait_for_function(
+        "document.getElementById('orig-about').textContent.indexOf('Reading') === -1")
+    about = text(page, "#orig-about")
+    assert "scanned" in about and "1,313 ¶" in about
