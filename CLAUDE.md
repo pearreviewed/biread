@@ -409,6 +409,8 @@ CI so it stops depending on anyone remembering.
 | A build that glosses forty paragraphs and says fifteen hundred? | **The count is the job, not the book.** `plan_gloss` asked for the opening and then handed the progress screen the whole book as its denominator, so a build doing forty paragraphs read *36 of 1,518* — and, worse, the clock divides the rate by what it thinks is left, so seven real minutes were quoted as **over two hours**. The feature above worked exactly as designed and every figure a reader could see said it had not. `GlossRun.total` is now what the run was asked for and `held` is what an earlier session already made, so `done` counts from there: a build resuming with a thousand paragraphs in hand does not open at zero, and glosses bought *beyond* the opening by a reader still reach the rebuilt book without pushing the count past its own end. |
 | A book that jumps about while it is being made? | **It keeps the book's own 7:5 and never moves.** The progress spread was sized by whatever paragraph had just landed — 236px, 337px, 236px on three consecutive turns, measured — so the one screen a reader watches for an hour was the one that would not sit still. A page that overruns is faded out at the foot, which is nearer to what a page does than slicing a line of type in half. And it now turns during the **glossing** pass, which is the longest and had nothing repainting it at all: every finished pair is kept in order as it arrives, so the last pass turns through the book that has just been made, with folio numbers under each page, since a spread that changes only its words does not read as a page being turned. |
 | An align build that stops halfway through? | **Every chapter it matched is kept, and no chapter is matched twice.** Translations and glosses already survived a closed lid; the matching did not, so the one route that buys no translation at all was the one route that bought its whole book again — 365 chapters of Les Misérables re-embedded because a reader closed the tab at chapter 300. `_by_embeddings` writes each chapter pair's finished placements into the same drawer as they land, under **both** editions and the embedding model: a match is a fact about the two editions together, so bringing a different published translation must not be handed the placements made for the last one, and each model scores in a space of its own. An entry that does not answer paragraph for paragraph is passed over rather than trusted, whatever it is filed under. What a resume still buys is **bounded and does not grow with the book** — `open_together` re-reads the first sixty paragraphs of each edition and `_chapter_pairs` a gist per chapter, where the matching itself re-reads nothing. Deliberately **not** cached with it: `open_together`'s own answer, because it decides where a book begins and a wrong held answer would silently behead an edition, which is a poor trade for a fraction of a cent. And the price screen is untouched, so a resumed align build is quoted the whole run and charged for what is left of it: under-charging against the quote, which is the safe direction, and not yet said out loud the way the translate route says it. |
+| A book on the shelf with no file to take away? | **Given one out of itself, and the whole shelf carries the same one.** The reader's download control was intact and correct to hide itself: seven of eight books simply had nothing inside them. Micromégas was the exception because it was made by the CLI with `--epub --pdf` before the shelf existed, and everything published since goes through `publish.py`, which typesets nothing — so the format quietly stopped travelling with the books, and nobody could see it stop, because a book with no file looks exactly like a book with the button hidden. Rebuilding to reach the format would mean fetching both editions, matching them again and paying for a book already on disk, so the book is read back out of its own page: `export/refit.book_from_html` re-derives the chapters and the translation, and it is exact rather than nearly right — re-deriving the pairs and the chapter headings from a finished book lands on the ones that book already carries, to the paragraph, which is what the test asserts and what a wrong reconstruction would break invisibly, a heading gone or a paragraph facing the wrong page. `python -m biread.publish all --formats` puts the file **inside** the book, where a download has always lived, and leaves alone anything already there, so it costs only what is missing. **EPUB everywhere; both where both exist**, which is Micromégas, and the same command makes a PDF for any book that should have one. What it costs is the whole book twice: Candide 0.6 → 1.2 MB, Bovary 1.6 → 3.6, Notre-Dame 2.4 → 5.4, and Les Misérables **6.9 → 15.9 MB**, which is the figure to weigh if a reader ever complains about opening that one. |
+| A format made by an exporter that has since been replaced? | **Remade on somebody's say-so, never sniffed.** Skipping a format the book already has is what makes `all --formats` cheap to re-run, and it is exactly how the one stale file survived: Micromégas carried the **reflowable** EPUB — the design built, shipped and reverted for the fixed-layout spread — and was passed over for having an EPUB at all. The book's *text* cannot go stale this way, since `make` writes a fresh file with no formats in it, but its *typesetting* can. A file carries no record of the exporter that made it and guessing from its shape would be a rule about EPUBs pretending to be a rule about versions, so `--remake` is asked for by whoever changed the exporter, who is the only one who knows. A remade format keeps its **place in the menu**: replacing Micromégas's EPUB moved it behind the PDF, which is a control a reader has used before quietly rearranging itself. |
 
 ## Reversals
 
@@ -477,14 +479,22 @@ Recorded because the reasoning matters more than the outcome.
 
 ## Known open issues
 
-- **All seven shelf books are built, and none but Micromégas is glossed.**
-  Micromégas (34 paragraphs, glossed throughout, the published column beside
-  ours, EPUB and PDF inside), Candide (98.9%), Bovary (87%), Eighty Days (79%),
+- **All seven shelf books are built and carry an EPUB; none but Micromégas is
+  glossed.** Micromégas (34 paragraphs, glossed throughout, the published column
+  beside ours, EPUB and PDF inside), Candide (98.9%), Bovary (87%), Eighty Days (79%),
   20,000 Leagues (58.8%), Notre-Dame (86%) and Les Misérables (92%, 12,208
   paragraphs — the largest by three times). An unglossed book is no longer a book
   without hover: a reader finishes one by reading it, on their own key, a page
   ahead of themselves. What the shelf is short of now is *glosses somebody has
   paid for* and more titles, not builds.
+- **A book built in the browser still carries no EPUB or PDF, and cannot.** Both
+  exporters paginate by measuring real type in headless Chromium, which the
+  builder's own tab has no way to run, so the download control is hidden on every
+  book a reader makes for themselves. That is honest rather than broken — there is
+  no file to offer — but it means the format is a property of the shelf, not of
+  biread. Closing it would mean either paginating in the reader's own page (the
+  algorithm is already there, in reader.js) or a server, and the second is ruled
+  out on the same grounds as everything else here.
 - **Salammbô is off the shelf for now.** It was the eighth, built and approved at
   90%; its `Book` record and its published row were taken out on 2026-08-06 and
   its built file left in `web/books/`, unlisted. Restoring it is one `Book` back
@@ -651,6 +661,8 @@ biread/
   language.py     what glossing needs to know about the source language
   render/         book -> one HTML file (templates/ holds the real reader)
   export/         static copies: epub.py (fixed-layout spread), pdf.py (print) — both headless Chromium
+                  refit.py reads a finished book back out of its own page, so a
+                  format can be made long after the build and without paying twice
   llm/            one thin client per provider
   publish.py      shelf book -> a file ready to hand out, then approved by hand
   check.py        a finished book looked at where books break: opening, middle, end

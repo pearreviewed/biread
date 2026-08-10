@@ -415,3 +415,84 @@ def test_rewrapping_something_that_is_not_a_book_says_so():
 
     with pytest.raises(ValueError, match="not a built reader"):
         rewrap("<!doctype html><p>hello</p>")
+
+
+# ---- giving a finished book a format it was built without ------------------
+# The alternative is rebuilding the book to get at its EPUB, which means fetching
+# both editions and matching them again for a result already on disk.
+
+def _finished(**kwargs):
+    from biread.render import render_html
+
+    book = [Chapter("I", "Titre", ["Il y avait en Vestphalie.", "Une autre phrase."])]
+    return render_html("Mon Livre", book, {}, **kwargs)
+
+
+def test_a_format_added_afterwards_is_offered_and_carries_its_bytes():
+    from biread.render import BOOK_DATA_RE, add_downloads
+
+    after = add_downloads(_finished(), [("epub", "translation", "L.epub", b"PK\x03\x04zz")])
+    data = json.loads(BOOK_DATA_RE.search(after).group(2))
+    assert data["downloads"] == [
+        {"format": "epub", "source": "translation", "filename": "L.epub"}]
+    blob = re.search(r'id="dl-epub-translation">([^<]*)</script>', after)
+    assert base64.b64decode(blob.group(1)) == b"PK\x03\x04zz"
+
+
+def test_the_rest_of_the_book_is_left_exactly_as_it_was():
+    """Only the blobs and the menu's list of them may change: the file being
+    added to is a book somebody read and approved."""
+    from biread.render import BOOK_DATA_RE, add_downloads
+
+    before = _finished()
+    after = add_downloads(before, [("epub", "translation", "L.epub", b"zz")])
+    was = json.loads(BOOK_DATA_RE.search(before).group(2))
+    now = json.loads(BOOK_DATA_RE.search(after).group(2))
+    assert {k: v for k, v in now.items() if k != "downloads"} == was
+
+    def stripped(html):
+        html = re.sub(r'<script type="application/octet-stream".*?</script>', "", html, flags=re.S)
+        return re.sub(r"\s+", " ", BOOK_DATA_RE.sub("", html))
+
+    assert stripped(after) == stripped(before), "the reader around the book is untouched"
+
+
+def test_a_format_made_again_replaces_itself_rather_than_doubling():
+    from biread.render import BOOK_DATA_RE, add_downloads
+
+    once = add_downloads(_finished(), [("epub", "translation", "L.epub", b"old")])
+    twice = add_downloads(once, [("epub", "translation", "L.epub", b"new")])
+    data = json.loads(BOOK_DATA_RE.search(twice).group(2))
+    assert len(data["downloads"]) == 1
+    assert twice.count('id="dl-epub-translation"') == 1
+    assert base64.b64encode(b"new").decode() in twice
+    assert base64.b64encode(b"old").decode() not in twice
+
+
+def test_a_format_already_inside_is_left_alone_when_another_is_added():
+    from biread.render import BOOK_DATA_RE, add_downloads
+
+    before = _finished(downloads=[("pdf", "translation", "L.pdf", b"%PDF-1.4")])
+    after = add_downloads(before, [("epub", "translation", "L.epub", b"PK")])
+    data = json.loads(BOOK_DATA_RE.search(after).group(2))
+    assert {d["format"] for d in data["downloads"]} == {"pdf", "epub"}
+    assert base64.b64encode(b"%PDF-1.4").decode() in after
+
+
+def test_adding_a_format_to_something_that_is_not_a_book_says_so():
+    from biread.render import add_downloads
+
+    with pytest.raises(ValueError, match="not a built reader"):
+        add_downloads("<!doctype html><p>hello</p>", [("epub", "translation", "L", b"z")])
+
+
+def test_a_replaced_format_keeps_its_place_in_the_menu():
+    """Micromégas lists EPUB then PDF, and re-typesetting its EPUB must not put
+    the PDF first: the menu is in the order the book lists them."""
+    from biread.render import BOOK_DATA_RE, add_downloads
+
+    before = _finished(downloads=[("epub", "translation", "L.epub", b"old"),
+                                  ("pdf", "translation", "L.pdf", b"%PDF")])
+    after = add_downloads(before, [("epub", "translation", "L.epub", b"new")])
+    data = json.loads(BOOK_DATA_RE.search(after).group(2))
+    assert [d["format"] for d in data["downloads"]] == ["epub", "pdf"]

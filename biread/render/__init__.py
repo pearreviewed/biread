@@ -304,6 +304,8 @@ def _reader_css() -> str:
 DOWNLOAD_BLOB_RE = re.compile(
     r'<script type="application/octet-stream".*?</script>', re.S)
 
+BLOB_ID_RE = re.compile(r'id="(dl-[a-z-]+)"')
+
 #: `id="dl-epub"` — the scheme before a book could carry two editions.
 LEGACY_BLOB_ID_RE = re.compile(r'(id="dl-[a-z]+)(")')
 
@@ -326,6 +328,51 @@ def _carry_downloads(html: str, data: dict) -> str:
         LEGACY_BLOB_ID_RE.sub(r"\1-translation\2", blob)
         for blob in DOWNLOAD_BLOB_RE.findall(html)
     )
+
+
+def add_downloads(html: str, downloads: list[Download]) -> str:
+    """Put built editions inside a book that is already finished.
+
+    A book carries its EPUB and PDF as base64 blobs, so making one after the fact
+    is a matter of adding it to the file rather than building the file again —
+    which is the difference between a few minutes of typesetting and re-fetching,
+    re-matching and re-paying for a book that is already correct.
+
+    Everything else in the file is left exactly as it was: only the blob scripts
+    and the menu's own list of them change. A format already inside is replaced
+    where it stands rather than doubled or moved to the end — the menu is in the
+    order the book lists them, and a book that gains a better EPUB should not
+    also reorder the control a reader has used before.
+    """
+    found = BOOK_DATA_RE.search(html)
+    if not found:
+        raise ValueError("not a built reader: no book data")
+    data = json.loads(found.group(2))
+
+    fresh = {(fmt, source): filename for fmt, source, filename, _blob in downloads}
+    listed = []
+    for entry in data.get("downloads") or []:
+        key = (entry["format"], entry.get("source", "translation"))
+        listed.append({"format": key[0], "source": key[1],
+                       "filename": fresh.pop(key, entry["filename"])})
+    listed += [{"format": fmt, "source": source, "filename": filename}
+               for (fmt, source), filename in fresh.items()]
+    data["downloads"] = listed
+
+    replaced = {f"dl-{fmt}-{source}" for fmt, source, _filename, _blob in downloads}
+    blobs = [blob for blob in DOWNLOAD_BLOB_RE.findall(html)
+             if (match := BLOB_ID_RE.search(blob)) and match.group(1) not in replaced]
+    blobs.append(_download_scripts(downloads))
+
+    body = DOWNLOAD_BLOB_RE.sub("", html[:found.start()]).rstrip("\n")
+    return "".join([
+        body,
+        "\n",
+        "\n".join(blob for blob in blobs if blob),
+        "\n",
+        found.group(1), script_json(data), found.group(3),
+        html[found.end():],
+    ])
 
 
 def rewrap(html: str, gloss_on_demand: dict | None = None,

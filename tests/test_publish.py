@@ -151,3 +151,138 @@ def _stub_result():
     return BuildResult(html="<html></html>",
                        alignment=AlignmentReport(method="pivot", chapters_matched=True,
                                                  total=10))
+
+
+# ---- giving a published book its EPUB, long after it was built --------------
+# The whole point is that this touches nothing else: it must not fetch, must not
+# align, and must not cost anything. What it acts on is the file on disk.
+
+def _shelved(tmp_path, manifest_at, **kwargs):
+    from biread.cleanup import Chapter
+    from biread.render import render_html
+
+    book = [Chapter("I", "Titre", ["Il y avait en Vestphalie."])]
+    (tmp_path / "candide.html").write_text(render_html("Candide", book, {}, **kwargs),
+                                           encoding="utf-8")
+    publish.approve("candide", "candide.html", "Smollett · 1920", "2026-08-02")
+
+
+def _typeset(monkeypatch, blob=b"PK\x03\x04"):
+    """Stand in for the browser: what is being tested here is the plumbing
+    around the typesetting, which has its own suite."""
+    seen = {}
+
+    def fake(html, out_dir, formats, author=""):
+        seen["html"], seen["formats"], seen["author"] = html, formats, author
+        return [(fmt, "translation", f"Candide.{fmt}", blob) for fmt in formats]
+
+    monkeypatch.setattr("biread.export.refit.formats_from_html", fake)
+    return seen
+
+
+def test_a_published_book_gains_the_format_inside_itself(tmp_path, manifest_at, monkeypatch):
+    import base64
+    import json
+
+    from biread.render import BOOK_DATA_RE
+
+    _shelved(tmp_path, manifest_at)
+    _typeset(monkeypatch)
+    publish.add_formats("candide", ["epub"])
+
+    html = (tmp_path / "candide.html").read_text(encoding="utf-8")
+    data = json.loads(BOOK_DATA_RE.search(html).group(2))
+    assert [d["format"] for d in data["downloads"]] == ["epub"]
+    assert base64.b64encode(b"PK\x03\x04").decode() in html
+
+
+def test_the_shelf_supplies_the_one_thing_the_file_cannot_say(tmp_path, manifest_at,
+                                                              monkeypatch):
+    """A finished book carries its title and not its author, so the author comes
+    off the shelf record — everything else is read from the book."""
+    _shelved(tmp_path, manifest_at)
+    seen = _typeset(monkeypatch)
+    publish.add_formats("candide", ["epub"])
+    assert seen["author"] == "Voltaire"
+
+
+def test_all_means_every_book_on_the_shelf(tmp_path, manifest_at, monkeypatch):
+    _shelved(tmp_path, manifest_at)
+    publish.approve("micromegas", "micromegas.html", None, "2026-08-02")
+    (tmp_path / "micromegas.html").write_text(
+        (tmp_path / "candide.html").read_text(encoding="utf-8"), encoding="utf-8")
+    _typeset(monkeypatch)
+    assert [slug for slug, _ in publish.add_formats("all", ["epub"])] == \
+        ["candide", "micromegas"]
+
+
+def test_a_book_nobody_published_is_refused_by_name(tmp_path, manifest_at, monkeypatch):
+    _shelved(tmp_path, manifest_at)
+    _typeset(monkeypatch)
+    with pytest.raises(BireadError, match="not a published book"):
+        publish.add_formats("bovary", ["epub"])
+
+
+def test_a_published_book_whose_file_is_gone_stops_rather_than_guessing(
+        tmp_path, manifest_at, monkeypatch):
+    _shelved(tmp_path, manifest_at)
+    (tmp_path / "candide.html").unlink()
+    _typeset(monkeypatch)
+    with pytest.raises(BireadError, match="has no file"):
+        publish.add_formats("candide", ["epub"])
+
+
+def test_adding_a_format_fetches_nothing_and_aligns_nothing(tmp_path, manifest_at,
+                                                            monkeypatch):
+    def refuse(*args, **kwargs):
+        raise AssertionError("a format is made from the book, not from the network")
+
+    monkeypatch.setattr(publish, "load_pair", refuse)
+    monkeypatch.setattr(publish, "build_aligned", refuse)
+    monkeypatch.setattr(publish, "embedder_for", refuse)
+    _shelved(tmp_path, manifest_at)
+    _typeset(monkeypatch)
+    assert publish.main(["candide", "--formats"]) == 0
+
+
+def test_a_book_that_already_carries_a_pdf_keeps_it(tmp_path, manifest_at, monkeypatch):
+    import json
+
+    from biread.render import BOOK_DATA_RE
+
+    _shelved(tmp_path, manifest_at,
+             downloads=[("pdf", "translation", "Candide.pdf", b"%PDF-1.4")])
+    _typeset(monkeypatch)
+    publish.add_formats("candide", ["epub"])
+
+    html = (tmp_path / "candide.html").read_text(encoding="utf-8")
+    data = json.loads(BOOK_DATA_RE.search(html).group(2))
+    assert {d["format"] for d in data["downloads"]} == {"epub", "pdf"}
+
+
+def test_a_format_the_book_already_carries_is_not_made_again(tmp_path, manifest_at,
+                                                             monkeypatch, capsys):
+    """Re-running over the whole shelf must cost only the books that are actually
+    missing one — that is what makes it a habit rather than an afternoon."""
+    _shelved(tmp_path, manifest_at,
+             downloads=[("epub", "translation", "Candide.epub", b"PK")])
+    seen = _typeset(monkeypatch)
+    made = publish.add_formats("candide", ["epub"], on_book=publish.report_formats)
+    assert made == [("candide", [])] and "formats" not in seen
+    assert "already carries it" in capsys.readouterr().out
+
+
+def test_remaking_replaces_a_format_typeset_by_an_older_exporter(tmp_path, manifest_at,
+                                                                 monkeypatch):
+    """Micromégas carried the reflowable EPUB — the design that was reverted for
+    the fixed-layout spread — and was skipped for having one at all."""
+    import base64
+
+    _shelved(tmp_path, manifest_at,
+             downloads=[("epub", "translation", "Candide.epub", b"reflowable")])
+    _typeset(monkeypatch, blob=b"fixed-layout")
+    publish.add_formats("candide", ["epub"], remake=True)
+
+    html = (tmp_path / "candide.html").read_text(encoding="utf-8")
+    assert base64.b64encode(b"fixed-layout").decode() in html
+    assert base64.b64encode(b"reflowable").decode() not in html

@@ -12,16 +12,23 @@ has to be remembered.
     python -m biread.publish candide --dry-run     # what it would cost, no calls
     python -m biread.publish candide               # fetch, align, render, check
     python -m biread.publish candide --approve     # put it on the shelf
+    python -m biread.publish all --formats         # give every shelf book its EPUB
 
 Approval is deliberately its own step. A book that merely aligned is not a book
 somebody vouched for, and the whole difference between this shelf and a search
 box is that a person looked.
+
+`--formats` is the one step here that acts on the book rather than making it. It
+reads the finished file, typesets it, and puts the result back inside — so a book
+gains its EPUB in the minutes the typesetting takes, and not the fetching, the
+matching and the money of a build that has already been done.
 """
 from __future__ import annotations
 
 import argparse
 import json
 import sys
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -29,6 +36,7 @@ from .build import build_aligned
 from .cache import Cache
 from .errors import BireadError
 from .llm.embed import OLLAMA_BASE, Embedder
+from .render import Download, download_name
 from .shelf import by_slug, load_pair
 from .targets import get_target
 
@@ -82,6 +90,66 @@ def approve(slug: str, file: str, english: str | None, today: str) -> dict:
     return row
 
 
+def add_formats(slug: str, formats: list[str], books_dir: Path | None = None,
+                remake: bool = False, on_book=None) -> list[tuple[str, list[Download]]]:
+    """Typeset published books into EPUB (and PDF), and put them inside.
+
+    A reader downloads the book as one file, so the formats live in it rather
+    than beside it. `slug` is one book or "all"; "all" means every book on the
+    shelf, which is what keeps them from drifting apart — a format everywhere is
+    a promise the whole shelf has to keep, not a thing one book happens to have.
+
+    Nothing is fetched and nothing is charged. The book on disk is the source.
+
+    A format the book already carries is left alone, so this can be re-run over
+    the whole shelf for the cost of the books that are actually missing one. The
+    book's *text* cannot go stale that way — `make` writes a fresh file carrying
+    no formats at all — but the *typesetting* can, and did: Micromégas was the
+    one book with an EPUB and it was the reflowable one, built before that design
+    was reverted for the fixed-layout spread. A file carries no record of the
+    exporter that made it, so `remake` is the answer rather than a guess: it is
+    asked for by whoever changed the exporter, who is the only one who knows.
+    """
+    from .export.refit import formats_from_html
+    from .render import BOOK_DATA_RE, add_downloads
+
+    books = books_dir or BOOKS
+    rows = read_manifest()["books"]
+    if slug != "all":
+        rows = [row for row in rows if row["slug"] == slug]
+        if not rows:
+            raise BireadError(
+                f"{slug!r} is not a published book — `--formats` acts on a book "
+                f"that is already on the shelf. Published: "
+                f"{', '.join(r['slug'] for r in read_manifest()['books']) or 'none'}")
+
+    made: list[tuple[str, list[Download]]] = []
+    for row in rows:
+        path = books / row["file"]
+        if not path.is_file():
+            raise BireadError(f"published book {row['slug']!r} has no file at {path}")
+        html = path.read_text(encoding="utf-8")
+        found = BOOK_DATA_RE.search(html)
+        if not found:
+            raise BireadError(f"{path} is not a built book: it carries no book data")
+        carried = {entry["format"] for entry in json.loads(found.group(2)).get("downloads") or []}
+        wanted = [fmt for fmt in formats if remake or fmt not in carried]
+
+        book = by_slug(row["slug"])
+        downloads: list[Download] = []
+        if wanted:
+            with tempfile.TemporaryDirectory() as tmp:
+                # The author is the one thing a finished book does not say about
+                # itself, and the shelf does.
+                downloads = formats_from_html(html, Path(tmp), wanted,
+                                              author=book.author if book else "")
+            path.write_text(add_downloads(html, downloads), encoding="utf-8")
+        made.append((row["slug"], downloads))
+        if on_book:
+            on_book(row["slug"], downloads, path)
+    return made
+
+
 def make(slug: str, *, translation: int = 0, gloss: bool = False,
          embedder=None, gloss_client=None, gloss_cfg=None,
          fetch=None, out_dir: Path | None = None, on_progress=None) -> Made:
@@ -130,7 +198,19 @@ def build_parser() -> argparse.ArgumentParser:
         prog="python -m biread.publish",
         description="Build a shelf book and, once you have looked at it, publish it.",
     )
-    parser.add_argument("slug", help="which shelf book (see python -m biread.shelf)")
+    parser.add_argument(
+        "slug",
+        help="which shelf book (see python -m biread.shelf); \"all\" with --formats")
+    parser.add_argument(
+        "--formats", nargs="*", default=None, metavar="FORMAT",
+        choices=["epub", "pdf"],
+        help="typeset a book already on the shelf into EPUB (and pdf, if you ask "
+             "for it) and put the files inside it. Makes nothing else and calls "
+             "nothing; default: epub")
+    parser.add_argument(
+        "--remake", action="store_true",
+        help="with --formats, typeset again even where the book already carries "
+             "the format. For when the exporter itself has changed")
     parser.add_argument(
         "--translation", type=int, default=0, metavar="N",
         help="which English edition, where the shelf lists more than one (default: 0)")
@@ -175,6 +255,17 @@ def embedder_for(args) -> Embedder:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+
+    if args.formats is not None:
+        try:
+            add_formats(args.slug, args.formats or ["epub"], remake=args.remake,
+                        on_book=report_formats)
+        except BireadError as exc:
+            print(f"\n{exc}", file=sys.stderr)
+            return 1
+        print("\nRun `python web/build.py` to serve them.")
+        return 0
+
     book = by_slug(args.slug)
     if book is None:
         print(f"No book on the shelf called {args.slug!r}. "
@@ -230,6 +321,15 @@ def main(argv: list[str] | None = None) -> int:
         print("\nNot on the shelf yet. Look at the three spreads above, then:")
         print(f"  python -m biread.publish {args.slug} --approve")
     return 0
+
+
+def report_formats(slug: str, downloads: list[Download], path: Path) -> None:
+    if not downloads:
+        print(f"{slug}: already carries it, left alone")
+        return
+    files = ", ".join(f"{fmt.upper()} {len(blob) / 1e6:.1f} MB"
+                      for fmt, _source, _filename, blob in downloads)
+    print(f"{slug}: {files} — the book is now {path.stat().st_size / 1e6:.1f} MB")
 
 
 def report_made(made: Made) -> None:

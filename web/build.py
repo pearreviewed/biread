@@ -232,8 +232,18 @@ def main() -> None:
     for entry in published():
         book = next(b for b in shelf["books"] if b["slug"] == entry["slug"])
         made = book["prebuilt"]
+        formats = " + ".join(f.upper() for f in made["formats"]) or "no EPUB"
         print(f"  ready to read: {book['title']} — {made['paragraphs']} paragraphs, "
-              f"{made['glossed']} glossed, {made['bytes'] / 1e6:.1f} MB")
+              f"{made['glossed']} glossed, {made['bytes'] / 1e6:.1f} MB, {formats}")
+    # Every published book is meant to carry its EPUB, and a build that re-made
+    # one drops it. Said here rather than left to be noticed by a reader who
+    # opens the book and finds the download gone.
+    missing = [entry["slug"] for entry in published()
+               if "epub" not in next(b for b in shelf["books"]
+                                     if b["slug"] == entry["slug"])["prebuilt"]["formats"]]
+    if missing:
+        print(f"\n  {', '.join(missing)} carry no EPUB. Give them one with:")
+        print("    python -m biread.publish all --formats")
     print("Try it locally:  python -m http.server -d web/dist   (then open /builder.html)")
 
 
