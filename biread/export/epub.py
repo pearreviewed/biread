@@ -248,6 +248,33 @@ def _book_pairs(chapters: list[Chapter], translations: dict[str, str],
     return pairs, chapter_meta
 
 
+def _load_the_type(page) -> None:
+    """Have the real book face in hand before a single line is measured.
+
+    `document.fonts.ready` answers about the fonts a page is *already using*, and
+    the harness at that moment is two empty divs — so it resolved instantly, the
+    font was never fetched, and every page was measured in the fallback face.
+    Charter is narrower than Charis SIL, so each page was measured to hold more
+    than it holds: 24 lines where the emitted page needs 28. The pages then
+    overran, and `.page` clips what overruns, so the surplus was not merely ugly
+    but *gone* — the last lines of about a page in three were cut off the book.
+
+    Asking for the face by name loads it; checking afterwards is the point, since
+    the failure this replaces was silent and produced a plausible-looking book.
+    """
+    page.evaluate(
+        "async (px) => {"
+        "  await document.fonts.load(px + 'px \"Charis SIL\"');"
+        "  await document.fonts.load('italic ' + px + 'px \"Charis SIL\"');"
+        "  await document.fonts.ready;"
+        "}", FPX)
+    if not page.evaluate(f"() => document.fonts.check('{FPX}px \"Charis SIL\"')"):
+        raise BireadError(
+            "the book's own face would not load in the layout browser, so every "
+            "page would be measured in a substitute and come out overfull. "
+            "Nothing was written.")
+
+
 def _paginate(pairs: list[dict], chapters: list[dict], lang: str) -> list[dict]:
     """Lay the book out into spreads in headless Chromium, using the reader's
     algorithm against the real page CSS. Needs the ``[browser]`` extra."""
@@ -274,7 +301,7 @@ def _paginate(pairs: list[dict], chapters: list[dict], lang: str) -> list[dict]:
             try:
                 page = browser.new_page(viewport={"width": 1600, "height": 1000})
                 page.set_content(harness, wait_until="load")
-                page.evaluate("() => document.fonts.ready")
+                _load_the_type(page)
                 return page.evaluate(
                     f"([pairs, chapters, lang]) => {PAGINATE_JS}(pairs, chapters, lang)",
                     [pairs, chapters, lang],

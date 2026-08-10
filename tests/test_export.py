@@ -249,3 +249,58 @@ def test_write_pdf_produces_a_real_pdf(tmp_path):
     data = out.read_bytes()
     assert data[:5] == b"%PDF-"
     assert len(data) > 2000
+
+
+@pytest.mark.skipif(not HAS_BROWSER, reason="EPUB export needs the [browser] extra")
+def test_no_page_holds_more_than_it_was_measured_to_hold(tmp_path):
+    """The paginator measured in a fallback face and the book was set in Charis
+    SIL, which is wider — so pages came out overfull, and `.page` clips what
+    overruns, which means the last lines of about a page in three were cut off
+    the book rather than merely crowded. Measuring is only worth anything if what
+    was measured is what gets written, so this renders the emitted pages and
+    holds them to their own page box."""
+    import re as _re
+    from playwright.sync_api import sync_playwright
+
+    from biread.export.epub import PAGE_H, PAGE_W
+
+    # Long paragraphs, so pages fill and a break has to be found inside one.
+    body = [(" ".join(f"phrase numéro {n} d'un paragraphe français assez long pour "
+                      f"remplir la page" for n in range(i * 12, i * 12 + 12)))
+            for i in range(6)]
+    chapters = [Chapter("I", "Le Départ", body)]
+    translations = {hash_text(p): p.replace("phrase numéro", "sentence number")
+                                  .replace("d'un paragraphe français assez long pour remplir la page",
+                                           "of an English paragraph long enough to fill the page")
+                    for p in body}
+    out = tmp_path / "b.epub"
+    write_epub("Essai", chapters, translations, out, ENGLISH)
+
+    unpacked = tmp_path / "unpacked"
+    zipfile.ZipFile(out).extractall(unpacked)
+    pages = sorted((unpacked / "OEBPS").glob("p*.xhtml"))
+    assert pages, "the book produced no pages at all"
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch()
+        try:
+            page = browser.new_page(viewport={"width": PAGE_W, "height": PAGE_H})
+            overfull = []
+            for path in pages:
+                page.goto(path.resolve().as_uri())
+                page.wait_for_function("() => document.fonts.check('23px \"Charis SIL\"')")
+                spill = page.evaluate("""() => {
+                  const box = document.querySelector('.page');
+                  const cs = getComputedStyle(box);
+                  const floor = box.getBoundingClientRect().bottom - parseFloat(cs.paddingBottom);
+                  let worst = 0;
+                  for (const el of box.querySelectorAll('p, .chapter-heading'))
+                    worst = Math.max(worst, el.getBoundingClientRect().bottom - floor);
+                  return Math.round(worst);
+                }""")
+                if spill > 0:
+                    overfull.append((path.name, spill))
+        finally:
+            browser.close()
+
+    assert not overfull, f"pages running past their own text box: {overfull}"
