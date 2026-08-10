@@ -88,13 +88,24 @@ class GlossUnit:
 
 @dataclass
 class GlossRun:
+    #: Every gloss the book will carry, including any an earlier session left in
+    #: the cache beyond what this run was asked for.
     glosses: dict[str, list[GlossUnit]]
+    #: The job as asked for, which on a book glossed only at its opening is the
+    #: opening and not the book. Counting the book here quoted the wait for
+    #: fifteen hundred paragraphs while forty were being made.
     total: int
+    #: Of `total`, how many were already made before this run started.
+    held: int = 0
     glossed: int = 0
     rescued: int = 0  # of `glossed`, how many needed a second pass on their own
     unglossed: list[str] = field(default_factory=list)
     cost: float | None = None
     stopped_at_cap: bool = False
+
+    @property
+    def done(self) -> int:
+        return self.held + self.glossed
 
 
 def body_units(chapters: list[Chapter]) -> list[Unit]:
@@ -498,7 +509,7 @@ def plan_gloss(
     return GlossPlan(
         units=units,
         groups=list(batch(units, pending, max_chars=BATCH_CHARS)),
-        run=GlossRun(glosses=glosses, total=len(units)),
+        run=GlossRun(glosses=glosses, total=wanted, held=wanted - len(pending)),
         gloss_lang=gloss_lang,
     )
 
@@ -571,7 +582,7 @@ def _keep(
     cache.update({cache_key(unit.hash): encode(located)})
     plan.run.glossed += 1
     if on_progress:
-        on_progress(len(plan.run.glosses), plan.run.total)
+        on_progress(plan.run.done, plan.run.total)
 
 
 def gloss_book(

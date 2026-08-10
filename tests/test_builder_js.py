@@ -522,6 +522,18 @@ def test_glossing_says_the_two_pages_are_already_written(page):
     assert text(page, "#bind-note") == ""
 
 
+def test_the_note_says_where_this_pass_ends(page):
+    """On the default the pass stops at the opening and the book makes the rest
+    under whoever reads it. A note promising the whole hover, over a counter
+    that stops at forty, reads as a build that gave up partway."""
+    page.evaluate("show('binding'); paintBinding({stage: 'gloss', done: 4, total: 40})")
+    assert "as you read it" in text(page, "#bind-note")
+
+    page.evaluate("S.glossScope = 'whole'; paintBinding({stage: 'gloss', done: 4, total: 1518})")
+    assert "as you read it" not in text(page, "#bind-note")
+    assert "Both pages are finished" in text(page, "#bind-note")
+
+
 def spread_height(page):
     return page.eval_on_selector("#s-binding .spread", "e => Math.round(e.getBoundingClientRect().height)")
 

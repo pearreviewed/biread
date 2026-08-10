@@ -200,6 +200,74 @@ def test_estimate_counts_only_uncached_paragraphs(tmp_path, book, config):
     assert result.cost > 0
 
 
+# ---- glossing the opening only ----
+
+class Obliging:
+    """Glosses the first word of every paragraph it is shown, whatever it is."""
+
+    input_tokens = output_tokens = 0
+
+    def __init__(self):
+        self.prompts = []
+
+    def complete(self, system, user, max_tokens=None):
+        self.prompts.append(user)
+        import re
+        blocks = re.findall(
+            r"=== PARAGRAPH (\d+) ===\n(.*?)(?=\n\n=== PARAGRAPH |\Z)", user, re.S)
+        return response(*[(int(n), [line(t.strip().split()[0], "noun", "a word")])
+                          for n, t in blocks])
+
+
+@pytest.fixture
+def long_book():
+    return [Chapter("I", None, [f"Paragraphe {n} du texte." for n in range(60)])]
+
+
+def test_glossing_the_opening_asks_for_the_opening_only(tmp_path, long_book, config):
+    client = Obliging()
+    run = gloss_book(long_book, client, Cache.load(tmp_path / "g.json"), config(), limit=40)
+
+    assert run.glossed == 40
+    assert "Paragraphe 40" not in "\n".join(client.prompts)
+
+
+def test_the_count_is_the_job_not_the_book(tmp_path, long_book, config):
+    """The progress screen quotes its wait from this count. Counting the whole
+    book while forty paragraphs were being made read `36 of 1,518` on a book of
+    Nausea's length, and turned seven real minutes into over two hours left."""
+    seen = []
+    gloss_book(long_book, Obliging(), Cache.load(tmp_path / "g.json"), config(),
+               on_progress=lambda done, total: seen.append((done, total)), limit=40)
+
+    assert seen[-1] == (40, 40)
+    assert {total for _, total in seen} == {40}
+
+
+def test_glosses_kept_from_an_earlier_session_start_the_count(tmp_path, long_book, config):
+    path = tmp_path / "g.json"
+    gloss_book(long_book, Obliging(), Cache.load(path), config(), limit=10)
+
+    seen = []
+    run = gloss_book(long_book, Obliging(), Cache.load(path), config(),
+                     on_progress=lambda done, total: seen.append((done, total)), limit=40)
+    assert run.held == 10
+    assert seen[0][0] == 11        # not 1: ten were already made
+    assert seen[-1] == (40, 40)
+
+
+def test_a_gloss_beyond_the_opening_is_carried_but_not_counted(tmp_path, long_book, config):
+    """A reader who glossed further while reading keeps those glosses in the
+    rebuilt book, and they do not make the next build's count read past its end."""
+    path = tmp_path / "g.json"
+    gloss_book(long_book, Obliging(), Cache.load(path), config())        # the whole book
+
+    run = gloss_book(long_book, Obliging(), Cache.load(path), config(), limit=5)
+    assert run.total == 5
+    assert run.held == 5
+    assert len(run.glosses) == 60
+
+
 # ---- typography: the failure that cost a real run ----
 
 CURLY = "Il s’appelait Micromégas — « un nom qui convient », dit-il… l’escalier."

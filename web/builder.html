@@ -2053,11 +2053,15 @@ function paintBinding(m) {
     $("bind-eta").textContent = roughly(elapsed / done * (m.total - m.done) / 60000, S.clock);
   }
   // Glossing is the last pass and the longest, and it runs after both pages are
-  // written. A reader meeting a long wait here should know what is already made.
+  // written. A reader meeting a long wait here should know what is already made,
+  // and where the pass ends: on the default it is the opening only, and the book
+  // goes on making the rest under whoever reads it.
   $("bind-note").textContent = unkept
     ? "This browser will not keep what has been made, so stopping now would mean starting over."
-    : m.stage === "gloss"
-    ? "Both pages are finished. This last pass adds the hover translations." : "";
+    : m.stage !== "gloss" ? ""
+    : glossLimit()
+    ? "Both pages are finished. This adds the hover for the opening pages, and the book makes the rest as you read it."
+    : "Both pages are finished. This last pass adds the hover translations.";
   // The aligner works through the original in order, so until the first chapter
   // is matched the left page turns with the count. After that the real pairs
   // arrive and drive both pages, so this stands aside.

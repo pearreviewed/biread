@@ -73,7 +73,7 @@ const SETUP = [
   "    from biread.gloss import MAX_TOKENS, plan_gloss",
   "    plan = plan_gloss(_JOB['draft'].chapters, _JOB['cache'], _JOB['target'].name, gloss_limit or None)",
   "    _JOB['plan'] = plan",
-  "    js_progress('gloss', len(plan.run.glosses), plan.run.total)",
+  "    js_progress('gloss', plan.run.done, plan.run.total)",
   "    return json.dumps({'system': plan.system(0), 'retry': plan.system(1),",
   "                       'maxTokens': MAX_TOKENS,",
   "                       'batches': [{'n': n, 'prompt': plan.prompt(n)}",
