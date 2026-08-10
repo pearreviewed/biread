@@ -1398,7 +1398,7 @@ def test_the_pass_finishes_the_book_while_it_is_being_read(browser, gloss_path):
     rewind(page)
 
     page.click("#gloss-btn")
-    assert page.inner_text("#gloss-btn") in ("Translating as you read", "Translating…")
+    assert page.inner_text("#gloss-btn") in ("On as you read", "Translating…")
     # Every body paragraph in the book, not only the ones on this spread, and
     # nothing left to buy once they are all there.
     page.wait_for_selector("#gloss-btn", state="hidden", timeout=25000)

@@ -123,6 +123,12 @@ button:focus-visible { outline: 2px solid rgba(200,175,130,.85); outline-offset:
 .btn-pill.ghosted[hidden] { display: none; }
 .btn-pill.ghosted > * { grid-area: 1 / 1; }
 .btn-pill.ghosted > i { visibility: hidden; font-style: normal; white-space: nowrap; }
+/* The two pills are read in one glance and the covering one is the reading aid,
+   so it takes the room: wider on the sides only, never taller, or the header
+   grows and the book repaginates under it. The hover pill gives that room back
+   by holding a shorter longest label and closer sides. */
+#blur-toggle { padding-left: 24px; padding-right: 24px; }
+#gloss-btn { padding-left: 13px; padding-right: 13px; }
 .segmented-row { display: flex; align-items: center; gap: 6px; }
 .segmented { display: flex; align-items: stretch; border: 1px solid var(--rule); border-radius: 999px; overflow: hidden; }
 .segmented button { font-size: 14px; border: none; padding: 7px 15px; background: transparent; color: var(--ink-soft); transition: background .2s ease, color .2s ease; }
