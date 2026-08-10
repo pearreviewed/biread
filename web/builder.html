@@ -1030,10 +1030,10 @@ function madeOf(book) {
         ? "French + translation + published"
         : "French + translation"];
   parts.push(!made.glossed
-    ? "no glosses"
+    ? "no hover translations"
     : made.glossed >= made.paragraphs
-      ? "glosses"
-      : "glosses on " + made.glossed + " paragraphs");
+      ? "hover translations"
+      : "hover translations on " + made.glossed + " paragraphs");
   if (made.formats.length) parts.push(made.formats.map((f) => f.toUpperCase()).join(" + "));
   return parts.join(" · ");
 }
@@ -1670,8 +1670,8 @@ function paintGlossScope() {
     b.setAttribute("aria-pressed", b.dataset.scope === S.glossScope ? "true" : "false");
   }
   $("gloss-scope-note").textContent = S.glossScope === "whole"
-    ? "Every paragraph is glossed before you get the book. It is much the longest part of a build."
-    : "The first pages are glossed now and the book fills in the rest as you read it, on this same key. "
+    ? "Every paragraph gets its hover translations before you get the book. It is much the longest part of a build."
+    : "The first pages get theirs now and the book fills in the rest as you read it, on this same key. "
       + "You can start reading in minutes.";
 }
 for (const b of $("gloss-scope").children) {
@@ -1963,10 +1963,10 @@ function paintPrice() {
     // The figure claims only what it actually covers: with no rate for the
     // embedding model, the matching is not in it and must not look like it is.
     $("fig-of").textContent = !known.length ? "tokens to read"
-      : reading == null ? "the glosses only" : "the whole book";
+      : reading == null ? "the hover translations only" : "the whole book";
     const parts = ["Both editions read once by " + (model || "an embedding model")
       + (reading == null ? "" : " (" + money(reading) + ")")];
-    if (glosses != null) parts.push("glosses (" + money(glosses) + ")");
+    if (glosses != null) parts.push("hover translations (" + money(glosses) + ")");
     $("fig-detail").textContent = parts.join(" plus ") + ", charged to your key."
       + (reading == null ? " Matching the two editions is priced at your provider's embedding rate, typically a cent or two a book." : "");
     return;
@@ -1985,9 +1985,11 @@ function paintPrice() {
   const count = e ? e.paragraphs.toLocaleString() + " passages" : "The book";
   const parts = [count + " translated (" + money(translate) + ")"];
   // Named for what is actually being bought: with the opening glossed and the
-  // rest left to the reader, a bare "glosses" would read as the whole book's.
+  // rest left to the reader, a bare "hover translations" would read as the whole
+  // book's.
   if (glosses != null) {
-    parts.push((glossLimit() ? "glosses for the opening (" : "glosses (") + money(glosses) + ")");
+    parts.push((glossLimit() ? "hover translations for the opening ("
+                             : "hover translations (") + money(glosses) + ")");
   }
   const resumed = alreadyDone();
   $("fig-detail").textContent = parts.join(" plus ") + ", charged to your key."

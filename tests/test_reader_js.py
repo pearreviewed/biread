@@ -780,7 +780,7 @@ def test_spanish_reader_localizes_controls_and_hyphenation(spanish_reader):
     page = spanish_reader
     assert page.inner_text("#chap-btn") == "Capítulos"
     assert page.inner_text("#bm-btn").startswith("Marcadores")
-    assert page.inner_text("#blur-toggle") == "Difuminar la traducción"
+    assert page.inner_text("#blur-toggle") == "Cubrir el español"
     # The translated (right) column hyphenates as Spanish, not English.
     assert page.get_attribute("#stage-wrap .page-right p.pair-en", "lang") == "es"
     # The corner tag follows the target too: FR stays on the source, ES on the right.
@@ -1340,7 +1340,7 @@ def test_the_offer_appears_only_where_a_page_lacks_glosses(browser, gloss_path):
     page = _fresh(browser, gloss_path)
     page.evaluate("() => localStorage.clear()")
     assert page.locator("#gloss-btn").is_visible()
-    assert page.inner_text("#gloss-btn") == "Add glosses"
+    assert page.inner_text("#gloss-btn") == "Hover to translate"
     # Nothing hovers until somebody pays for it.
     assert page.locator("#stage-wrap .page-left .unit").count() == 0
     assert page.evaluate("() => window.__calls === undefined")
@@ -1355,7 +1355,7 @@ def test_glossing_asks_for_a_key_then_calls_only_the_provider(browser, gloss_pat
 
     page.click("#gloss-btn")
     page.wait_for_selector(".revise-key", timeout=3000)
-    assert "glosses" in page.inner_text(".revise-key .info-title")
+    assert "translations" in page.inner_text(".revise-key .info-title")
     # And it says what it will go on doing: a key given for one page and then
     # spent on a whole book would be a thing the reader was not told.
     assert "rest of the book while you read" in page.inner_text(".revise-key .info-body")
@@ -1398,7 +1398,7 @@ def test_the_pass_finishes_the_book_while_it_is_being_read(browser, gloss_path):
     rewind(page)
 
     page.click("#gloss-btn")
-    assert page.inner_text("#gloss-btn") in ("Glossing as you read", "Adding glosses…")
+    assert page.inner_text("#gloss-btn") in ("Translating as you read", "Translating…")
     # Every body paragraph in the book, not only the ones on this spread, and
     # nothing left to buy once they are all there.
     page.wait_for_selector("#gloss-btn", state="hidden", timeout=25000)
@@ -1422,9 +1422,9 @@ def test_the_button_holds_its_width_through_every_label_it_wears(browser, gloss_
     rewind(page)
 
     width = page.eval_on_selector("#gloss-btn", "e => e.getBoundingClientRect().width")
-    assert page.inner_text("#gloss-btn") == "Add glosses"
+    assert page.inner_text("#gloss-btn") == "Hover to translate"
     page.click("#gloss-btn")
-    assert page.inner_text("#gloss-btn") == "Adding glosses…"
+    assert page.inner_text("#gloss-btn") == "Translating…"
     assert page.eval_on_selector("#gloss-btn", "e => e.getBoundingClientRect().width") == width
     page.close()
 
@@ -1523,7 +1523,7 @@ def test_a_reply_that_will_not_anchor_leaves_the_page_plain(browser, gloss_path)
     page.click("#gloss-btn")
     page.wait_for_timeout(900)
     assert page.locator("#stage-wrap .page-left .unit").count() == 0
-    assert page.inner_text("#gloss-btn") != "Add glosses", "a failure should say so"
+    assert page.inner_text("#gloss-btn") != "Hover to translate", "a failure should say so"
     page.close()
 
 
@@ -1549,7 +1549,7 @@ def test_bought_glosses_survive_reopening_the_book(browser, gloss_path):
         "return c && c.textContent && !c.textContent.includes('+'); }", timeout=15000)
     rewind(page)
     page.wait_for_selector("#stage-wrap .page-left .unit", timeout=5000)
-    assert page.inner_text("#gloss-btn") == "Add glosses", "the pass is off, and offered"
+    assert page.inner_text("#gloss-btn") == "Hover to translate", "the pass is off, and offered"
     page.close()
 
 

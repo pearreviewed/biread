@@ -232,7 +232,7 @@ def test_the_aligned_gate_does_not_claim_the_reading_it_cannot_price(page):
     page.wait_for_timeout(300)
     # No OpenRouter rate is known for the embedding model in a test, so the figure
     # covers the glosses alone and must say so rather than read as the whole bill.
-    assert "glosses only" in text(page, "#fig-of")
+    assert "hover translations only" in text(page, "#fig-of")
     assert "Matching the two editions is priced" in text(page, "#fig-detail")
 
 
@@ -808,7 +808,7 @@ def test_the_ready_line_says_what_is_in_the_book_and_names_the_edition(page):
     # clause is measured off the file rather than written by hand. One line, and
     # one only — the rule beneath it stands level with its neighbours' or the
     # row reads as out of true.
-    assert said == "French + Phalen · glosses · EPUB + PDF"
+    assert said == "French + Phalen · hover translations · EPUB + PDF"
     assert "Or build it yourself" in text(page, ".card[data-slug=micromegas]")
 
 
@@ -1105,19 +1105,19 @@ def test_a_book_divided_differently_says_so_rather_than_shrugging(page):
     assert page.evaluate("agreement(1, 22)").startswith("1 chapter against 22")
 
 
-def test_a_book_without_glosses_says_so_in_two_words(page):
+def test_a_book_without_hover_translations_says_so_in_a_phrase(page):
     """The offer used to be made here, in a sentence with a price in it, and it
     ran to two lines on seven cards of eight. A card states the fact; the offer
     is met in the reader, whose header carries it."""
     page.click("[data-route=shelf]")
     assert text(page, ".card[data-slug=candide] .say") == \
-        "French + published translation · no glosses"
+        "French + published translation · no hover translations"
     assert "penny" not in text(page, ".card[data-slug=candide]")
 
 
-def test_a_book_that_has_glosses_is_not_said_to_be_missing_them(page):
+def test_a_book_that_has_them_is_not_said_to_be_missing_them(page):
     page.click("[data-route=shelf]")
-    assert "no glosses" not in text(page, ".card[data-slug=micromegas]")
+    assert "no hover translations" not in text(page, ".card[data-slug=micromegas]")
 
 
 def test_a_card_says_on_its_face_what_the_book_is(page):
