@@ -30,14 +30,14 @@ pip install -e ".[browser]" && playwright install chromium webkit
 pytest
 ```
 
-That is about 1,080 Python tests, and the suite **needs no network and no API
-key** — the model is faked and the fixtures are canned — so you can run all of
-it for free, as often as you like. On top of that sit 174 browser tests (the
-reader, the builder, and the gloss pool), each run once in Chromium and once in
-WebKit; they and the EPUB/PDF export render tests skip themselves unless the
-`[browser]` extra is installed. WebKit is roughly six times slower, so narrowing
-with `BIREAD_ENGINES=chromium` is worth it in a tight loop and not before a
-merge.
+That is about 1,110 tests, and the suite **needs no network and no API key** —
+the model is faked and the fixtures are canned — so you can run all of it for
+free, as often as you like. Roughly 370 of them drive a real browser (the
+reader, the builder, and the gloss pool), because each of those runs once in
+Chromium and once in WebKit; they and the EPUB/PDF export render tests skip
+themselves unless the `[browser]` extra is installed. WebKit is roughly six
+times slower, so narrowing with `BIREAD_ENGINES=chromium` is worth it in a tight
+loop and not before a merge.
 
 One suite is opt-in because it boots Pyodide from a CDN and reads `web/dist`:
 

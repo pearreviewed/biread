@@ -52,9 +52,18 @@ book and never a word of text, which is what keeps it a tool rather than a host.
   the replies — while the transport moved out, because that pass is nothing but
   network. A local Ollama gets one hand instead of six, since a second request
   there only queues on the same card.
-- **A book need not be fully glossed to be read.** The build makes the opening,
-  and the finished book carries the protocol so the rest is made on the reader's
-  own key, one request at a time, as they read.
+- **A book need not be fully glossed to be read.** The build makes the opening —
+  measured in characters of the original rather than a count of paragraphs, since
+  a book set in short dialogue lines and one set in long ones share nothing but
+  the number — and the finished book carries the protocol so the rest is made on
+  the reader's own key, one request at a time, as they read.
+- **A book you built has somewhere to be found.** Every build also goes into the
+  browser's own storage and stands on a row at the top of the front door, so the
+  way back to it is not remembering what the file was called. That row is
+  emphatically **not** the shelf: the shelf below is published and vouched for,
+  and this is one person's own files. It says so in its own words, nothing about
+  it reaches a server, and it is one browser only — clearing site data takes the
+  row with it, which is why the file itself is still offered on the card.
 
 Two things the page will tell a reader before they pay: that their file is a
 **photograph of a book** rather than a typeset one, since biread leaves OCR

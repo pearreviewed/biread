@@ -33,12 +33,12 @@ the command line and in the [web builder](web/README.md):
 
 <p align="center">
   <img src="docs/screenshots/gloss.jpg" width="860"
-       alt="Hovering the French phrase 'dont on peut faire' shows a tooltip giving its part of speech, its translation in context, and the infinitive 'faire'">
+       alt="Hovering the French phrase 'dont on peut faire' shows a small tooltip giving its meaning in context, 'of which one can make/do', and the infinitive 'faire'">
   <br>
-  <sub><em>Hover a phrase for its translation in context. The target is a
-  <em>unit</em>, not a word — an article or a preposition is glossed together with
-  the word it attaches to — and a verb also shows its infinitive, with the passé
-  composé beside a passé simple.</em></sub>
+  <sub><em>Hover a phrase for what it means here. The target is a <em>unit</em>,
+  not a word — an article or a preposition is glossed together with the word it
+  attaches to — and a verb also shows its infinitive, with the passé composé
+  beside a passé simple.</em></sub>
 </p>
 
 <p align="center">
@@ -404,10 +404,10 @@ pip install -e ".[dev]"
 pytest
 ```
 
-That is about 1,080 Python tests, and **no test touches the network or needs a
-key**, so the whole suite runs for free as often as you like. The model is a
-fake that echoes structured replies, including malformed and truncated ones, and
-the provider clients are tested against stubbed SDK responses.
+That is about 1,110 tests, and **not one touches the network or needs a key**, so
+the whole suite runs for free as often as you like. The model is a fake that
+echoes structured replies, including malformed and truncated ones, and the
+provider clients are tested against stubbed SDK responses.
 
 The reader and the builder are driven in a real browser, because their bugs live
 in layout and timing — pagination measured against a box that had not been laid
@@ -420,7 +420,7 @@ the browser extra is installed:
 ```sh
 pip install -e ".[browser]" && playwright install chromium webkit
 pytest tests/test_reader_js.py       # 76 tests × 2 engines, the reader
-pytest tests/test_builder_js.py      # 90 tests × 2 engines, the builder
+pytest tests/test_builder_js.py      # 99 tests × 2 engines, the builder
 pytest tests/test_gloss_pool_js.py   #  8 tests × 2 engines, the gloss pool
 BIREAD_ENGINES=chromium pytest tests/test_reader_js.py   # one engine, when it must be quick
 ```
