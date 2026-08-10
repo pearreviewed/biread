@@ -2,7 +2,7 @@
 # Turn on GitHub sign-in, without the secret ever touching shell history, a file
 # in the repo, or anyone's transcript. Run it on the server:
 #
-#   ssh -t -i ~/.ssh/id_ed25519_ovh <your-user>@<your-host> \
+#   ssh -t <your-user>@<your-host> \
 #       /srv/apps/biread/server/deploy/enable-signin.sh
 #
 # Register the OAuth App first — the callback must be exactly:
@@ -23,7 +23,7 @@ if [ ! -t 0 ]; then
 This needs a terminal to ask you for the two values, and ssh did not give it one.
 Add -t:
 
-  ssh -t -i ~/.ssh/id_ed25519_ovh <your-user>@<your-host> \
+  ssh -t <your-user>@<your-host> \
       /srv/apps/biread/server/deploy/enable-signin.sh
 
 Nothing has been changed.
