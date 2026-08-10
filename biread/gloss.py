@@ -461,6 +461,36 @@ class GlossPlan:
         return build_prompt(self.units, self.groups[n])
 
 
+#: The opening a build glosses when the reader takes it over the whole book,
+#: measured in characters of the original rather than in paragraphs. What a
+#: reader is given is a stretch of *reading*, and a flat paragraph count does not
+#: buy the same stretch twice: a book set in short dialogue lines and a book set
+#: in long ones share nothing but the number. 40 paragraphs is the whole of
+#: Micromégas and thirteen spreads of La Nausée's four hundred and ninety-seven.
+OPENING_CHARS = 40_000
+#: A book of very long paragraphs still gets a few, and a book of very short ones
+#: does not run away with the build.
+OPENING_MIN = 40
+OPENING_MAX = 400
+
+
+def opening(chapters: list[Chapter], chars: int = OPENING_CHARS) -> int:
+    """How many paragraphs of `chapters` make the opening, for `plan_gloss`.
+
+    A book shorter than the budget comes out whole, which is what makes this
+    scale rather than merely cap: nothing is left for a reader to buy on a book
+    that fits.
+    """
+    units = body_units(chapters)
+    taken = run = 0
+    for unit in units:
+        if run >= chars:
+            break
+        run += len(unit.text)
+        taken += 1
+    return min(len(units), max(OPENING_MIN, min(taken, OPENING_MAX)))
+
+
 def plan_gloss(
     chapters: list[Chapter], cache: Cache, gloss_lang: str = "English", limit: int | None = None
 ) -> GlossPlan:

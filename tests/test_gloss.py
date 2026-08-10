@@ -582,6 +582,57 @@ def test_an_echoed_infinitive_already_in_the_cache_is_not_shown():
     assert shown.infinitive == ""
 
 
+# ---------- how much of a book the build glosses ----------
+
+def _book_of(count, chars):
+    return [Chapter("I", None, ["Il monta l'escalier. " * (chars // 20) for _ in range(count)])]
+
+
+def test_a_book_smaller_than_the_opening_is_glossed_whole():
+    """Which is what makes this scale rather than merely cap: nothing is left for
+    a reader to buy on a book that fits."""
+    from biread.gloss import OPENING_CHARS, opening
+
+    book = _book_of(30, OPENING_CHARS // 60)
+    assert opening(book) == 30
+
+
+def test_the_opening_is_a_stretch_of_reading_not_a_count_of_paragraphs():
+    """Two books of the same length in paragraphs and different lengths in prose
+    must not be given the same opening: 40 paragraphs is the whole of Micromégas
+    and thirteen spreads of La Nausée's four hundred and ninety-seven."""
+    from biread.gloss import OPENING_CHARS, OPENING_MIN, opening
+
+    short_paragraphs = opening(_book_of(4000, 200))
+    long_paragraphs = opening(_book_of(4000, 2000))
+    assert short_paragraphs > long_paragraphs
+    for book, taken in ((_book_of(4000, 200), short_paragraphs),
+                        (_book_of(4000, 2000), long_paragraphs)):
+        paragraphs = book[0].paragraphs
+        assert sum(len(p) for p in paragraphs[:taken]) >= OPENING_CHARS
+        # And no further than it must go: one paragraph fewer falls short of the
+        # budget, unless the floor is what set the count.
+        assert (taken == OPENING_MIN
+                or sum(len(p) for p in paragraphs[:taken - 1]) < OPENING_CHARS)
+
+
+def test_the_opening_is_bounded_at_both_ends():
+    """A book of very long paragraphs still gets a few, and a book of very short
+    ones does not run away with the build."""
+    from biread.gloss import OPENING_MAX, OPENING_MIN, opening
+
+    assert opening(_book_of(200, 40_000)) == OPENING_MIN
+    assert opening(_book_of(20_000, 20)) == OPENING_MAX
+
+
+def test_the_opening_is_what_the_run_then_asks_for(tmp_path):
+    from biread.gloss import opening, plan_gloss
+
+    book = _book_of(4000, 200)
+    plan = plan_gloss(book, Cache.load(tmp_path / "g.json"), limit=opening(book))
+    assert plan.run.total == opening(book)
+
+
 # ---------- driven from outside: the browser's several-at-once pass ----------
 
 def _long_book(count=14):

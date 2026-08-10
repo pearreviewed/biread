@@ -364,10 +364,12 @@ def test_the_hover_is_made_for_the_opening_by_default(page):
     to_settings(page)
     assert page.get_attribute("[data-scope=opening]", "aria-pressed") == "true"
     assert "start reading in minutes" in text(page, "#gloss-scope-note")
-    assert page.evaluate("() => glossLimit()") == 40
+    # How long an opening is belongs to the engine, which holds the paragraphs;
+    # the page says only which of the two was asked for.
+    assert page.evaluate("() => openingOnly()") is True
 
     page.click("[data-scope=whole]")
-    assert page.evaluate("() => glossLimit()") == 0
+    assert page.evaluate("() => openingOnly()") is False
     assert "longest part of a build" in text(page, "#gloss-scope-note")
 
     # And no choice to make where there is no hover to make it about.
@@ -609,6 +611,26 @@ def test_the_price_is_what_is_left_to_pay(page):
         "S.sample = {cost: 0.01, glossCost: 0.02, chars: 1000, bookChars: 100000};"
         "paintPrice()")
     assert page.evaluate("() => measured().translate") == pytest.approx(0.4, rel=1e-6)
+
+
+def test_the_price_line_says_how_far_the_opening_reaches(page):
+    """"For the opening" says nothing about how far it goes, and how far it goes
+    is the difference between a chapter and four pages. The engine's own count
+    for this book is on the line, so it cannot promise a stretch it will not
+    make."""
+    to_settings(page)
+    page.evaluate(
+        "S.estimate = {paragraphs: 1518, pending: 1518, translate_cost: 0.4,"
+        " gloss_cost: 0.06, gloss_total: 85, cost: 0.46};"
+        "S.sample = null; paintPrice()")
+    assert "opening 85 passages" in text(page, "#fig-detail")
+
+    page.click("[data-scope=whole]")
+    page.evaluate(
+        "S.estimate = {paragraphs: 1518, pending: 1518, translate_cost: 0.4,"
+        " gloss_cost: 0.9, gloss_total: 1518, cost: 1.3};"
+        "S.sample = null; paintPrice()")
+    assert "opening" not in text(page, "#fig-detail")
 
 
 # ---- the shelf -----------------------------------------------------------

@@ -405,8 +405,11 @@ def rewrap(html: str, gloss_on_demand: dict | None = None,
     changes is only the reader around them.
 
     `gloss_on_demand` additionally tells the book where its reader may buy the
-    glosses it lacks. A book that already carries glosses ignores it — there is
-    nothing to buy, and an idle button is a lie about the page.
+    glosses it lacks. Only a book whose every paragraph already carries one
+    ignores it — there is nothing left to buy, and an idle button is a lie about
+    the page. A book glossed in *part* is the ordinary case now that a build
+    makes the opening and leaves the rest to whoever reads it, and testing for
+    any gloss at all took the offer away from exactly those books.
 
     `builder_url` is the way back. A finished book had none, so a reader who
     opened one off the shelf had no route to the builder or the shelf but the
@@ -417,7 +420,10 @@ def rewrap(html: str, gloss_on_demand: dict | None = None,
         raise ValueError("not a built reader: no book data")
     data = json.loads(found.group(2))
 
-    if gloss_on_demand and not any(pair.get("units") for pair in data["pairs"]):
+    unglossed = any(
+        not pair.get("units") and pair.get("fr", "").strip() for pair in data["pairs"]
+    )
+    if gloss_on_demand and unglossed:
         for pair in data["pairs"]:
             # A bought gloss is kept against its source paragraph, so a rebuild
             # that changes the paragraph drops it rather than pinning it to prose

@@ -1606,7 +1606,7 @@ async function payload(extra) {
     // The same paragraphs in another language are another translation, so the
     // work already paid for is filed under both.
     workKey: S.book ? S.book + "." + $("lang").value : "loose",
-    glossLimit: glossLimit(),
+    glossOpening: openingOnly(),
     local: S.local,
     shelfKey: S.pick && S.route === "shelf" ? S.pick.key : null,
     provider: S.local ? "openrouter" : S.provider,
@@ -1673,7 +1673,6 @@ $("gloss").addEventListener("change", () => { setProvider(S.provider); priceIt()
 // of translating and runs after both pages are written, so on a long book it is
 // the whole of the wait — and the book can carry the protocol instead and finish
 // itself while it is read, on the same key, a page ahead of the reader.
-const GLOSS_OPENING = 40;   // paragraphs: the first several spreads
 function paintGlossScope() {
   const want = $("gloss").checked;
   $("gloss-scope").hidden = !want;
@@ -1694,8 +1693,12 @@ for (const b of $("gloss-scope").children) {
     priceIt();
   });
 }
-function glossLimit() {
-  return S.glossScope === "whole" ? 0 : GLOSS_OPENING;
+// Whether the build makes the opening only. How long an opening is belongs to
+// the engine (`biread.gloss.opening`), which holds the paragraphs: this page
+// knows a count and an average, and an average buys a chapter of one book and
+// four pages of another.
+function openingOnly() {
+  return S.glossScope !== "whole";
 }
 
 /* --- step two ------------------------------------------------------------ */
@@ -1914,7 +1917,7 @@ function measured() {
     // The page read is a rate over the whole book, which is the wrong ruler for
     // a build glossing only the opening. There the counted estimate already
     // measures the job as asked for, so it is left to speak.
-    glosses: s.glossCost == null || glossLimit() ? null : s.glossCost * scale * glossOwing,
+    glosses: s.glossCost == null || openingOnly() ? null : s.glossCost * scale * glossOwing,
   };
 }
 // What an earlier session already bought, said plainly and only when there is
@@ -2016,12 +2019,16 @@ function paintPrice() {
   // above the paragraph count on the file card and should not look like it.
   const count = e ? e.paragraphs.toLocaleString() + " passages" : "The book";
   const parts = [count + " translated (" + money(translate) + ")"];
-  // Named for what is actually being bought: with the opening glossed and the
-  // rest left to the reader, a bare "hover translations" would read as the whole
-  // book's.
+  // Named for what is actually being bought, and sized: with the opening glossed
+  // and the rest left to the reader, a bare "hover translations" would read as
+  // the whole book's, and "the opening" alone says nothing about how far it
+  // reaches. The count is the engine's own answer for this book, so the line
+  // cannot promise a stretch the build will not make.
   if (glosses != null) {
-    parts.push((glossLimit() ? "hover translations for the opening ("
-                             : "hover translations (") + money(glosses) + ")");
+    const opening = openingOnly() && e && e.gloss_total
+      ? "hover translations for the opening " + e.gloss_total.toLocaleString() + " passages ("
+      : openingOnly() ? "hover translations for the opening (" : "hover translations (";
+    parts.push(opening + money(glosses) + ")");
   }
   const resumed = alreadyDone();
   $("fig-detail").textContent = parts.join(" plus ") + ", charged to your key."
@@ -2093,7 +2100,7 @@ function paintBinding(m) {
   $("bind-note").textContent = unkept
     ? "This browser will not keep what has been made, so stopping now would mean starting over."
     : m.stage !== "gloss" ? ""
-    : glossLimit()
+    : openingOnly()
     ? "Both pages are finished. This adds the hover for the opening pages, and the book makes the rest as you read it."
     : "Both pages are finished. This last pass adds the hover translations.";
   // The aligner works through the original in order, so until the first chapter

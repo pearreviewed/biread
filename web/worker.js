@@ -77,8 +77,13 @@ const SETUP = [
   // The book between its two halves: made, not yet glossed, not yet set in type.
   "_JOB = {}",
   "def gloss_task():",
-  "    from biread.gloss import MAX_TOKENS, plan_gloss",
-  "    plan = plan_gloss(_JOB['draft'].chapters, _JOB['cache'], _JOB['target'].name, gloss_limit or None)",
+  "    from biread.gloss import MAX_TOKENS, opening, plan_gloss",
+  // How much of the hover the build itself makes. The opening is sized from the
+  // book rather than sent as a number, because only this side has the
+  // paragraphs: the page knows a total and an average, and an average buys a
+  // different amount of reading in every book.
+  "    limit = opening(_JOB['draft'].chapters) if gloss_opening else None",
+  "    plan = plan_gloss(_JOB['draft'].chapters, _JOB['cache'], _JOB['target'].name, limit)",
   "    _JOB['plan'] = plan",
   "    js_progress('gloss', plan.run.done, plan.run.total)",
   "    return json.dumps({'system': plan.system(0), 'retry': plan.system(1),",
@@ -105,11 +110,18 @@ const SETUP = [
   "    _JOB['run'] = plan.run",
   "def build_end():",
   "    from biread.build import finish",
-  // The protocol travels with the book whenever a chat model was chosen, so a
-  // book whose opening was glossed — or which was built with no hover at all —
-  // is finished by whoever reads it, on their own key. It costs a few kilobytes
-  // and saves the hours a full gloss pass would have taken before page one.
-  "    offer = {'provider': provider, 'model': MODEL, 'lang': _JOB['target'].name} if _JOB.get('client') else None",
+  // The protocol travels with every book, so one whose opening was glossed — or
+  // which was built with no hover at all — is finished by whoever reads it, on
+  // their own key. It costs a few kilobytes and saves the hours a full gloss
+  // pass would have taken before page one.
+  //
+  // Written whether or not this build made a chat client, which is the whole of
+  // it: the align route asks for a model only once the hover is wanted, so a
+  // book aligned with the box unticked came out sealed — no hover, and no way
+  // for its reader to add one ever. A model was still chosen on the page.
+  // Local builds name Ollama, since a model on the builder's own machine is not
+  // one the book can send a reader to.
+  "    offer = {'provider': ('ollama' if local_engine else provider), 'model': MODEL, 'lang': _JOB['target'].name}",
   "    res = finish(_JOB['draft'], _JOB.get('run'), offer)",
   "    tr = res.translation.cost if res.translation else None",
   "    gl = res.gloss.cost if res.gloss else None",
@@ -305,7 +317,9 @@ const ESTIMATE = [
   "    e = est_tr(orig_chapters, cache, cfg, target.name)",
   "    out.update(paragraphs=e.total, pending=e.pending, translate_cost=e.cost)",
   "if want_gloss:",
-  "    g = est_gl(orig_chapters, cache, cfg.for_glossing(), target.name, gloss_limit or None)",
+  "    from biread.gloss import opening",
+  "    g = est_gl(orig_chapters, cache, cfg.for_glossing(), target.name,",
+  "               opening(orig_chapters) if gloss_opening else None)",
   "    out.update(gloss_cost=g.cost or 0.0, gloss_done=g.cached, gloss_total=g.total)",
   "out['cost'] = (out['translate_cost'] or 0.0) + (out['gloss_cost'] or 0.0)",
   "json.dumps(out)",
@@ -395,9 +409,10 @@ self.onmessage = async (e) => {
     // another language are another translation.
     pyodide.globals.set("work_key", m.workKey || "loose");
     pyodide.globals.set("want_gloss", !!m.gloss);
-    // How much of the hover the build itself makes. Null is the whole book; a
-    // number is its opening, with the rest left to the reader.
-    pyodide.globals.set("gloss_limit", m.glossLimit || 0);
+    // How much of the hover the build itself makes: the whole book, or its
+    // opening with the rest left to the reader. How long an opening is is
+    // `biread.gloss.opening`'s to say, since the paragraphs are on this side.
+    pyodide.globals.set("gloss_opening", !!m.glossOpening);
     pyodide.globals.set("api_key", m.key || "");
     pyodide.globals.set("title", m.title || "book");
     pyodide.globals.set("model_id", m.model || "claude-sonnet-5");
@@ -407,6 +422,10 @@ self.onmessage = async (e) => {
     // all come from the page, which knows what the reader picked and what it costs.
     pyodide.globals.set("provider", m.provider || "anthropic");
     pyodide.globals.set("base_url", m.baseUrl || "");
+    // A build on the reader's own machine reaches its model through OpenRouter's
+    // wire shape at a local address, so the provider it names is not the one the
+    // finished book must send a reader to.
+    pyodide.globals.set("local_engine", !!m.local);
     pyodide.globals.set("price_in", m.priceIn || 0);
     pyodide.globals.set("price_out", m.priceOut || 0);
     pyodide.globals.set("embed_model", m.embedModel || "bge-m3");

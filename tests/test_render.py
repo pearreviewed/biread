@@ -427,6 +427,27 @@ def test_a_book_that_already_has_glosses_is_never_offered_them():
     assert "gloss" not in data, "there is nothing to buy, and an idle button lies"
 
 
+def test_the_offer_survives_a_book_glossed_only_at_its_opening():
+    """The ordinary book now: a build makes the opening and the reader the rest.
+
+    Testing for any gloss at all took the offer away from exactly those books,
+    which left a reader stranded at the first unglossed page with no control to
+    press."""
+    from biread.gloss import GlossUnit
+    from biread.render import BOOK_DATA_RE, render_html, rewrap
+
+    opening, rest = "Il y avait en Vestphalie.", "Le baron était un seigneur."
+    book = [Chapter("I", None, [opening, rest])]
+    glosses = {hash_text(opening): [
+        GlossUnit(start=0, end=10, pos="verb", gloss="there was", infinitive="avoir")]}
+    html = render_html("L", book, {}, glosses=glosses)
+    data = json.loads(BOOK_DATA_RE.search(
+        rewrap(html, gloss_on_demand={"provider": "openrouter", "model": "m"})).group(2))
+    assert data["gloss"]["enabled"] is True
+    assert all("h" in pair for pair in data["pairs"]), "a bought gloss is kept by hash"
+    assert data["pairs"][0]["units"], "what was already glossed is not thrown away"
+
+
 def test_rewrapping_something_that_is_not_a_book_says_so():
     from biread.render import rewrap
 
