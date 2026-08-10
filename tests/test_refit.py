@@ -143,3 +143,73 @@ def test_the_french_page_faces_its_own_translation(tmp_path):
         for fr, en in zip(FR, EN):
             if fr[:20] in left:
                 assert en[:20] in right, f"{fr[:20]!r} is facing the wrong page"
+
+
+# ---- the command that gives any finished book its format -------------------
+# A book built in the browser can carry no EPUB at the time it is made: both
+# exporters measure real type in a headless browser, which a reader's tab cannot
+# run. The book is on their disk afterwards, and the typesetting needs only that.
+
+def _typeset(monkeypatch, blob=b"PK\x03\x04"):
+    seen = {}
+
+    def fake(html, out_dir, formats, author=""):
+        seen["formats"], seen["author"] = formats, author
+        return [(fmt, "translation", f"L.{fmt}", blob) for fmt in formats]
+
+    monkeypatch.setattr("biread.export.refit.formats_from_html", fake)
+    return seen
+
+
+def test_a_book_built_in_a_browser_can_be_given_its_epub(tmp_path, monkeypatch):
+    from biread import formats
+
+    book = tmp_path / "la nausee - bilingual reader.html"
+    book.write_text(a_book(), encoding="utf-8")
+    _typeset(monkeypatch)
+
+    assert formats.add_formats(book, ["epub"]) == [("epub", 4)]
+    assert data_of(book.read_text(encoding="utf-8"))["downloads"][0]["format"] == "epub"
+
+
+def test_both_formats_when_both_are_asked_for(tmp_path, monkeypatch):
+    from biread import formats
+
+    book = tmp_path / "b.html"
+    book.write_text(a_book(), encoding="utf-8")
+    seen = _typeset(monkeypatch)
+    formats.main([str(book), "--pdf"])
+    assert seen["formats"] == ["epub", "pdf"]
+    assert [d["format"] for d in data_of(book.read_text(encoding="utf-8"))["downloads"]] == \
+        ["epub", "pdf"]
+
+
+def test_a_book_that_already_carries_it_is_left_alone(tmp_path, monkeypatch, capsys):
+    from biread import formats
+
+    book = tmp_path / "b.html"
+    book.write_text(a_book(downloads=[("epub", "translation", "L.epub", b"PK")]),
+                    encoding="utf-8")
+    was = book.read_text(encoding="utf-8")
+    _typeset(monkeypatch)
+    assert formats.main([str(book)]) == 0
+    assert book.read_text(encoding="utf-8") == was
+    assert "already carries it" in capsys.readouterr().out
+
+
+def test_the_source_file_you_built_from_is_refused_by_name(tmp_path, capsys):
+    from biread import formats
+
+    source = tmp_path / "la nausee.html"
+    source.write_text("<html><body><p>Chapitre I</p></body></html>", encoding="utf-8")
+    assert formats.main([str(source)]) == 1
+    err = capsys.readouterr().err
+    assert "la nausee.html is not a book biread made" in err
+    assert "the finished HTML a build hands you" in err
+
+
+def test_a_file_that_is_not_there_says_so(tmp_path, capsys):
+    from biread import formats
+
+    assert formats.main([str(tmp_path / "nowhere.html")]) == 2
+    assert "No file at" in capsys.readouterr().err

@@ -28,7 +28,6 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -36,7 +35,7 @@ from .build import build_aligned
 from .cache import Cache
 from .errors import BireadError
 from .llm.embed import OLLAMA_BASE, Embedder
-from .render import Download, download_name
+from .formats import Typeset
 from .shelf import by_slug, load_pair
 from .targets import get_target
 
@@ -91,7 +90,7 @@ def approve(slug: str, file: str, english: str | None, today: str) -> dict:
 
 
 def add_formats(slug: str, formats: list[str], books_dir: Path | None = None,
-                remake: bool = False, on_book=None) -> list[tuple[str, list[Download]]]:
+                remake: bool = False, on_book=None) -> list[tuple[str, list[Typeset]]]:
     """Typeset published books into EPUB (and PDF), and put them inside.
 
     A reader downloads the book as one file, so the formats live in it rather
@@ -99,19 +98,12 @@ def add_formats(slug: str, formats: list[str], books_dir: Path | None = None,
     shelf, which is what keeps them from drifting apart — a format everywhere is
     a promise the whole shelf has to keep, not a thing one book happens to have.
 
-    Nothing is fetched and nothing is charged. The book on disk is the source.
-
-    A format the book already carries is left alone, so this can be re-run over
-    the whole shelf for the cost of the books that are actually missing one. The
-    book's *text* cannot go stale that way — `make` writes a fresh file carrying
-    no formats at all — but the *typesetting* can, and did: Micromégas was the
-    one book with an EPUB and it was the reflowable one, built before that design
-    was reverted for the fixed-layout spread. A file carries no record of the
-    exporter that made it, so `remake` is the answer rather than a guess: it is
-    asked for by whoever changed the exporter, who is the only one who knows.
+    The typesetting itself is `biread.formats`, which does this for any finished
+    book at all. What is here is only the shelf's part of it: which files those
+    are, and whose book each one is — the author being the one thing a finished
+    book does not say about itself, and the shelf record does.
     """
-    from .export.refit import formats_from_html
-    from .render import BOOK_DATA_RE, add_downloads
+    from .formats import add_formats as typeset
 
     books = books_dir or BOOKS
     rows = read_manifest()["books"]
@@ -123,30 +115,17 @@ def add_formats(slug: str, formats: list[str], books_dir: Path | None = None,
                 f"that is already on the shelf. Published: "
                 f"{', '.join(r['slug'] for r in read_manifest()['books']) or 'none'}")
 
-    made: list[tuple[str, list[Download]]] = []
+    made: list[tuple[str, list[Typeset]]] = []
     for row in rows:
         path = books / row["file"]
         if not path.is_file():
             raise BireadError(f"published book {row['slug']!r} has no file at {path}")
-        html = path.read_text(encoding="utf-8")
-        found = BOOK_DATA_RE.search(html)
-        if not found:
-            raise BireadError(f"{path} is not a built book: it carries no book data")
-        carried = {entry["format"] for entry in json.loads(found.group(2)).get("downloads") or []}
-        wanted = [fmt for fmt in formats if remake or fmt not in carried]
-
         book = by_slug(row["slug"])
-        downloads: list[Download] = []
-        if wanted:
-            with tempfile.TemporaryDirectory() as tmp:
-                # The author is the one thing a finished book does not say about
-                # itself, and the shelf does.
-                downloads = formats_from_html(html, Path(tmp), wanted,
-                                              author=book.author if book else "")
-            path.write_text(add_downloads(html, downloads), encoding="utf-8")
-        made.append((row["slug"], downloads))
+        files = typeset(path, formats, remake=remake,
+                        author=book.author if book else "")
+        made.append((row["slug"], files))
         if on_book:
-            on_book(row["slug"], downloads, path)
+            on_book(row["slug"], files, path)
     return made
 
 
@@ -323,13 +302,12 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-def report_formats(slug: str, downloads: list[Download], path: Path) -> None:
-    if not downloads:
+def report_formats(slug: str, files: list[Typeset], path: Path) -> None:
+    if not files:
         print(f"{slug}: already carries it, left alone")
         return
-    files = ", ".join(f"{fmt.upper()} {len(blob) / 1e6:.1f} MB"
-                      for fmt, _source, _filename, blob in downloads)
-    print(f"{slug}: {files} — the book is now {path.stat().st_size / 1e6:.1f} MB")
+    made = ", ".join(f"{fmt.upper()} {size / 1e6:.1f} MB" for fmt, size in files)
+    print(f"{slug}: {made} — the book is now {path.stat().st_size / 1e6:.1f} MB")
 
 
 def report_made(made: Made) -> None:
