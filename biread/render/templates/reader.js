@@ -2234,7 +2234,8 @@
   document.getElementById('blur-toggle').addEventListener('click', function () {
     S.blurEnglish = !S.blurEnglish;
     S.activePair = -1;
-    this.textContent = S.blurEnglish ? i18n('showTranslation') : i18n('blur');
+    document.getElementById('blur-label').textContent =
+      S.blurEnglish ? i18n('showTranslation') : i18n('blur');
     var nodes = document.querySelectorAll('.pair-en, .page-corner-right, .page-num-right');
     for (var i = 0; i < nodes.length; i++) nodes[i].classList.toggle('blurred', S.blurEnglish);
   });

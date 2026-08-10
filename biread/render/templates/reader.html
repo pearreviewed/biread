@@ -15,7 +15,14 @@
   <div class="header-right">
     <button class="counter" id="counter" data-i18n-aria="goToPage" aria-label="Go to a page"></button>
     <input class="counter-input" id="counter-input" type="text" inputmode="numeric" autocomplete="off" data-i18n-aria="pageNumber" aria-label="Page number" hidden>
-    <button class="btn-pill" id="blur-toggle" data-i18n="blur">Cover the English</button>
+    <!-- Both labels are laid out inside, one of them hidden, so the pill is as
+         wide as the longer of the two in any language and does not move under
+         the pointer that just pressed it. -->
+    <button class="btn-pill ghosted" id="blur-toggle">
+      <span id="blur-label" data-i18n="blur">Blur the English</span>
+      <i data-i18n="blur" aria-hidden="true">Blur the English</i>
+      <i data-i18n="showTranslation" aria-hidden="true">Show the English</i>
+    </button>
     <!-- Only on a book published without glosses, and only once it says where to
          ask for them. Hidden by default so every other book is untouched. -->
     <!-- Every label this button can wear is laid out inside it, all but one of

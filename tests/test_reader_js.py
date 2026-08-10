@@ -780,7 +780,7 @@ def test_spanish_reader_localizes_controls_and_hyphenation(spanish_reader):
     page = spanish_reader
     assert page.inner_text("#chap-btn") == "Capítulos"
     assert page.inner_text("#bm-btn").startswith("Marcadores")
-    assert page.inner_text("#blur-toggle") == "Cubrir el español"
+    assert page.inner_text("#blur-toggle") == "Desenfocar el español"
     # The translated (right) column hyphenates as Spanish, not English.
     assert page.get_attribute("#stage-wrap .page-right p.pair-en", "lang") == "es"
     # The corner tag follows the target too: FR stays on the source, ES on the right.
