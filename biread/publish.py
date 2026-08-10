@@ -33,6 +33,7 @@ from pathlib import Path
 
 from .build import build_aligned
 from .cache import Cache
+from .gloss import GlossRun
 from .errors import BireadError
 from .llm.embed import OLLAMA_BASE, Embedder
 from .formats import Typeset
@@ -58,6 +59,9 @@ class Made:
     paragraphs: int
     blank: int
     glossed: int
+    #: The gloss run itself, kept so the report can say what the retries cost.
+    #: No estimate counts them, and this command is where they can be read.
+    gloss: GlossRun | None = None
     #: How much of the English that exists ended up on the page. None where the
     #: alignment could not say.
     placed_share: float | None = None
@@ -168,6 +172,7 @@ def make(slug: str, *, translation: int = 0, gloss: bool = False,
         paragraphs=report.total if report else 0,
         blank=report.unmatched if report else 0,
         glossed=result.gloss.glossed if result.gloss else 0,
+        gloss=result.gloss,
         placed_share=report.placed_share if report else None,
     )
 
@@ -282,7 +287,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     print()
 
-    report_made(made)
+    report_made(made, gloss_cfg)
     if not args.no_check:
         if not report_check(made):
             print("\nNot approved: fix what the check found, or look yourself and "
@@ -310,7 +315,7 @@ def report_formats(slug: str, files: list[Typeset], path: Path) -> None:
     print(f"{slug}: {made} — the book is now {path.stat().st_size / 1e6:.1f} MB")
 
 
-def report_made(made: Made) -> None:
+def report_made(made: Made, gloss_cfg=None) -> None:
     print(f"{made.title} -> {made.path}")
     print(f"  {made.paragraphs:,} paragraphs, {round(made.coverage * 100)}% with an "
           f"English counterpart")
@@ -331,6 +336,10 @@ def report_made(made: Made) -> None:
                   "blanks are the translator's doing")
     print(f"  {made.glossed:,} glossed" if made.glossed
           else "  no glosses — a reader adds them as they read, on their own key")
+    if made.gloss is not None and gloss_cfg is not None:
+        from .cli import report_retries
+
+        report_retries(made.gloss, gloss_cfg)
 
 
 def report_check(made: Made) -> bool:

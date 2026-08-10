@@ -106,7 +106,7 @@ def test_the_requests_overlap(page):
     seen = page.evaluate("() => seen")
     assert seen["peak"] == 6
     assert len(seen["took"]) == 20
-    assert used == {"in": 200, "out": 800}
+    assert used == {"in": 200, "out": 800, "retryIn": 0, "retryOut": 0, "resent": 0}
 
 
 def test_a_short_book_asks_for_no_more_hands_than_it_has_batches(page):
@@ -131,10 +131,14 @@ def test_every_batch_is_written_off_exactly_once(page):
 def test_a_reply_that_will_not_parse_is_asked_for_once_more(page):
     """The same two attempts the engine has always made, the second carrying the
     stricter note."""
-    run(page, 1, replies=[{"status": 200, "text": "I cannot do that."}])
+    used = run(page, 1, replies=[{"status": 200, "text": "I cannot do that."}])
     took = page.evaluate("() => seen.took")
     assert len(took) == 2
     assert page.evaluate("() => seen.off") == [0]
+    # And the second send is counted as what it is. An estimate prices one send a
+    # batch, so this is spend nothing has ever quoted for, and the engine cannot
+    # see it: these calls are the page's, not the engine's.
+    assert (used["resent"], used["retryIn"], used["retryOut"]) == (1, 10, 40)
 
 
 def test_a_provider_saying_not_so_fast_is_waited_out(page):

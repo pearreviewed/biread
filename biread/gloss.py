@@ -98,6 +98,15 @@ class GlossRun:
     held: int = 0
     glossed: int = 0
     rescued: int = 0  # of `glossed`, how many needed a second pass on their own
+    #: Batches a first reply could not be anchored in, so the whole batch was
+    #: asked for again with the stricter note.
+    resent: int = 0
+    #: What every one of those retries cost, in tokens. An estimate prices one
+    #: clean pass and nothing has ever counted this, which is the whole of why
+    #: the quote comes in under the bill. Kept as tokens rather than dollars so a
+    #: run whose model has no rate on file still reports something true.
+    retry_in: int = 0
+    retry_out: int = 0
     unglossed: list[str] = field(default_factory=list)
     cost: float | None = None
     stopped_at_cap: bool = False
@@ -105,6 +114,10 @@ class GlossRun:
     @property
     def done(self) -> int:
         return self.held + self.glossed
+
+    def retry_cost(self, cfg) -> float | None:
+        """What was spent beyond one clean pass. None where the model has no rate."""
+        return cfg.estimate_cost(self.retry_in, self.retry_out)
 
 
 def body_units(chapters: list[Chapter]) -> list[Unit]:
@@ -560,7 +573,10 @@ def rescue_failures(
 ) -> None:
     """Every paragraph a batch lost, retried alone and then sentence by sentence."""
     for unit in plan.failed:
+        before = (client.input_tokens, client.output_tokens)
         located = None if plan.run.stopped_at_cap else rescue(client, unit.text, plan.gloss_lang)
+        plan.run.retry_in += client.input_tokens - before[0]
+        plan.run.retry_out += client.output_tokens - before[1]
         if located:
             _keep(plan, cache, unit, located, on_progress)
             plan.run.rescued += 1
@@ -611,10 +627,15 @@ def gloss_book(
 
     for n in range(len(plan.groups)):
         for attempt in range(2):
+            before = (client.input_tokens, client.output_tokens)
             try:
                 completion = client.complete(plan.system(attempt), plan.prompt(n), MAX_TOKENS)
             except Exception as e:
                 raise GlossError(f"gloss request failed: {e}") from e
+            if attempt:
+                run.resent += 1
+                run.retry_in += client.input_tokens - before[0]
+                run.retry_out += client.output_tokens - before[1]
             if completion.truncated:
                 raise GlossError(
                     f"the model hit its {MAX_TOKENS}-token limit mid-paragraph. "

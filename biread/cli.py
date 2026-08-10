@@ -285,18 +285,50 @@ def report_gloss_estimate(chapters: list[Chapter], cache: Cache, cfg: Config,
               f"has run to roughly double this — read it as a floor, not a ceiling.")
 
 
+def report_retries(run, cfg: Config, quoted: float | None = None) -> None:
+    """What the run spent beyond one clean pass, which is what no estimate counts.
+
+    Printed after every run, including a run that needed no retry at all: a rate
+    of zero on an easy book is as much of a reading as a rate of a third on a
+    hard one, and a line that appears only on bad runs cannot be averaged.
+    """
+    if not run.glossed and not run.resent:
+        return
+    spent = run.retry_cost(cfg)
+    if not run.rescued and not run.resent:
+        print("  Nothing was retried: every batch anchored on its first reply.")
+        return
+    counts = []
+    if run.rescued:
+        counts.append(f"{run.rescued} passage(s) re-done on their own")
+    if run.resent:
+        counts.append(f"{run.resent} batch(es) asked for again")
+    detail = f"${spent:.4f}" if spent is not None else f"{run.retry_in + run.retry_out:,} tokens"
+    line = f"  Retries: {', '.join(counts)}, {detail}."
+    # The share that matters for a quote is what the retries add *on top of* a
+    # clean pass, because a clean pass is the only thing an estimate prices.
+    if spent is not None and run.cost is not None and run.cost > spent:
+        line += f" That is {spent / (run.cost - spent):.0%} on top of a clean pass"
+        if quoted:
+            line += f", which was quoted at ${quoted:.4f}"
+        line += "."
+    print(line)
+
+
 def run_glossing(chapters: list[Chapter], cache: Cache, cfg: Config, gloss_lang: str = "English"):
     gloss_cfg = cfg.for_glossing()
 
     def progress(done: int, total: int) -> None:
         print(f"\r  glossed {done}/{total} paragraphs…", end="", flush=True)
 
+    # Taken before the run, because the cache fills as it goes and an estimate
+    # made afterwards would price a book already bought.
+    quoted = estimate_gloss(chapters, cache, gloss_cfg, gloss_lang).cost
+
     print(f"\nGlossing the French with {gloss_cfg.model}:")
     run = gloss_book(chapters, get_client(gloss_cfg), cache, gloss_cfg, progress, gloss_lang)
     if run.glossed:
         print()
-        if run.rescued:
-            print(f"  {run.rescued} needed a second pass on their own.")
     else:
         print("Every paragraph was already annotated — nothing to gloss.")
 
@@ -305,7 +337,9 @@ def run_glossing(chapters: list[Chapter], cache: Cache, cfg: Config, gloss_lang:
               f"MAX_COST_USD cap (${gloss_cfg.max_cost_usd:.2f}). Annotated so far is "
               f"cached — raise the cap and re-run to continue.")
     elif run.cost is not None:
-        print(f"Gloss cost this run: ${run.cost:.4f}")
+        against = f", against ${quoted:.4f} quoted" if quoted else ""
+        print(f"Gloss cost this run: ${run.cost:.4f}{against}")
+    report_retries(run, gloss_cfg, quoted)
 
     if run.unglossed:
         print(f"\n{len(run.unglossed)} paragraph(s) could not be annotated and stay "

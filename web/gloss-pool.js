@@ -69,7 +69,10 @@ async function ask(cfg, system, user, maxTokens) {
 async function glossInParallel(task, cfg) {
   const take = pyodide.globals.get("gloss_take");
   const off = pyodide.globals.get("gloss_off");
-  const used = { in: 0, out: 0 };
+  // `retryIn`/`retryOut` are the sends beyond one clean pass. An estimate prices
+  // one send a batch, so a second one is spend nothing has ever counted; the
+  // rescue pass counts itself, in gloss.py, because the engine makes those calls.
+  const used = { in: 0, out: 0, retryIn: 0, retryOut: 0, resent: 0 };
   let next = 0;
   const worker = async () => {
     for (let i = next++; i < task.batches.length; i = next++) {
@@ -82,6 +85,7 @@ async function glossInParallel(task, cfg) {
           break;  // unreachable or refused: the rescue pass tries it alone
         }
         used.in += reply.in; used.out += reply.out;
+        if (attempt) { used.resent++; used.retryIn += reply.in; used.retryOut += reply.out; }
         if (reply.truncated) break;
         if (take(b.n, reply.text)) break;
       }

@@ -17,6 +17,7 @@ from biread.gloss import (
     encode,
     estimate,
     gloss_book,
+    GlossRun,
     parse_units,
 )
 from biread.llm.base import Completion
@@ -368,6 +369,46 @@ def test_a_paragraph_nothing_can_rescue_stays_plain(tmp_path, book, config, make
     assert run.rescued == 0
     assert not run.glosses
     assert run.unglossed == [PARAGRAPH[:60], "Il monta l'escalier."]
+
+
+# ---- what a run spends beyond one clean pass ----
+#
+# An estimate prices one send per batch and nothing has ever counted the rest,
+# which is the whole of why the quote comes in under the bill. The invariant here
+# is arithmetic and not a threshold: every request past the first send of each
+# batch is in `retry_in`/`retry_out`, whichever path made it. FakeClient charges
+# 100 in and 50 out a call, so the sum is checkable against the calls themselves.
+
+def test_every_send_beyond_a_clean_pass_is_counted(tmp_path, book, config, make_client):
+    alone = response((0, [line("Sur la table", "prep. phrase", "on the table")]))
+    client = make_client(script=[MANGLED, MANGLED, alone])
+    run = gloss_book(book, client, Cache.load(tmp_path / "g.json"), config())
+
+    clean = 1  # one batch, sent once: all an estimate ever pays for
+    assert run.resent == 1                     # the batch asked for a second time
+    assert run.rescued == 1                    # the passage re-done on its own
+    assert len(client.prompts) > clean
+    assert run.retry_in == 100 * (len(client.prompts) - clean)
+    assert run.retry_out == 50 * (len(client.prompts) - clean)
+
+
+def test_a_run_that_needed_no_retry_says_so_with_a_zero(tmp_path, book, config, make_client):
+    # A zero is a reading too: a rate can only be averaged if the easy books
+    # report one, so nothing here may be left unset on a clean run.
+    good = response((0, [line("Sur la table", "prep. phrase", "on the table")]),
+                    (1, [line("Il monta", "verb", "he climbed", "inf=monter")]))
+    client = make_client(script=[good])
+    run = gloss_book(book, client, Cache.load(tmp_path / "g.json"), config())
+
+    assert run.glossed == 2
+    assert (run.resent, run.rescued, run.retry_in, run.retry_out) == (0, 0, 0, 0)
+    assert run.retry_cost(config()) == 0
+
+
+def test_the_retry_bill_is_priced_at_the_model_s_own_rate(config):
+    run = GlossRun(glosses={}, total=1, retry_in=1_000_000, retry_out=2_000_000)
+    assert run.retry_cost(config(price_per_mtok=(3.0, 15.0))) == pytest.approx(33.0)
+    assert run.retry_cost(config(price_per_mtok=None)) is None
 
 
 # ---- a hover explains one phrase, not a clause ----

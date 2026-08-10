@@ -100,10 +100,16 @@ const SETUP = [
   // A batch nothing could be anchored in is retried here one paragraph at a
   // time, on the blocking client — there are few of them, and they are the calls
   // that need the model's whole attention rather than the network's.
-  "def gloss_end(tokens_in, tokens_out):",
+  "def gloss_end(tokens_in, tokens_out, retry_in, retry_out, resent):",
   "    from biread.gloss import rescue_failures",
   "    plan, client, cfg = _JOB['plan'], _JOB['client'], _JOB['cfg']",
   "    was = (client.input_tokens, client.output_tokens)",
+  // What the page's own retries cost. The rescue pass below adds its own, being
+  // the engine's calls; between them the run knows everything spent beyond one
+  // clean pass, which is the part no estimate counts.
+  "    plan.run.resent += int(resent)",
+  "    plan.run.retry_in += int(retry_in)",
+  "    plan.run.retry_out += int(retry_out)",
   "    rescue_failures(plan, client, _JOB['cache'], lambda d, t: js_progress('gloss', d, t))",
   "    plan.run.cost = cfg.estimate_cost(int(tokens_in) + client.input_tokens - was[0],",
   "                                      int(tokens_out) + client.output_tokens - was[1])",
@@ -370,8 +376,9 @@ async function buildBook(script, m) {
           provider: m.provider || "anthropic", baseUrl: m.baseUrl || "",
           key: m.key, model: m.model, local: !!m.local,
         })
-      : { in: 0, out: 0 };
-    pyodide.runPython(`gloss_end(${used.in}, ${used.out})`);
+      : { in: 0, out: 0, retryIn: 0, retryOut: 0, resent: 0 };
+    pyodide.runPython(
+      `gloss_end(${used.in}, ${used.out}, ${used.retryIn}, ${used.retryOut}, ${used.resent})`);
   }
   return JSON.parse(pyodide.runPython("build_end()"));
 }
