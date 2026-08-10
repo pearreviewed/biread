@@ -213,10 +213,9 @@ p.pair { margin: 0 -12px 0.5em; padding: 2px 12px; font-size: var(--fpx); line-h
 .unit:hover, .unit.pinned { background: rgba(180,150,100,.26); }
 
 .tip { position: fixed; z-index: 70; max-width: 300px; background: var(--panel); color: var(--panel-ink); border-radius: 8px; padding: 9px 12px; box-shadow: var(--panel-shadow); pointer-events: none; animation: xfade .12s ease-out; }
-.tip-surface { font-size: 15px; color: var(--ink-bright); }
-.tip-pos { font-size: 12px; font-style: italic; color: var(--ink-dim); margin-top: 1px; }
-.tip-gloss { font-size: 14px; line-height: 1.4; margin-top: 6px; }
-.tip-form { font-size: 12.5px; color: var(--ink-soft); margin-top: 4px; }
+/* The translation leads, because it is the whole of what the panel is for. */
+.tip-gloss { font-size: 15px; line-height: 1.4; color: var(--ink-bright); }
+.tip-form { font-size: 12.5px; color: var(--ink-soft); margin-top: 5px; }
 .tip-form-label { color: var(--ink-dim); }
 
 /* A paragraph resumed from the previous page is not a new paragraph. */

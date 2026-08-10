@@ -43,13 +43,12 @@ def response(*blocks):
 def test_parses_the_three_required_fields():
     units = parse_units(line("Sur la table", "prep. phrase", "on the table"))
     assert units == [{"surface": "Sur la table", "pos": "prep. phrase",
-                      "gloss": "on the table", "infinitive": "", "perfect": ""}]
+                      "gloss": "on the table", "infinitive": ""}]
 
 
-def test_parses_the_optional_verb_fields():
-    units = parse_units(line("il se leva", "verb", "he rose", "inf=se lever", "pc=il s'est levé"))
+def test_parses_the_optional_verb_field():
+    units = parse_units(line("il se leva", "verb", "he rose", "inf=se lever"))
     assert units[0]["infinitive"] == "se lever"
-    assert units[0]["perfect"] == "il s'est levé"
 
 
 def test_ignores_malformed_lines():
@@ -106,7 +105,7 @@ def test_gaps_between_units_are_allowed():
 
 def test_encode_round_trips():
     units = anchor(PARAGRAPH, parse_units(
-        line("il se leva", "verb", "he rose", "inf=se lever", "pc=il s'est levé")))
+        line("il se leva", "verb", "he rose", "inf=se lever")))
     assert decode(encode(units)) == units
 
 
@@ -121,8 +120,8 @@ def book():
 def good_reply():
     return response(
         (0, [line("Sur la table", "prep. phrase", "on the table"),
-             line("il se leva", "verb", "he rose", "inf=se lever", "pc=il s'est levé")]),
-        (1, [line("Il monta", "verb", "he climbed", "inf=monter", "pc=il est monté"),
+             line("il se leva", "verb", "he rose", "inf=se lever")]),
+        (1, [line("Il monta", "verb", "he climbed", "inf=monter"),
              line("l'escalier", "noun", "the staircase")]),
     )
 
@@ -141,7 +140,6 @@ def test_a_run_glosses_and_caches(tmp_path, book, config, make_client, good_repl
     units = run.glosses[hash_text(PARAGRAPH)]
     assert [PARAGRAPH[u.start:u.end] for u in units] == ["Sur la table", "il se leva"]
     assert units[1].infinitive == "se lever"
-    assert units[1].perfect == "il s'est levé"
     assert len(Cache.load(path)) == 2
 
 
@@ -545,64 +543,43 @@ def test_recovering_intensifiers_does_not_reopen_two_nouns():
         assert over_broad(surface, "noun phrase"), surface
 
 
-def test_a_perfect_that_only_echoes_the_surface_is_dropped():
-    """The prompt scopes the passé composé to passé simple verbs, and models
-    offer one on any past tense anyway — cheap ones by answering "était" for
-    "était". A compound tense carries an auxiliary and can never equal its own
-    surface, so an echo is not a perfect; showing it teaches something false."""
+def test_a_field_the_prompt_no_longer_asks_for_is_ignored():
+    """The panel carries the translation and, on a verb, the infinitive. Nothing
+    else: the French is under the pointer already. A model offering a passé
+    composé unbidden must not be able to put a line back on the page."""
     from biread.gloss import FIELD, parse_units
 
-    echoed, real = parse_units(
-        f"était{FIELD}verb{FIELD}was{FIELD}inf=être{FIELD}pc=était\n"
+    (unit,) = parse_units(
         f"il disséqua{FIELD}verb{FIELD}dissected{FIELD}inf=disséquer{FIELD}pc=il a disséqué")
-    assert echoed["perfect"] == ""
-    assert echoed["infinitive"] == "être"      # the infinitive is untouched
-    assert real["perfect"] == "il a disséqué"
+    assert unit == {"surface": "il disséqua", "pos": "verb",
+                    "gloss": "dissected", "infinitive": "disséquer"}
 
 
-def test_an_echo_is_caught_through_case_and_punctuation():
+def test_an_infinitive_that_only_echoes_the_surface_is_dropped():
+    """A verb already in the infinitive earns no second line — it would repeat
+    the word under the pointer, which is the duplication the panel was cut back
+    to avoid. Caught through case and punctuation, since a model straightens the
+    curly apostrophe however firmly it is told not to."""
     from biread.gloss import FIELD, parse_units
 
-    (unit,) = parse_units(f"S’attirait{FIELD}verb{FIELD}attracted{FIELD}pc=s'attirait")
-    assert unit["perfect"] == ""
+    echoed, curly, real = parse_units(
+        f"parler{FIELD}verb{FIELD}to speak{FIELD}inf=parler\n"
+        f"S’attirer{FIELD}verb{FIELD}to attract{FIELD}inf=s'attirer\n"
+        f"il se leva{FIELD}verb{FIELD}he rose{FIELD}inf=se lever")
+    assert echoed["infinitive"] == ""
+    assert curly["infinitive"] == ""
+    assert real["infinitive"] == "se lever"
 
 
-def test_an_echoed_perfect_already_in_the_cache_is_not_shown():
-    """The parse-time guard came after 250 Candide paragraphs were cached. A
-    false claim should not reach the page on the strength of being old."""
+def test_an_echoed_infinitive_already_in_the_cache_is_not_shown():
+    """The parse-time guard is newer than the caches. A line saying nothing
+    should not reach the page on the strength of being old."""
     from biread.gloss import GlossUnit, displayable
 
-    para = "Monsieur le baron était un des plus puissants seigneurs."
-    start = para.index("était")
-    unit = GlossUnit(start, start + 5, "verb", "was", "être", "était")
-    (shown,) = displayable(para, [unit])
-    assert shown.perfect == ""
-    assert shown.infinitive == "être"
-
-
-def test_only_a_present_auxiliary_makes_a_perfect():
-    """The two tenses models offer in its place both read like an answer:
-    "avait" is the imparfait of the auxiliary, "n'avait pas pu" the
-    plus-que-parfait. No passé composé lacks a present auxiliary."""
-    from biread.gloss import is_perfect
-
-    assert is_perfect("il a disséqué")
-    assert is_perfect("n'a jamais voulu")
-    assert is_perfect("il y a eu")
-    assert is_perfect("elle est venue")
-    assert not is_perfect("avait")               # imparfait of the auxiliary
-    assert not is_perfect("n'avait pas pu")      # plus-que-parfait
-    assert not is_perfect("pesait")
-
-
-def test_a_pronoun_in_the_surface_no_longer_hides_an_echo():
-    """"Il avait" -> pc="avait" survived the echo test, because the surface
-    carries the pronoun and the answer does not."""
-    from biread.gloss import FIELD, parse_units
-
-    (unit,) = parse_units(f"Il avait{FIELD}verb{FIELD}had{FIELD}inf=avoir{FIELD}pc=avait")
-    assert unit["perfect"] == ""
-    assert unit["infinitive"] == "avoir"
+    para = "Il ne savait plus parler à personne."
+    start = para.index("parler")
+    (shown,) = displayable(para, [GlossUnit(start, start + 6, "verb", "to speak", "parler")])
+    assert shown.infinitive == ""
 
 
 # ---------- driven from outside: the browser's several-at-once pass ----------

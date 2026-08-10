@@ -351,6 +351,27 @@ def test_a_translation_that_drops_a_chapter_stops_being_trusted_by_number():
     assert "topic-5" not in texts[hash_text(fourth)]
 
 
+def test_a_named_division_takes_the_other_edition_s_own_heading():
+    """A diary's sections are dates, not numbers, and `Chapitre N` is not what
+    stands over them. The English heading is the one the translator wrote —
+    `VENDREDI.` faces `Friday:` because that edition says so, not because we
+    turned a French date into an English one."""
+    def dated(title, topic):
+        return Chapter(None, title, [f"Ceci traite de topic-{topic}, longuement et en détail.",
+                                     f"Encore topic-{topic}, pour faire trois paragraphes.",
+                                     f"Toujours topic-{topic}, et voilà."])
+
+    french = [dated(f"JOUR {n}.", n) for n in range(1, 5)]
+    published = [dated(f"Day {n}:", n) for n in range(1, 5)]
+
+    aligned, report = align_published(french, published, embed=topics)
+
+    assert report.chapter_titles == {hash_text(f"JOUR {n}."): f"Day {n}:" for n in range(1, 5)}
+    # Reported apart from the matched prose, not mixed into it: a heading is not
+    # a paragraph that landed, and counting it would flatter the coverage figure.
+    assert hash_text("JOUR 1.") not in aligned
+
+
 def test_sound_numbering_is_still_trusted():
     """The check must not push good books onto the slower whole-book path."""
     french = [about(n, n) for n in range(1, 7)]

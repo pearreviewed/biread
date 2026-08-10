@@ -9,7 +9,8 @@ like a gloss, not like a bug.
 So they are run side by side here. The Python answer is the truth; the JS answer
 has to match it exactly, on real French with the things that actually break
 matching — curly apostrophes, elisions, guillemets, an ellipsis that folds to
-three characters, a passé simple with its perfect, and units too wide to hover.
+three characters, an infinitive echoing its own surface, and units too wide to
+hover.
 """
 from __future__ import annotations
 
@@ -36,7 +37,7 @@ CASES = [
     (
         "Il y avait en Vestphalie un jeune garçon.",
         "\n".join([
-            f("Il y avait", "verb", "there was", "inf=avoir", "pc=il y a eu"),
+            f("Il y avait", "verb", "there was", "inf=avoir"),
             f("en Vestphalie", "prepositional phrase", "in Westphalia"),
             f("un jeune garçon", "noun phrase", "a young boy"),
         ]),
@@ -47,7 +48,7 @@ CASES = [
         "\n".join([
             f("L'escalier", "noun", "the staircase"),
             f("de l'étoile", "prepositional phrase", "of the star"),
-            f("qu'il monta", "verb", "that he climbed", "inf=monter", "pc=qu'il est monté"),
+            f("qu'il monta", "verb", "that he climbed", "inf=monter"),
         ]),
     ),
     (
@@ -56,7 +57,7 @@ CASES = [
         "Et puis… dit-il avec une petite fourmilière.",
         "\n".join([
             f("Et puis...", "adverb", "and then"),
-            f("dit-il", "verb", "he said", "inf=dire", "pc=il a dit"),
+            f("dit-il", "verb", "he said", "inf=dire"),
             f("une petite fourmilière", "noun phrase", "a little anthill"),
         ]),
     ),
@@ -65,17 +66,16 @@ CASES = [
         "Les citoyens de la terre virent des mites attractives et répulsives.",
         "\n".join([
             f("Les citoyens de la terre", "noun phrase", "the citizens of the earth"),
-            f("virent", "verb", "saw", "inf=voir", "pc=ont vu"),
+            f("virent", "verb", "saw", "inf=voir"),
             f("des mites attractives et répulsives", "noun phrase", "attractive and repulsive mites"),
         ]),
     ),
     (
-        # A perfect that only echoes its surface, and one in the wrong tense:
-        # both must be dropped rather than taught to a reader as fact.
-        "Il était là, et il n’avait pas pu partir.",
+        # An infinitive echoing its own surface, and a field the prompt no longer
+        # asks for: both must be dropped rather than printed under the pointer.
+        "Il ne savait plus parler, et il n’avait pas pu partir.",
         "\n".join([
-            f("Il était", "verb", "he was", "inf=être", "pc=il était"),
-            f("là", "adverb", "there"),
+            f("parler", "verb", "to speak", "inf=parler"),
             f("il n'avait pas pu partir", "verb", "he had not been able to leave",
               "inf=pouvoir", "pc=il n'avait pas pu"),
         ]),
@@ -95,7 +95,7 @@ def in_python(paragraph: str, reply: str):
     located = anchor(paragraph, parse_units(reply))
     if not located:
         return None
-    return [[u.start, u.end, u.pos, u.gloss, u.infinitive, u.perfect]
+    return [[u.start, u.end, u.pos, u.gloss, u.infinitive]
             for u in displayable(paragraph, located)]
 
 
@@ -148,7 +148,7 @@ def test_the_protocol_carries_what_the_reader_needs():
     js = (TEMPLATES / "reader.js").read_text(encoding="utf-8")
     got = protocol()
     for field in ("prompt", "field", "fold", "maxContentWords", "predicatePos",
-                  "functionWords", "coordinators", "prepositions", "perfectAuxiliaries"):
+                  "functionWords", "coordinators", "prepositions"):
         assert field in got, f"protocol() dropped {field}"
         assert f"GLOSS.{field}" in js, f"reader.js never reads GLOSS.{field}"
     assert json.dumps(got)  # serialisable: it travels inside the book

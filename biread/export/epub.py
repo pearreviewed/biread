@@ -123,12 +123,15 @@ PAGINATE_JS = r"""
   function heading(chapter, side) {
     var h = document.createElement('div'); h.className = 'chapter-heading';
     h.lang = side === 'en' ? 'en' : 'fr';
-    var e = document.createElement('div'); e.className = 'ch-eyebrow';
-    e.textContent = side === 'en' ? chapter.enEyebrow : chapter.frEyebrow;
+    var over = side === 'en' ? chapter.enEyebrow : chapter.frEyebrow;
+    if (over) {
+      var e = document.createElement('div'); e.className = 'ch-eyebrow';
+      e.textContent = over; h.appendChild(e);
+    }
     var t = document.createElement('div'); t.className = 'ch-title';
     t.textContent = side === 'en' ? chapter.enTitle : chapter.frTitle;
     var r = document.createElement('div'); r.className = 'ch-rule';
-    h.appendChild(e); h.appendChild(t); h.appendChild(r); return h;
+    h.appendChild(t); h.appendChild(r); return h;
   }
   function para(p, side, text, continued) {
     var n = document.createElement('p');
@@ -243,6 +246,16 @@ def _book_pairs(chapters: list[Chapter], translations: dict[str, str],
                 "enEyebrow": f"{target.chapter_word} {chapter.number}",
                 "enTitle": translations.get(hash_text(chapter.title), "") if chapter.title else "",
             })
+        elif chapter.title:
+            # A division named rather than numbered — a diary's dates. The
+            # heading is its own title, so there is nothing to stand over it.
+            chapter_meta.append({
+                "pair": len(pairs),
+                "frEyebrow": "",
+                "frTitle": chapter.title,
+                "enEyebrow": "",
+                "enTitle": translations.get(hash_text(chapter.title), ""),
+            })
         for paragraph in chapter.paragraphs:
             pairs.append({"fr": paragraph, "en": translations.get(hash_text(paragraph), "")})
     return pairs, chapter_meta
@@ -322,7 +335,8 @@ def _column_html(parts: list[dict], side: str, chapter: dict | None, folio: int)
     if chapter:
         eyebrow = _esc(chapter["frEyebrow"] if side == "fr" else chapter["enEyebrow"])
         title = _esc(chapter["frTitle"] if side == "fr" else chapter["enTitle"])
-        out.append(f'<div class="chapter-heading"><div class="ch-eyebrow">{eyebrow}</div>'
+        over = f'<div class="ch-eyebrow">{eyebrow}</div>' if eyebrow else ""
+        out.append(f'<div class="chapter-heading">{over}'
                    f'<div class="ch-title">{title}</div><div class="ch-rule"></div></div>')
     lang = "fr" if side == "fr" else "en"
     for part in parts:

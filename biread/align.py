@@ -70,6 +70,11 @@ class AlignmentReport:
     #: other edition's shape: "published", "original", or "". Never silent — the
     #: reader is told, because that side's paragraphing is the other book's.
     cut: str = ""
+    #: Original chapter title hash -> the counterpart edition's own heading, for
+    #: books whose divisions are named rather than numbered. A diary's `VENDREDI.`
+    #: has an English heading only because the other edition wrote one; a number
+    #: needs no such help, since it is the same numeral on both sides.
+    chapter_titles: dict[str, str] = field(default_factory=dict)
     notes: list[str] = field(default_factory=list)
 
     @property
@@ -1174,6 +1179,11 @@ def _by_embeddings(
             for paragraph in fr.paragraphs:
                 aligned[hash_text(paragraph)] = ""
             continue
+        # A named division gets its heading from the edition that wrote one, the
+        # same principle as the prose beneath it: `VENDREDI.` faces `Friday:`
+        # because the translator set that, not because we translated the date.
+        if fr.title and pub.title and not fr.number:
+            report.chapter_titles[hash_text(fr.title)] = pub.title
         prose = prose_only(pub.paragraphs)
         report.dropped += len(pub.paragraphs) - len(prose)
         key = match_key(fr, pub, embed_id)

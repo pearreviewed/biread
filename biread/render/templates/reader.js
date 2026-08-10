@@ -272,15 +272,21 @@
     var head = document.createElement('div');
     head.className = 'chapter-heading';
     head.lang = lang === 'en' ? 'en' : 'fr';
-    var eyebrow = document.createElement('div');
-    eyebrow.className = 'ch-eyebrow';
-    eyebrow.textContent = lang === 'en' ? chapter.enEyebrow : chapter.frEyebrow;
+    // A book divided by date rather than by number carries no eyebrow at all —
+    // the date is the whole heading — and an empty one would leave a band of
+    // space above the title where the other book has a word.
+    var over = lang === 'en' ? chapter.enEyebrow : chapter.frEyebrow;
+    if (over) {
+      var eyebrow = document.createElement('div');
+      eyebrow.className = 'ch-eyebrow';
+      eyebrow.textContent = over;
+      head.appendChild(eyebrow);
+    }
     var title = document.createElement('div');
     title.className = 'ch-title';
     title.textContent = lang === 'en' ? chapter.enTitle : chapter.frTitle;
     var rule = document.createElement('div');
     rule.className = 'ch-rule';
-    head.appendChild(eyebrow);
     head.appendChild(title);
     head.appendChild(rule);
     // Where the edition beside the French does not contain this chapter at all,
@@ -880,12 +886,11 @@
 
     tip = document.createElement('div');
     tip.className = 'tip';
-    tip.appendChild(line('tip-surface', span.textContent));
-    if (unit[2]) tip.appendChild(line('tip-pos', unit[2]));
+    // The translation, and for a conjugated verb its infinitive. Nothing else:
+    // the French is under the pointer already, so printing it again in the panel
+    // spends the reader's attention on the one thing they can see without it.
     tip.appendChild(line('tip-gloss', unit[3]));
-    // Only verbs carry these, and only when they say something the surface does not.
     if (unit[4]) tip.appendChild(formLine('inf', unit[4]));
-    if (unit[5]) tip.appendChild(formLine('passé composé', unit[5]));
     document.body.appendChild(tip);
 
     var target = span.getBoundingClientRect();
@@ -959,32 +964,21 @@
       === b.replace(NON_WORD_RE, '').toLowerCase();
   }
 
-  // A compound past is a present auxiliary plus a participle. Anything offered
-  // as a passé composé without one is some other tense wearing its name, and a
-  // false grammatical claim is worse than none.
-  function isPerfect(form) {
-    if (!GLOSS.perfectAuxiliaries.length) return true;
-    var words = wordsIn(form);
-    for (var i = 0; i < words.length; i++) {
-      if (inList(GLOSS.perfectAuxiliaries, words[i])) return true;
-    }
-    return false;
-  }
-
   function parseUnits(block) {
     var lines = block.split('\n'), units = [], i, k, parts, unit, extra, eq;
     for (i = 0; i < lines.length; i++) {
       parts = lines[i].split(GLOSS.field).map(function (p) { return p.trim(); });
       if (parts.length < 3 || !parts[0]) continue;
-      unit = { surface: parts[0], pos: parts[1], gloss: parts[2], infinitive: '', perfect: '' };
+      unit = { surface: parts[0], pos: parts[1], gloss: parts[2], infinitive: '' };
       for (k = 3; k < parts.length; k++) {
         extra = parts[k];
         eq = extra.indexOf('=');
         if (eq === -1) continue;
         if (extra.slice(0, eq).trim() === 'inf') unit.infinitive = extra.slice(eq + 1).trim();
-        else if (extra.slice(0, eq).trim() === 'pc') unit.perfect = extra.slice(eq + 1).trim();
       }
-      if (sameForm(unit.perfect, unit.surface) || !isPerfect(unit.perfect)) unit.perfect = '';
+      // An infinitive echoing its own surface says nothing: the verb already is
+      // one, and the line would repeat the word under the pointer.
+      if (sameForm(unit.infinitive, unit.surface)) unit.infinitive = '';
       units.push(unit);
     }
     return units;
@@ -1003,7 +997,7 @@
       cursor = found + surface.length;
       located.push([
         hay.index[found], hay.index[found + surface.length - 1] + 1,
-        proposed[i].pos, proposed[i].gloss, proposed[i].infinitive, proposed[i].perfect
+        proposed[i].pos, proposed[i].gloss, proposed[i].infinitive
       ]);
     }
     return located.length ? located : null;
@@ -1049,9 +1043,10 @@
       u = units[i];
       surface = paragraph.slice(u[0], u[1]);
       if (overBroad(surface, u[2])) continue;
-      if (u[5] && (sameForm(u[5], surface) || !isPerfect(u[5]))) {
-        shown.push([u[0], u[1], u[2], u[3], u[4], '']);
-      } else shown.push(u);
+      // An infinitive echoing its surface is dropped here as well as at parsing,
+      // because a book glossed before that rule existed still carries them.
+      if (u[4] && sameForm(u[4], surface)) shown.push([u[0], u[1], u[2], u[3], '']);
+      else shown.push(u);
     }
     return shown;
   }
@@ -2414,14 +2409,20 @@
     CHAPTERS.forEach(function (chapter) {
       var row = document.createElement('button');
       row.className = 'popover-row' + (chapter === current ? ' active' : '');
-      var eyebrow = document.createElement('div');
-      eyebrow.className = 'eyebrow-sm';
-      eyebrow.textContent = chapter.frEyebrow;
-      var sub = document.createElement('div');
-      sub.className = 'sub';
-      sub.textContent = chapter.frTitle;
-      row.appendChild(eyebrow);
-      row.appendChild(sub);
+      // `Chapitre III` over the chapter's own title, where it has both. A book
+      // divided by date has only the one, and it takes the row.
+      if (chapter.frEyebrow) {
+        var eyebrow = document.createElement('div');
+        eyebrow.className = 'eyebrow-sm';
+        eyebrow.textContent = chapter.frEyebrow;
+        row.appendChild(eyebrow);
+      }
+      if (chapter.frTitle) {
+        var sub = document.createElement('div');
+        sub.className = 'sub';
+        sub.textContent = chapter.frTitle;
+        row.appendChild(sub);
+      }
       row.addEventListener('click', function () {
         S.chapOpen = false;
         renderOverlays();

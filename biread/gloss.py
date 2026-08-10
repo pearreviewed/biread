@@ -49,9 +49,9 @@ reading edition. Divide each paragraph into hover units and explain each one in 
 {LANGUAGE.gloss_rules}
 
 FOR EACH UNIT, one line, fields separated by {FIELD}:
-surface {FIELD} part of speech {FIELD} {gloss_lang} gloss {FIELD} inf=… {FIELD} pc=…
-The last two appear only on verbs, per the rules above. A passé simple verb carries both:
-il disséqua {FIELD} verb {FIELD} dissected {FIELD} inf=disséquer {FIELD} pc=il a disséqué
+surface {FIELD} part of speech {FIELD} {gloss_lang} gloss {FIELD} inf=…
+The last appears only on verbs, per the rules above:
+il disséqua {FIELD} verb {FIELD} dissected {FIELD} inf=disséquer
 un jeune homme {FIELD} noun phrase {FIELD} a young man
 
 THE SURFACE FIELD IS COPIED, NOT WRITTEN. Reproduce it exactly as it appears in the \
@@ -83,7 +83,6 @@ class GlossUnit:
     pos: str
     gloss: str
     infinitive: str = ""
-    perfect: str = ""
 
 
 @dataclass
@@ -133,48 +132,22 @@ def parse_units(block: str) -> list[dict]:
         parts = [p.strip() for p in line.split(FIELD)]
         if len(parts) < 3 or not parts[0]:
             continue
-        unit = {"surface": parts[0], "pos": parts[1], "gloss": parts[2],
-                "infinitive": "", "perfect": ""}
+        unit = {"surface": parts[0], "pos": parts[1], "gloss": parts[2], "infinitive": ""}
         for extra in parts[3:]:
             key, _, value = extra.partition("=")
             if key.strip() == "inf":
                 unit["infinitive"] = value.strip()
-            elif key.strip() == "pc":
-                unit["perfect"] = value.strip()
-        # A perfect that only echoes the surface is not a perfect. Models offer
-        # one on any past tense however plainly the prompt scopes it to the passé
-        # simple, and the cheaper ones answer "était" for "était". A compound
-        # tense always carries an auxiliary, so it can never equal its own
-        # surface — and showing one that does teaches the reader something false,
-        # which is worse than showing nothing.
-        if _same_form(unit["perfect"], unit["surface"]) or not is_perfect(unit["perfect"]):
-            unit["perfect"] = ""
+        # An infinitive that only echoes the surface says nothing: the verb
+        # already is one, and a line repeating the word under the pointer is the
+        # duplication this tooltip was cut back to avoid.
+        if _same_form(unit["infinitive"], unit["surface"]):
+            unit["infinitive"] = ""
         units.append(unit)
     return units
 
 
 def _same_form(a: str, b: str) -> bool:
     return bool(a) and re.sub(r"\W+", "", a).casefold() == re.sub(r"\W+", "", b).casefold()
-
-
-def is_perfect(form: str) -> bool:
-    """Whether a proposed passé composé is one, on the evidence that settles it.
-
-    The echo test misses a whole class: "Il avait" answered with "avait" differs
-    from its surface only by the pronoun, and "n'avait pas pu" differs entirely
-    while being the plus-que-parfait. Both read like an answer.
-
-    A compound past is a present auxiliary plus a participle — the gloss rules
-    say so and give worked examples. Neither of those two carries a present
-    auxiliary, and no passé composé lacks one.
-    """
-    if not LANGUAGE.perfect_auxiliaries:
-        return True
-    # Tokenised *on* apostrophes, as the function-word list is and for the same
-    # reason: the auxiliary in "il s'est levé" and "n'a jamais voulu" is elided
-    # onto its neighbour, and a token of "s'est" matches nothing.
-    words = {w.casefold() for w in re.findall(r"\w+", form)}
-    return bool(words & LANGUAGE.perfect_auxiliaries)
 
 
 # Models normalise typography however firmly they are told not to: a curly
@@ -292,7 +265,6 @@ def anchor(paragraph: str, proposed: list[dict]) -> list[GlossUnit] | None:
             pos=unit["pos"],
             gloss=unit["gloss"],
             infinitive=unit["infinitive"],
-            perfect=unit["perfect"],
         ))
     return located or None
 
@@ -302,17 +274,16 @@ def displayable(paragraph: str, units: list[GlossUnit]) -> list[GlossUnit]:
     where units become hovers, rather than baked into the cache — so tightening
     it drops the offenders on the next render, with nothing to pay again.
 
-    The echoed perfect is dropped here for the same reason. Parsing already
+    The echoed infinitive is dropped here for the same reason. Parsing already
     refuses to store one, but caches written before it did still hold them, and
-    a false grammatical claim should not survive to the page on the strength of
-    being old."""
+    a line repeating the word under the pointer should not survive to the page on
+    the strength of being old."""
     shown = []
     for u in units:
         surface = paragraph[u.start:u.end]
         if over_broad(surface, u.pos):
             continue
-        bogus = _same_form(u.perfect, surface) or not is_perfect(u.perfect)
-        shown.append(replace(u, perfect="") if u.perfect and bogus else u)
+        shown.append(replace(u, infinitive="") if _same_form(u.infinitive, surface) else u)
     return shown
 
 
@@ -338,7 +309,6 @@ def protocol(gloss_lang: str = "English") -> dict:
         "functionWords": sorted(LANGUAGE.function_words),
         "coordinators": sorted(LANGUAGE.coordinators),
         "prepositions": sorted(LANGUAGE.prepositions),
-        "perfectAuxiliaries": sorted(LANGUAGE.perfect_auxiliaries),
     }
 
 

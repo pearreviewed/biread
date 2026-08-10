@@ -364,6 +364,10 @@ def draft_aligned(
     # is rendered, so no call is paid for on a paragraph the reader never sees.
     body = [c for c in trim_matter(chapters) if c.paragraphs] or chapters
 
+    # Merged after the coverage arithmetic, not before: a heading is not prose
+    # that landed, and counting it would flatter the figure by a chapter a time.
+    aligned = {**aligned, **report.chapter_titles}
+
     return Draft(
         title=title, chapters=body, translations=aligned, target=target,
         note=published_note(report), solo=True, alignment=report,

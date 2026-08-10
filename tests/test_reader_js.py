@@ -846,17 +846,17 @@ GLOSS_FR = "Sur la table, il se leva et monta l'escalier tranquillement."
 def build_glossed_reader(tmp_path_factory):
     from biread.gloss import GlossUnit
 
-    def unit(surface, pos, gloss, inf="", pc=""):
+    def unit(surface, pos, gloss, inf=""):
         start = GLOSS_FR.index(surface)
-        return GlossUnit(start, start + len(surface), pos, gloss, inf, pc)
+        return GlossUnit(start, start + len(surface), pos, gloss, inf)
 
     chapters = [Chapter("I", "Le Départ", [GLOSS_FR] + [f"{SHORT_FR} ({n})" for n in range(8)])]
     translations = {hash_text(p): SHORT_EN for c in chapters for p in c.paragraphs}
     translations[hash_text("Le Départ")] = "[Le Départ]"
     glosses = {hash_text(GLOSS_FR): [
         unit("Sur la table", "prep. phrase", "on the table"),
-        unit("il se leva", "verb", "he rose", "se lever", "il s'est levé"),
-        unit("monta", "verb", "climbed", "monter", "est monté"),
+        unit("il se leva", "verb", "he rose", "se lever"),
+        unit("monta", "verb", "climbed", "monter"),
     ]}
 
     out = tmp_path_factory.mktemp("glossed") / "book.html"
@@ -885,24 +885,26 @@ def test_the_paragraph_still_reads_as_the_original_text(glossed):
     assert rendered == GLOSS_FR
 
 
-def test_hover_shows_the_gloss_with_the_verb_forms(glossed):
+def test_hover_shows_the_translation_and_the_infinitive(glossed):
+    """The panel says what the phrase means, and for a conjugated verb what verb
+    it is. Not the French itself, which is under the pointer; not the part of
+    speech; not the passé composé, which was dropped along with the prompt that
+    asked for it."""
     glossed.hover("#stage-wrap .page-left .unit >> nth=1")
     glossed.wait_for_selector(".tip", timeout=3000)
     tip = glossed.inner_text(".tip")
-    assert "il se leva" in tip
-    assert "verb" in tip
     assert "he rose" in tip
-    assert "inf · se lever" in tip          # infinitive, verbs only
-    assert "passé composé · il s'est levé" in tip
+    assert "inf · se lever" in tip
+    assert "il se leva" not in tip          # the French is not written twice
+    assert "verb" not in tip
+    assert "passé composé" not in tip
 
 
-def test_a_non_verb_shows_no_verb_lines(glossed):
+def test_a_non_verb_shows_the_translation_alone(glossed):
     glossed.hover("#stage-wrap .page-left .unit >> nth=0")
     glossed.wait_for_selector(".tip", timeout=3000)
     tip = glossed.inner_text(".tip")
-    assert "on the table" in tip
-    assert "inf ·" not in tip
-    assert "passé composé" not in tip
+    assert tip.strip() == "on the table"
 
 
 def test_the_tooltip_stays_on_screen(glossed):
@@ -964,7 +966,7 @@ def test_mobile_glosses_the_french_and_a_tap_pins_the_meaning(browser, tmp_path_
     page.click("#stage-wrap .mobile-pair .pair-fr .unit >> nth=1")
     page.wait_for_selector(".tip", timeout=3000)
     tip = page.inner_text(".tip")
-    assert "he rose" in tip and "verb" in tip
+    assert "he rose" in tip and "inf · se lever" in tip
     assert page.locator("#stage-wrap .unit.pinned").count() == 1
     page.close()
 

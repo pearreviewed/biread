@@ -151,6 +151,23 @@ def test_word_numbered_chapter_gets_a_numeral_eyebrow():
     assert [c["enEyebrow"] for c in data["chapters"]] == ["Chapter I", "Chapter XVII"]
 
 
+def test_a_book_divided_by_date_keeps_its_headings():
+    """A diary has a spine and no numbers in it. Requiring a number dropped every
+    one of La Nausée's twenty-two entries: no headings on the page, an empty
+    Chapters menu, and fifteen hundred paragraphs running together."""
+    book = [Chapter(None, None, ["Feuillet sans date."]),
+            Chapter(None, "MARDI 30 JANVIER.", ["Rien de neuf."]),
+            Chapter(None, "VENDREDI.", ["Une autre entrée."])]
+    data = build_book_data("Livre", book, {hash_text("MARDI 30 JANVIER."): "Tuesday, 30 January:"})
+
+    assert [c["frTitle"] for c in data["chapters"]] == ["MARDI 30 JANVIER.", "VENDREDI."]
+    assert [c["pair"] for c in data["chapters"]] == [1, 2]
+    # The date is the whole heading, so nothing stands over it — and the English
+    # one is whatever answers to it, never a date we wrote ourselves.
+    assert [c["frEyebrow"] for c in data["chapters"]] == ["", ""]
+    assert [c["enTitle"] for c in data["chapters"]] == ["Tuesday, 30 January:", ""]
+
+
 def test_the_masthead_stays_french_in_the_rendered_file(tmp_path, book):
     out = tmp_path / "es.html"
     render_book("Mon Livre", book, {}, out, target=SPANISH)
@@ -403,7 +420,7 @@ def test_a_book_that_already_has_glosses_is_never_offered_them():
 
     book = [Chapter("I", None, ["Il y avait en Vestphalie."])]
     glosses = {hash_text("Il y avait en Vestphalie."): [
-        GlossUnit(start=0, end=10, pos="verb", gloss="there was", infinitive="avoir", perfect="")]}
+        GlossUnit(start=0, end=10, pos="verb", gloss="there was", infinitive="avoir")]}
     html = render_html("L", book, {}, glosses=glosses)
     data = json.loads(BOOK_DATA_RE.search(
         rewrap(html, gloss_on_demand={"provider": "openrouter", "model": "m"})).group(2))

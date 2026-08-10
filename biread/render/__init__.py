@@ -165,6 +165,21 @@ def build_book_data(
                 "enEyebrow": f"{target.chapter_word} {numeral}",
                 "enTitle": translations.get(hash_text(chapter.title), "") if chapter.title else "",
             })
+        elif chapter.title:
+            # A division the book marks by something other than a number: a diary
+            # keeps its sections by date, and `Chapitre N` is not what stands over
+            # them. The heading is its own title on both sides, so there is no
+            # eyebrow — and the English one is whatever answers to it, the
+            # counterpart edition's own dateline or the translated one, never a
+            # date we wrote ourselves. Dropping these was a whole novel arriving
+            # with no headings on the page and an empty Chapters menu.
+            chapter_meta.append({
+                "pair": len(pairs),
+                "frEyebrow": "",
+                "frTitle": chapter.title,
+                "enEyebrow": "",
+                "enTitle": translations.get(hash_text(chapter.title), ""),
+            })
         for paragraph in chapter.paragraphs:
             key = hash_text(paragraph)
             pair = {"fr": paragraph, "en": translations.get(key, "")}
@@ -179,10 +194,9 @@ def build_book_data(
             if units:
                 # Positional, to keep the payload small: a book carries tens of
                 # thousands of these. [start, end, part of speech, gloss,
-                # infinitive, passé composé] — the last two usually empty.
+                # infinitive] — the last empty on everything but a conjugated verb.
                 pair["units"] = [
-                    [u.start, u.end, u.pos, u.gloss, u.infinitive, u.perfect]
-                    for u in units
+                    [u.start, u.end, u.pos, u.gloss, u.infinitive] for u in units
                 ]
             pairs.append(pair)
 

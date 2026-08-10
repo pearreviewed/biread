@@ -16,6 +16,17 @@ def one_vector(texts):
     return [[1.0, 0.0] for _ in texts]
 
 
+def by_section(texts):
+    """Each section its own direction, so unnumbered divisions have something to
+    pair on. The trailing digit is what a real embedder would read as topic."""
+    def vector(text):
+        digits = [c for c in text if c.isdigit()]
+        vec = [0.0] * 8
+        vec[int(digits[-1]) % 8 if digits else 7] = 1.0
+        return vec
+    return [vector(t) for t in texts]
+
+
 @pytest.fixture
 def published():
     return [
@@ -79,6 +90,30 @@ def test_matching_streams_the_pairs_it_places(book, published):
     )
     assert [french for french, _ in seen] == [p for c in book[1:] for p in c.paragraphs]
     assert any(english for _, english in seen)
+
+
+def test_a_dated_book_heads_both_pages_from_the_two_editions():
+    """A diary is divided and numbered by nothing, and requiring a number left La
+    Nausée with no headings at all. The French page takes the date the edition
+    keeps; the English page takes the translator's own."""
+    import json
+
+    from biread.render import BOOK_DATA_RE
+
+    days = ["MARDI.", "MERCREDI.", "JEUDI.", "VENDREDI."]
+    english = ["Tuesday:", "Wednesday:", "Thursday:", "Friday:"]
+    french = [Chapter(None, day, [f"Entrée {n}.", f"Encore {n}."])
+              for n, day in enumerate(days)]
+    published = [Chapter(None, day, [f"Entry {n}.", f"More {n}."])
+                 for n, day in enumerate(english)]
+
+    result = build_aligned(title="La Nausée", chapters=french,
+                           published_chapters=published, embed=by_section)
+    data = json.loads(BOOK_DATA_RE.search(result.html).group(2))
+
+    assert [c["frTitle"] for c in data["chapters"]] == days
+    assert [c["enTitle"] for c in data["chapters"]] == english
+    assert [c["frEyebrow"] for c in data["chapters"]] == [""] * 4
 
 
 def test_an_aligned_book_builds_without_a_gloss_client(book, published):
