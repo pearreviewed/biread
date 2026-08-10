@@ -283,6 +283,8 @@ def build_aligned(
     gloss_client: LLMClient | None = None,
     gloss_cache: Cache | None = None,
     gloss_cfg: Config | None = None,
+    cache: Cache | None = None,
+    embed_id: str = "",
     on_progress: ProgressFn | None = None,
     on_text: BatchFn | None = None,
 ) -> BuildResult:
@@ -300,7 +302,8 @@ def build_aligned(
     """
     draft = draft_aligned(
         title=title, chapters=chapters, published_chapters=published_chapters, embed=embed,
-        target=target, repair_client=gloss_client, on_progress=on_progress, on_text=on_text,
+        target=target, repair_client=gloss_client, cache=cache, embed_id=embed_id,
+        on_progress=on_progress, on_text=on_text,
     )
     gloss_run = None
     if gloss and gloss_client is not None and gloss_cfg is not None:
@@ -323,10 +326,15 @@ def draft_aligned(
     embed: Embed,
     target: Target = ENGLISH,
     repair_client: LLMClient | None = None,
+    cache: Cache | None = None,
+    embed_id: str = "",
     on_progress: ProgressFn | None = None,
     on_text: BatchFn | None = None,
 ) -> Draft:
-    """Everything but the glossing and the typesetting."""
+    """Everything but the glossing and the typesetting.
+
+    `cache` keeps the matching itself, chapter by chapter, so a build stopped
+    partway through does not pay for the same chapters again."""
     # Before the cut, because a flat edition cut to a counterpart that still
     # carries an introduction is cut to the wrong shape by the whole length of it.
     chapters, published_chapters, dropped_orig, dropped_pub = open_together(
@@ -343,6 +351,7 @@ def draft_aligned(
     aligned, report = align_published(
         chapters, published_chapters, embed=embed,
         on_progress=_stage(on_progress, "align"), on_pairs=on_text,
+        cache=cache, embed_id=embed_id,
     )
     report.cut = cut
     for count, side in ((dropped_orig, "original"), (dropped_pub, "edition you brought")):

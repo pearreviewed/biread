@@ -333,7 +333,10 @@ const ALIGN = [
   // turns through the real book on the count alone and the right says it is
   // waiting. From the first chapter on, the spread shows the pairs themselves.
   "js_seed(json.dumps([[p, ''] for c in orig_chapters for p in c.paragraphs][:400]))",
-  "_JOB['draft'] = draft_aligned(title=title, chapters=orig_chapters, published_chapters=pub_chapters, embed=embedder.embed, target=target, repair_client=client, on_progress=lambda s, d, t: js_progress(s, d, t), on_text=lambda pairs: js_text(json.dumps(pairs)))",
+  // The matching is the long part of this route, and it is kept chapter by
+  // chapter in the same drawer the translations and glosses are: a build stopped
+  // halfway through comes back to the chapters it has left rather than the book.
+  "_JOB['draft'] = draft_aligned(title=title, chapters=orig_chapters, published_chapters=pub_chapters, embed=embedder.embed, target=target, repair_client=client, cache=cache, embed_id=embed_model, on_progress=lambda s, d, t: js_progress(s, d, t), on_text=lambda pairs: js_text(json.dumps(pairs)))",
 ].join("\n");
 
 // The whole of a build: the book, then its glosses, then the type set.

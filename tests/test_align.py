@@ -457,3 +457,89 @@ def test_a_spine_found_in_only_one_edition_does_not_blank_the_other():
     whole = [Chapter(None, None, [f"The {en} sleeps here." for _, en in words])]
     assert len(_chapter_pairs(french, whole, embed)) == 1
     assert align_published(french, whole, embed=embed)[1].coverage == 1.0
+
+
+# ---- a matching run that survives the tab ---------------------------------
+
+
+def _counted(embed):
+    """The same embedder, with a tally of how many texts it was asked to read."""
+    calls = []
+    def counting(texts):
+        calls.extend(texts)
+        return embed(texts)
+    return counting, calls
+
+
+def test_a_chapter_matched_once_is_not_matched_again():
+    """The align route's long pass, kept as it lands. A build stopped halfway
+    used to begin the whole of it again on the next visit."""
+    from biread.cache import Cache
+
+    cache = Cache(None)
+    french = [about(n, n) for n in range(1, 7)]
+    published = [about(n, n) for n in range(1, 7)]
+
+    first, seen = _counted(topics)
+    once, _ = align_published(french, published, embed=first, cache=cache, embed_id="bge-m3")
+    assert seen, "the first run must actually embed the book"
+
+    second, again = _counted(topics)
+    twice, _ = align_published(french, published, embed=second, cache=cache, embed_id="bge-m3")
+    assert twice == once, "a resumed match must place the book exactly as the first did"
+    # What is left is the chapter pairing, which reads a gist per chapter and not
+    # the prose: the paragraphs themselves are never sent a second time.
+    body = {p for c in french + published for p in c.paragraphs}
+    assert not (set(again) & body)
+    assert len(again) < len(seen)
+
+
+def test_another_edition_is_not_handed_the_last_one_s_placements():
+    """A match is a fact about two editions together. Bring a different published
+    translation and it is matched afresh, whatever is held for the old one."""
+    from biread.cache import Cache
+
+    cache = Cache(None)
+    french = [about(n, n) for n in range(1, 4)]
+    align_published(french, [about(n, n) for n in range(1, 4)],
+                    embed=topics, cache=cache, embed_id="bge-m3")
+
+    other = [Chapter(str(n), f"Titre {n}", [f"Another edition of topic-{n}, at length and in detail.",
+                                            f"Still topic-{n}, to make three paragraphs.",
+                                            f"Once more topic-{n}, and there it is."])
+             for n in range(1, 4)]
+    embed, seen = _counted(topics)
+    aligned, _ = align_published(french, other, embed=embed, cache=cache, embed_id="bge-m3")
+    assert set(seen) & {p for c in other for p in c.paragraphs}
+    assert "Another edition" in aligned[hash_text(french[0].paragraphs[0])]
+
+
+def test_a_model_that_scores_in_another_space_matches_afresh():
+    """Each embedding model has its own scale, so what one placed is not what
+    another would place, and the two are kept apart."""
+    from biread.cache import Cache
+
+    cache = Cache(None)
+    french = [about(n, n) for n in range(1, 4)]
+    published = [about(n, n) for n in range(1, 4)]
+    align_published(french, published, embed=topics, cache=cache, embed_id="bge-m3")
+
+    embed, seen = _counted(topics)
+    align_published(french, published, embed=embed, cache=cache, embed_id="text-embedding-3-large")
+    assert set(seen) & {p for c in french for p in c.paragraphs}
+
+
+def test_a_held_match_that_does_not_answer_the_chapter_is_passed_over():
+    """An entry is trusted only where it answers paragraph for paragraph. Anything
+    else is not this chapter's, whatever it is filed under."""
+    from biread.align import _held_match
+    from biread.cache import Cache
+
+    cache = Cache(None, {"k": '["One.", "Two."]', "short": '["One."]',
+                         "junk": "not json", "wrong": '[1, 2]'})
+    assert _held_match(cache, "k", 2) == ["One.", "Two."]
+    assert _held_match(cache, "short", 2) is None
+    assert _held_match(cache, "junk", 2) is None
+    assert _held_match(cache, "wrong", 2) is None
+    assert _held_match(cache, "missing", 2) is None
+    assert _held_match(None, "k", 2) is None

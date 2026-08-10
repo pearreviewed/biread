@@ -19,12 +19,14 @@ back to distributing proportionally, which is a rough approximation.
 """
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass, field
 from statistics import median
 from typing import Callable
 
 from .anchor import MIN_ANCHORS, agreements, align_by_anchors, longest_run
+from .cache import Cache
 from .cleanup import Chapter
 from .errors import AlignmentError
 from .numbering import chapter_number, number_tokens
@@ -1107,10 +1109,46 @@ def _chapter_pairs(
     )]
 
 
+#: Bumped when the matching changes, since a chapter held from an earlier session
+#: is only as good as the code that placed it.
+MATCH_VERSION = 1
+
+
+def match_key(french: Chapter, published: Chapter, embed_id: str) -> str:
+    """What a chapter pair's finished match is filed under.
+
+    Both editions are in the key, because a match is a fact about the two of them
+    together: bringing a different published translation must not be handed the
+    placements made for the last one. So is the embedding model, which scores in
+    a space of its own.
+    """
+    body = "\n".join(french.paragraphs) + "\0" + "\n".join(published.paragraphs)
+    return f"align.{hash_text(body)}.{embed_id}.{MATCH_VERSION}"
+
+
+def _held_match(cache: Cache | None, key: str, wanted: int) -> list[str] | None:
+    """A chapter matched in an earlier session, or None to match it now.
+
+    An entry that does not answer paragraph for paragraph is not this chapter's,
+    whatever it is filed under, and is passed over rather than trusted.
+    """
+    raw = cache.get(key) if cache is not None else None
+    if raw is None:
+        return None
+    try:
+        texts = json.loads(raw)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(texts, list) or len(texts) != wanted:
+        return None
+    return texts if all(isinstance(t, str) for t in texts) else None
+
+
 def _by_embeddings(
     french: list[Chapter], published: list[Chapter], embed: Embed, report: AlignmentReport,
     progress: Callable[[int, int], None] | None = None,
     on_pairs: Callable[[list[tuple[str, str]]], None] | None = None,
+    cache: Cache | None = None, embed_id: str = "",
 ) -> dict[str, str]:
     """Match two editions in a shared semantic space — the trustworthy no-key path.
 
@@ -1120,7 +1158,11 @@ def _by_embeddings(
     `progress(done, total)` is called per chapter, so a long book is not silent while
     it embeds; `on_pairs` hands the chapter's finished matches up as they land, so a
     caller watching the work sees the counterpart actually placed rather than an
-    empty page."""
+    empty page.
+
+    A finished chapter is written to `cache` as it lands, and a chapter already
+    there is not embedded again: this is the longest thing the align route does,
+    and a build interrupted halfway used to begin it from the top."""
     report.method = "pivot"
     pairs = _chapter_pairs(french, published, embed)
     aligned: dict[str, str] = {}
@@ -1134,7 +1176,12 @@ def _by_embeddings(
             continue
         prose = prose_only(pub.paragraphs)
         report.dropped += len(pub.paragraphs) - len(prose)
-        texts = embed_match(fr.paragraphs, prose, embed)
+        key = match_key(fr, pub, embed_id)
+        texts = _held_match(cache, key, len(fr.paragraphs))
+        if texts is None:
+            texts = embed_match(fr.paragraphs, prose, embed)
+            if cache is not None:
+                cache.update({key: json.dumps(texts, ensure_ascii=False)})
         report.unmatched += sum(1 for t in texts if not t)
         report.exact += 1
         for paragraph, text in zip(fr.paragraphs, texts):
@@ -1153,6 +1200,8 @@ def align_published(
     embed: Embed | None = None,
     on_progress: Callable[[int, int], None] | None = None,
     on_pairs: Callable[[list[tuple[str, str]]], None] | None = None,
+    cache: Cache | None = None,
+    embed_id: str = "",
 ) -> tuple[dict[str, str], AlignmentReport]:
     """Map French paragraph hash -> published English text.
 
@@ -1164,7 +1213,7 @@ def align_published(
     fault. Only this ratio separates them.
     """
     aligned, report = _align_published(
-        french, published, translations, embed, on_progress, on_pairs
+        french, published, translations, embed, on_progress, on_pairs, cache, embed_id
     )
     report.published_chars = sum(len(p) for c in published for p in c.paragraphs)
     # Distinct text: where one English paragraph faces several French ones it is
@@ -1181,6 +1230,8 @@ def _align_published(
     embed: Embed | None = None,
     on_progress: Callable[[int, int], None] | None = None,
     on_pairs: Callable[[list[tuple[str, str]]], None] | None = None,
+    cache: Cache | None = None,
+    embed_id: str = "",
 ) -> tuple[dict[str, str], AlignmentReport]:
     """Map French paragraph hash -> published English text.
 
@@ -1217,7 +1268,7 @@ def _align_published(
     # line up even where they share no words at all.
     if embed is not None:
         return _by_embeddings(
-            fr_bodies, pub_bodies, embed, report, on_progress, on_pairs
+            fr_bodies, pub_bodies, embed, report, on_progress, on_pairs, cache, embed_id
         ), report
 
     # With no generated translation to pivot through, the editions are matched on
