@@ -108,8 +108,10 @@ python -m biread book.txt -o output/
 
 ## Cost, caching, and interruptions
 
-Translation is the only thing that costs money, and every paragraph is cached
-by content hash the moment it comes back. So:
+Four things cost money — translating, `--gloss`, `--respace`, and aligning two
+editions, which pays for embeddings. Everything else is pure transformation of
+text you already have, which is why `--dry-run`, the exports and re-rendering are
+free. Every paragraph is cached by content hash the moment it comes back, so:
 
 - Re-running a finished book costs nothing.
 - Interrupting mid-run loses at most the batch in flight.
