@@ -36,9 +36,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python -m biread",
         description="Generate a self-contained bilingual HTML reader (French on the left, "
-                    "your chosen language on the right) from a plain-text book.",
+                    "your chosen language on the right) from a book.",
     )
-    parser.add_argument("input", type=Path, help="path to the source French text (.txt)")
+    parser.add_argument("input", type=Path,
+                        help="path to the source French book (.txt, .epub, .pdf, .html, .docx)")
     parser.add_argument(
         "--lang", type=str, default=DEFAULT_LANG, choices=sorted(TARGETS),
         help="target translation language (default: english). Each language is a "

@@ -1,15 +1,27 @@
 # biread
 
-Turn a plain-text French book into a single self-contained HTML file: an
-open-book spread with the French on the left page and an English translation on
-the right, paginated at runtime like a real book.
+Turn a French book into a single self-contained HTML file: an open-book spread
+with the French on the left page and an English translation on the right,
+paginated at runtime like a real book. It reads `.txt`, `.epub`, `.pdf`, `.html`
+and `.docx`.
 
 The output is one file. No server, no network, no build step — open it in a
 browser, or email it to someone.
 
+There are three ways to get the right-hand page, and they are the same three on
+the command line and in the [web builder](web/README.md):
+
+- **Have a model translate it** — bring the French, and the translation is made
+  paragraph by paragraph and cached.
+- **Align an edition you own** — bring both books, and the published translation
+  is matched to the French *by meaning*, so every word stays its translator's.
+- **Pick from the shelf** — take a book that is already out of copyright. Both
+  editions are fetched from Wikisource and Standard Ebooks; biread stores two
+  page names per book and never a word of text.
+
 <p align="center">
   <img src="docs/screenshots/reader.jpg" width="880"
-       alt="The reader: a header with translation, blur, chapters, bookmarks, font size and download controls, above a two-page spread with French on the left and English on the right">
+       alt="The reader: a header with the page counter, blur, an AI/published translation toggle, chapters, bookmarks, font size, link and download controls, above a two-page spread with French on the left and English on the right">
 </p>
 
 <p align="center">
@@ -21,10 +33,12 @@ browser, or email it to someone.
 
 <p align="center">
   <img src="docs/screenshots/gloss.jpg" width="860"
-       alt="Hovering a French word shows a tooltip with its translation, part of speech, infinitive, and passé composé">
+       alt="Hovering the French phrase 'dont on peut faire' shows a tooltip giving its part of speech, its translation in context, and the infinitive 'faire'">
   <br>
-  <sub><em>Hover any word for its translation in context — with the infinitive and, for a
-  passé simple verb, the passé composé.</em></sub>
+  <sub><em>Hover a phrase for its translation in context. The target is a
+  <em>unit</em>, not a word — an article or a preposition is glossed together with
+  the word it attaches to — and a verb also shows its infinitive, with the passé
+  composé beside a passé simple.</em></sub>
 </p>
 
 <p align="center">
@@ -34,6 +48,29 @@ browser, or email it to someone.
   <sub><em>On a phone, the spread folds into a single column — or export an EPUB
   with <code>--epub</code> and read the spread in Apple Books (best on a tablet
   or in landscape).</em></sub>
+</p>
+
+## In the browser, with no install
+
+The same pipeline runs entirely client-side in the [web builder](web/README.md),
+via Pyodide. A reader brings their own model — a local Ollama, or their own
+OpenRouter key — and no key and no book text ever reaches a server of ours.
+
+<p align="center">
+  <img src="docs/screenshots/builder.jpg" width="880"
+       alt="The builder's first step: a choice of three routes — align an edition I own, have a model translate it, pick from the shelf — above a file drop area accepting .txt, .epub, .pdf, .html and .docx">
+  <br>
+  <sub><em>Two steps. The first asks only which book and by which route; the
+  price and the engine come second, after you have read a sample page.</em></sub>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/shelf.jpg" width="880"
+       alt="The shelf: cards for Candide, Around the World in Eighty Days, Les Misérables, Madame Bovary, Micromégas and Notre-Dame de Paris, each naming its English translator, chapter count, a one-line summary, and a download size">
+  <br>
+  <sub><em>A reader holding nothing can still leave with a book. Each card says
+  only what the source itself says — the translator and year the wiki names, and
+  whether anyone has read that pairing through.</em></sub>
 </p>
 
 ## Quick start
@@ -57,6 +94,7 @@ python -m biread book.txt -o output/
 | `--lang LANG` | Language to translate into (default `english`); each language is a fresh translation, built on the runner's own key |
 | `--published FILE` | Also show a published translation (in the target language) you already own |
 | `--title TEXT` | Title in the reader header (default: from the filename) |
+| `--author TEXT` | The book's author, written into the EPUB metadata and the PDF title page |
 | `--gloss` | Annotate the French for hover translation (costs extra; see `--dry-run`) |
 | `--revise` | Let a reader correct the AI translation in the reader — by hand, or on their own key |
 | `--builder-url URL` | Where the reader can cross to the builder, as a quiet corner arrow. Omit it and no arrow appears, so a shared book never points at nothing |
@@ -65,6 +103,7 @@ python -m biread book.txt -o output/
 | `--cache-dir DIR` | Where translation caches live (default `cache/`) |
 | `--dry-run` | Report uncached work and an estimated cost, then stop |
 | `--force` | Proceed with books above 2,000 paragraphs |
+| `--respace` | Where a file is a scan, ask the model to put back the spaces its OCR lost (costs extra; see below) |
 | `--rebuild-cache` | Discard a cache written by an incompatible version |
 
 ## Cost, caching, and interruptions
@@ -258,12 +297,55 @@ is already generated and cached — but each keeps only what its medium can hold
   Chromium, so it needs the `[browser]` extra:
   `pip install -e ".[browser]" && playwright install chromium`.
 
+Because both exporters paginate by measuring real type, a book built **in the
+browser** comes out with nothing inside it and the download control hidden — the
+builder's tab has no way to run a headless Chromium. It can be given one later,
+on any machine that has the engine, without rebuilding or paying again:
+
+```sh
+python -m biread.formats book.html
+```
+
+That reads the finished book back out of its own page, re-derives the chapters
+and the translation exactly, and puts the EPUB inside the file where a download
+has always lived.
+
+## When the file fights back
+
+Most of biread's difficulty is not translation. It is that a real book arrives
+damaged, and every stage downstream assumes clean paragraph text. So there is a
+repair layer between extraction and cleanup, and its rule throughout is that a
+repair must be **corroborated by the file itself** — never inferred from shape,
+and never written by a model.
+
+- **`normalize.py`** undoes what an extractor does to a page: whitespace runs,
+  words hyphenated across a line break, running headers, and a heading word
+  marooned from its numeral. It reads a scan's *indentation* to find where
+  paragraphs begin, which is the compositor speaking rather than us guessing.
+- **`segment.py`** handles an edition that arrived with its paragraph breaks
+  gone. Where a second edition is in play, the flat one is cut to the other's
+  shape — free, instant, no model, and it recovers 98–100% of the paragraphs on
+  the books it has been measured against. Where there is no counterpart, the
+  model is shown numbered sentences and answers with the numbers that begin a
+  paragraph, so it cannot rewrite a word even in principle.
+- **`notes.py`** removes footnotes only where the prose actually refers to them.
+  A paragraph opening `1.` is a footnote in one book and a list in another, and a
+  note left in is untidy where a deleted sentence is unrecoverable.
+- **A scan is weighed and named.** A photograph of a book carries about 80 bytes
+  of file per character of text, where a typeset PDF sits between 1 and 4, so
+  biread can tell you before you pay. It does not silently correct the
+  misreadings; `--respace` will ask a model to put back the spaces OCR lost
+  (`isvery` → `is very`), and even then only the *spacing* is kept — the reply is
+  walked against the original character by character and the passage rebuilt
+  from the original's own characters, so a model that rewrites a word is thrown
+  away entirely.
+
 ## Adding a format
 
-`.txt` today. An extractor's only job is file → raw string: subclass
-`Extractor` in `biread/extract/`, declare its `suffixes`, and register it in
-`EXTRACTORS`. Stripping boilerplate, rejoining wrapped lines, and finding
-chapters all happen downstream in `cleanup.py`, so nothing else changes.
+`.txt`, `.epub`, `.pdf`, `.html` and `.docx` today. An extractor's only job is
+file → raw string: subclass `Extractor` in `biread/extract/`, declare its
+`suffixes`, and register it in `EXTRACTORS`. Repair, boilerplate stripping and
+chapter detection all happen downstream, so nothing else changes.
 
 Non-UTF-8 sources are decoded as cp1252 if UTF-8 fails, which covers most
 legacy French texts.
@@ -273,14 +355,40 @@ legacy French texts.
 ```
 biread/
   cli.py          argument parsing and everything the user sees printed
-  extract/        source file -> raw text
+  extract/        source file -> raw text (.txt .epub .pdf .html .docx)
+  normalize.py    raw text -> repaired: the injuries an extractor inflicts, and
+                  the paragraph breaks a conversion dropped, undone first
   cleanup.py      raw text -> chapters of clean paragraphs
-  translate.py    paragraphs -> English, batched and cached
-  align.py        a published translation -> aligned to the French
+  segment.py      an edition that lost its paragraph breaks -> cut to the shape
+                  of the other edition, where there is one
+  notes.py        footnotes and their markers, removed where the prose confirms
+  spacing.py      words an OCR ran together, put back apart (--respace)
+  translate.py    paragraphs -> the target language, batched and cached
+  align.py        a published translation -> matched to the French by meaning
+  gloss.py        per-paragraph hover units; width judged at render
+  language.py     what glossing needs to know about the source language
+  targets.py      one row per target language: name, chapter word, reader UI
+  build.py        the pipeline shared by the CLI and the in-browser builder
   render/         book -> one HTML file (templates/ holds the real reader)
+  export/         epub.py, pdf.py, and refit.py, which reads a finished book
+                  back out of its own page so a format can be made later
+  wikisource.py   two page names -> two editions, resolved and fetched
+  standardebooks.py  a second library, English only
+  shelf.py        the curated books, and what each one honestly claims
+  publish.py      shelf book -> a file ready to hand out, then approved by hand
+  formats.py      any finished book -> the same book with its EPUB inside it
+  check.py        a finished book looked at where books break
   llm/            one thin client per provider
-  cache.py        content-hash JSON cache
+  cache.py        content-hash JSON cache, merges on write
   config.py       environment, models, pricing
+```
+
+Three commands beyond `python -m biread`:
+
+```sh
+python -m biread.shelf                  # list the shelf; --check re-measures it
+python -m biread.publish <slug>         # build a shelf book, then look at it
+python -m biread.formats <book.html>    # put an EPUB inside a book already built
 ```
 
 The reader itself is `biread/render/templates/reader.{html,css,js}` — plain
@@ -294,21 +402,30 @@ pip install -e ".[dev]"
 pytest
 ```
 
-No test touches the network. The model is a fake that echoes structured
-replies, including malformed and truncated ones, and the three provider
-clients are tested against stubbed SDK responses.
+That is about 1,080 Python tests, and **no test touches the network or needs a
+key**, so the whole suite runs for free as often as you like. The model is a
+fake that echoes structured replies, including malformed and truncated ones, and
+the provider clients are tested against stubbed SDK responses.
 
-The reader itself is driven in a real browser, because its bugs live in layout
-and timing — pagination measured against a box that had not been laid out yet,
-a drag target destroyed mid-gesture — and none of those are reachable without a
-rendering engine. In two browsers, in fact: Safari has faults Chromium cannot
-see, so every one of those tests runs twice. They skip unless the browser extra
-is installed:
+The reader and the builder are driven in a real browser, because their bugs live
+in layout and timing — pagination measured against a box that had not been laid
+out yet, a drag target destroyed mid-gesture — and none of those are reachable
+without a rendering engine. In two browsers, in fact: Safari has faults Chromium
+cannot see (it once broke a shelf card across a column boundary in spite of
+`break-inside: avoid`), so every one of those tests runs twice. They skip unless
+the browser extra is installed:
 
 ```sh
 pip install -e ".[browser]" && playwright install chromium webkit
-pytest tests/test_reader_js.py
+pytest tests/test_reader_js.py       # 76 tests × 2 engines, the reader
+pytest tests/test_builder_js.py      # 90 tests × 2 engines, the builder
+pytest tests/test_gloss_pool_js.py   #  8 tests × 2 engines, the gloss pool
+BIREAD_ENGINES=chromium pytest tests/test_reader_js.py   # one engine, when it must be quick
 ```
+
+WebKit is roughly six times slower than Chromium, so a quick loop is worth
+narrowing and a merge is not. The EPUB and PDF export tests need the same extra,
+since both exporters paginate by measuring real type in headless Chromium.
 
 ## License
 

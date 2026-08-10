@@ -31,7 +31,35 @@ Free is therefore back, but on a different footing than before: free now means
 
 Bring a published edition you own and the builder aligns it by meaning through
 the embedding path — no translation of its own needed. Bring only the French and
-it translates with the chat model.
+it translates with the chat model. Bring nothing at all and there is a third
+route: **pick from the shelf**, where both editions are fetched from Wikisource
+and Standard Ebooks by the reader's own browser. biread stores two page names per
+book and never a word of text, which is what keeps it a tool rather than a host.
+
+## Four things the page does that are easy to miss
+
+- **The price comes after a sample page, not before.** `sample_translate` runs
+  the chosen model over three real paragraphs of the reader's own book and
+  renders them in a miniature of the reader's spread, so the estimate is a price
+  on prose already seen rather than a promise about quality.
+- **A build survives the tab closing.** Every paragraph paid for is written to
+  IndexedDB as it lands, keyed by a hash of the book's own text and filed per
+  language. Coming back, the reader picks the same file and the engine is handed
+  what is already held *before* the estimate runs, so the price screen quotes
+  only what is left and says so.
+- **Glossing runs six requests at a time**, in `gloss-pool.js`. The judgement
+  stays in `gloss.py` — it hands over the batches it means to send and takes back
+  the replies — while the transport moved out, because that pass is nothing but
+  network. A local Ollama gets one hand instead of six, since a second request
+  there only queues on the same card.
+- **A book need not be fully glossed to be read.** The build makes the opening,
+  and the finished book carries the protocol so the rest is made on the reader's
+  own key, one request at a time, as they read.
+
+Two things the page will tell a reader before they pay: that their file is a
+**photograph of a book** rather than a typeset one, since biread leaves OCR
+misreadings exactly as the file has them; and that a file which arrived with no
+paragraph breaks was cut to its counterpart's shape.
 
 ## Build the deployable
 

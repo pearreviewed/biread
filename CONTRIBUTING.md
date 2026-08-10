@@ -1,9 +1,10 @@
 # Contributing to biread
 
-Thanks for wanting to help. biread turns a plain-text French book into one
-self-contained bilingual HTML reader; the [README](README.md) explains what it
-does and [CLAUDE.md](CLAUDE.md) records the decisions behind it — read that
-before proposing a change to settled behaviour, so a reversal isn't re-argued.
+Thanks for wanting to help. biread turns a French book into one self-contained
+bilingual HTML reader; the [README](README.md) explains what it does,
+[ARCHITECTURE](ARCHITECTURE.md) is the map of the pipeline, and
+[CLAUDE.md](CLAUDE.md) records the decisions behind it — read that before
+proposing a change to settled behaviour, so a reversal isn't re-argued.
 
 ## Setup
 
@@ -29,10 +30,23 @@ pip install -e ".[browser]" && playwright install chromium webkit
 pytest
 ```
 
-The suite **needs no network and no API key** — the model is faked and the
-fixtures are canned — so you can run all of it for free, as often as you like.
-The ~54 browser tests (and the EPUB/PDF export render tests) skip themselves
-unless the `[browser]` extra is installed.
+That is about 1,080 Python tests, and the suite **needs no network and no API
+key** — the model is faked and the fixtures are canned — so you can run all of
+it for free, as often as you like. On top of that sit 174 browser tests (the
+reader, the builder, and the gloss pool), each run once in Chromium and once in
+WebKit; they and the EPUB/PDF export render tests skip themselves unless the
+`[browser]` extra is installed. WebKit is roughly six times slower, so narrowing
+with `BIREAD_ENGINES=chromium` is worth it in a tight loop and not before a
+merge.
+
+One suite is opt-in because it boots Pyodide from a CDN and reads `web/dist`:
+
+```sh
+python web/build.py && BIREAD_ENGINE_SMOKE=1 pytest tests/test_engine_js.py
+```
+
+That is the only test that runs the real in-browser engine end to end, with the
+provider intercepted so it costs nothing.
 
 CI runs the Python tests on every push and pull request, and the browser tests
 alongside; a change has to be green to merge. If you fix a bug, add the test
@@ -57,8 +71,9 @@ The codebase has a particular grain; match it rather than your own defaults.
 
 ## Money — the one thing to be careful with
 
-Translation and `--gloss` call a **paid** API. The tests never do, but a real
-build does. If you touch the pipeline:
+Translation, `--gloss` and `--respace` call a **paid** API, and so does aligning
+two editions, which pays for embeddings. The tests never do, but a real build
+does. If you touch the pipeline:
 
 - Price a change with `--dry-run` first — it needs no key and calls nothing.
 - Never run two builds against the same cache at once; they can clobber each
