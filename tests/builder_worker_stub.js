@@ -111,11 +111,13 @@ const SHELF = {
       // Made exactly as Candide was, which is half the point of it: two cards
       // that agree, so the line above the shelf has a majority to speak for.
       // The other half is its weight — the one book here heavy enough to be
-      // worth saying so on the face.
+      // worth saying so on the face. Its hover was bought for the opening and
+      // no further, which is what every build makes by default now: a state the
+      // card is deliberately blind to and the drawer counts.
       prebuilt: {
         href: "books/lesmis.html", filename: "Les Misérables - bilingual reader.html",
         english: "Hapgood · 1887", approved: "2026-08-05", bytes: 15943686,
-        paragraphs: 12208, translated: 11230, glossed: 0,
+        paragraphs: 12208, translated: 11230, glossed: 126,
         published: false, solo: true, formats: ["epub"],
       },
       readThrough: true, coverage: 0.921, added: false,

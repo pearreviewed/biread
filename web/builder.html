@@ -1186,32 +1186,54 @@ function weight(bytes) {
 // were each spending a line on a figure nobody weighs a novel by; the rest carry
 // theirs in the drawer, beside what the book is about.
 const HEAVY = 10e6;
-// What is in the finished file, as a line to be scanned rather than a sentence
-// to be read: what is in it, whether it is glossed, what else it came out as.
-// Glosses used to have a sentence of their own offering to sell them, which ran
-// to two lines on seven cards of eight and left the rule inside each card at a
-// different height from its neighbours'. A book without them says so in two
-// words; the offer itself is met in the reader, whose header carries it, and
-// where the reader is the one about to want it.
-// It is said on the card only where the card differs from its neighbours: see
-// the line above the shelf.
-function madeOf(book) {
+// What is in the finished file: what stands on the two pages, and whether the
+// hover translations were made. Two facts, each written twice — as a clause for
+// the line above the shelf, which says what the books have in common, and as a
+// line for a card, which says only where it differs from that.
+//
+// Three things used to stand here and no longer do. The edition inside was named
+// (`French + Phalen`) two lines under a credit line that already names it, in an
+// equation where the rest of this page speaks in phrases. The formats sat in the
+// same middot run as the hover, which is a fact about the download wearing the
+// dress of a fact about the book; they are in the drawer now, beside the weight,
+// which is the same kind of fact. And the hover was a bare noun, `hover
+// translations`, which does not say whether the book has them or is merely about
+// them: the reader's own header settled on **Hover to translate** as the name of
+// the thing, and this is the last place that was still calling it something else.
+function madeParts(book) {
   const made = book.prebuilt;
-  // Name the edition only where there is more than one to confuse it with.
-  const named = made.english && book.translations.length > 1;
-  const parts = [named
-    ? "French + " + made.english
-    : made.solo
-      ? "French + published translation"
-      : made.published
-        ? "French + translation + published"
-        : "French + translation"];
-  parts.push(!made.glossed
-    ? "no hover translations"
-    : made.glossed >= made.paragraphs
-      ? "hover translations"
-      : "hover translations on " + made.glossed + " paragraphs");
+  const pages = made.solo
+    ? { said: "the French beside a published English", card: "A published English" }
+    : made.published
+      ? { said: "the French with a translation of ours and a published one",
+          card: "Our translation, and a published one" }
+      : { said: "the French beside a translation of ours", card: "A translation of ours" };
+  // Binary, deliberately. A count of glossed paragraphs is a quantity, and in a
+  // slot whose other values are states it reads as a third state that does not
+  // exist. A book part-glossed says what is true of the book — they have not
+  // been made — and under-claims, which is the safe direction: a reader who
+  // hovers the first page and finds one has been given something, not misled.
+  // The count is in the drawer, where the quantities are.
+  const whole = made.glossed >= made.paragraphs;
+  return [
+    pages,
+    { said: whole ? "the hover translations are made throughout"
+                  : "the hover translations are not made yet",
+      card: "Hover to translate: " + (whole ? "included" : "not made yet") },
+  ];
+}
+// What is in the download, as against what is in the book: the weight, and the
+// formats that used to sit on the face in the middle of a sentence about the
+// two editions.
+function fileFacts(book) {
+  const made = book.prebuilt;
+  const parts = [weight(made.bytes)];
   if (made.formats.length) parts.push(made.formats.map((f) => f.toUpperCase()).join(" + "));
+  // Bought glosses that do not cover the book are a quantity, and this is where
+  // the quantities are.
+  if (made.glossed && made.glossed < made.paragraphs) {
+    parts.push("hover translations on the first " + made.glossed.toLocaleString() + " passages");
+  }
   return parts.join(" · ");
 }
 // What the finished books on this page are, where they agree: said once above
@@ -1223,13 +1245,27 @@ function madeOf(book) {
 // glosses must not put the line back on the other six. A card that differs says
 // its own line in full, which is what the wording above the shelf allows for.
 function commonMake(books) {
-  const lines = books.filter((b) => b.prebuilt).map(madeOf);
-  if (lines.length < 2) return null;
-  const seen = new Map();
-  for (const line of lines) seen.set(line, (seen.get(line) || 0) + 1);
-  let best = null;
-  for (const [line, n] of seen) if (!best || n > best.n) best = { line, n };
-  return best.n > lines.length / 2 ? best.line : null;
+  const all = books.filter((b) => b.prebuilt).map(madeParts);
+  if (all.length < 2) return null;
+  // Fact by fact rather than line by line: two books can agree on what is on
+  // their pages and disagree about the hover, and hoisting only what they agree
+  // on leaves each card saying the one thing that is its own.
+  const norm = all[0].map((_, i) => {
+    const seen = new Map();
+    for (const parts of all) {
+      const at = seen.get(parts[i].card);
+      seen.set(parts[i].card, { part: parts[i], n: (at ? at.n : 0) + 1 });
+    }
+    let best = null;
+    for (const v of seen.values()) if (!best || v.n > best.n) best = v;
+    return best.n > all.length / 2 ? best.part : null;
+  });
+  return norm.some(Boolean) ? norm : null;
+}
+// The same facts as one sentence, for the line above the cards.
+function normSaid(norm) {
+  const said = norm.filter(Boolean).map((p) => p.said);
+  return "Unless a card says otherwise: " + said.join(", and ") + ".";
 }
 function unreadNote(book) {
   if (book.readThrough) return null;
@@ -1312,9 +1348,13 @@ function bookCard(book) {
   if (book.lead) card.appendChild(el("div", "lead", book.lead));
 
   card.appendChild(actionLine(book));
-  // Only where this book is not what the line above the shelf already said.
-  const make = book.prebuilt ? madeOf(book) : null;
-  if (make && make !== S.norm) card.appendChild(el("div", "say", make));
+  // Only what the line above the shelf has not already said for this book.
+  if (book.prebuilt) {
+    const own = madeParts(book)
+      .filter((p, i) => !(S.norm && S.norm[i] && S.norm[i].card === p.card))
+      .map((p) => p.card);
+    if (own.length) card.appendChild(el("div", "say", own.join(" · ")));
+  }
   const said = caveat(book);
   if (said) card.appendChild(el("div", "say", said));
 
@@ -1350,7 +1390,7 @@ function bookCard(book) {
   // book with a file behind it is a curated one and has a drawer to keep it in.
   if (book.summary) {
     const brief = el("div", "brief");
-    if (book.prebuilt) brief.appendChild(el("div", "figures", weight(book.prebuilt.bytes)));
+    if (book.prebuilt) brief.appendChild(el("div", "figures", fileFacts(book)));
     brief.appendChild(el("div", null, book.summary));
     card.appendChild(brief);
   }
@@ -1404,7 +1444,7 @@ function paintShelf() {
 
   S.norm = commonMake(shown);
   $("shelf-norm").hidden = !S.norm;
-  $("shelf-norm").textContent = S.norm ? "Unless a card says otherwise: " + S.norm : "";
+  $("shelf-norm").textContent = S.norm ? normSaid(S.norm) : "";
 
   const cards = $("shelf-cards");
   cards.innerHTML = "";
