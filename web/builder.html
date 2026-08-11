@@ -138,7 +138,7 @@
      the column is left-aligned in the shelf's own width instead: the shelf fills
      it, everything else keeps a reading measure inside it, and every block on
      the screen starts at the same place. */
-  #s-books { --wide: min(1180px, calc(100vw - 76px));
+  #s-books { --wide: min(1180px, calc(100vw - 76px)); position: relative;
              width: var(--wide); margin-inline: calc((100% - var(--wide)) / 2); }
   .beside { margin: 26px 0 0; display: flex; align-items: flex-start; gap: 46px; }
   .beside > .step { flex: 1; min-width: 0; }
@@ -165,21 +165,34 @@
      stops being a full measure, which is where the container reaches its own cap
      and not a pixel sooner: any narrower and the tab strip would shrink on the
      routes that carry the page and not on the one that does not. */
-  /* Lifted clear of the row it sits in, but not up to the masthead: level with
-     the headline it answers, where the column beside it is still asking its
-     question. It rises into the hero's row and never into the hero, which keeps
-     a reading measure of its own well to the left of this. */
-  .taste { display: none; flex: none; width: 452px; flex-direction: column; gap: 11px;
-           margin-top: -58px; }
-  @media (min-width: 1260px) { #s-books:not(.wide) .taste { display: flex; } }
+  /* Held at a place of its own rather than carried by the row it was declared
+     in. In the flow it hung 58px above the step, which put it 122px down the
+     page while the headline was at full height and 122px up the moment the
+     first press docked the headline — a page of a book leaping the height of a
+     paragraph for a reason that has nothing to do with it, and staying there.
+     The panel answers what a reader ends up with; it is not part of the
+     question, so the question's height must not move it. Out of the flow, level
+     with the headline, which is the one thing on this screen that stays put. */
+  .taste { display: none; position: absolute; top: 90px; right: 0;
+           width: 452px; flex-direction: column; gap: 11px; }
+  /* Out of the flow, so the column beside it is held off the panel by hand
+     rather than by a flex gap: the same arithmetic, said once. */
+  @media (min-width: 1260px) {
+    #s-books:not(.wide) .taste { display: flex; }
+    #s-books:not(.wide) .beside > .step { max-width: calc(var(--wide) - 452px - 46px); }
+  }
   .taste .spread { aspect-ratio: 7 / 5; }
-  .taste .leaf { min-height: 0; overflow: hidden; padding: 17px 17px 9px; gap: 7px; }
+  /* A book's page is mostly margin, and the miniature was set like a column of
+     newsprint: the type ran to the edges, the lines sat close, and one paragraph
+     ended where the next began. Given the page margins a book has, the leading a
+     book has, and a paragraph break that can be seen from across the room. */
+  .taste .leaf { min-height: 0; overflow: hidden; padding: 22px 22px 11px; gap: 9px; }
   .taste .leaf .head i { font-size: 8.5px; }
   .taste .leaf .body { flex: 1; min-height: 0; overflow: hidden;
     -webkit-mask-image: linear-gradient(#000 calc(100% - 22px), transparent);
     mask-image: linear-gradient(#000 calc(100% - 22px), transparent); }
-  .taste .leaf p { font-size: 8.6px; line-height: 1.62; margin-bottom: .45em; }
-  .taste .leaf .folio { margin-top: 0; padding-top: 8px; font-size: 8px; }
+  .taste .leaf p { font-size: 8.4px; line-height: 1.85; margin-bottom: .95em; text-indent: 1.9em; }
+  .taste .leaf .folio { margin-top: 0; padding-top: 9px; font-size: 8px; }
   .taste .note { font-size: 13px; }
   .hero + .beside { margin-top: 36px; }
   /* The question above the tabs is a prompt, not a second headline: at the

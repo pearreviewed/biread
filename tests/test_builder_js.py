@@ -166,6 +166,19 @@ def test_the_door_shows_a_page_of_the_book_it_is_offering(page):
     # It fills the width the screen was leaving empty.
     right = lambda s: page.eval_on_selector(s, "e => e.getBoundingClientRect().right")
     assert right(".taste") - right("#s-books") == 0
+    # And it holds its place while the headline docks under it. In the flow it
+    # hung off the step, so the first press moved it 122px up the page and left
+    # it there — a page of a book leaping the height of a paragraph for a reason
+    # that has nothing to do with it.
+    top = lambda: page.eval_on_selector(".taste", "e => e.getBoundingClientRect().top")
+    page.reload()
+    page.wait_for_selector("[data-route=translate]")
+    page.set_viewport_size({"width": 1440, "height": 900})
+    door = top()
+    page.click("[data-route=translate]")
+    assert top() == door, "the page moved when the headline docked"
+    page.click("[data-route=align]")
+    assert top() == door, "the page moved between routes"
     # And it stands down where the shelf wants the room, and on a narrow window.
     page.click("[data-route=shelf]")
     assert page.eval_on_selector(".taste", "e => getComputedStyle(e).display") == "none"
