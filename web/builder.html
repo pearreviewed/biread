@@ -165,7 +165,12 @@
      stops being a full measure, which is where the container reaches its own cap
      and not a pixel sooner: any narrower and the tab strip would shrink on the
      routes that carry the page and not on the one that does not. */
-  .taste { display: none; flex: none; width: 452px; flex-direction: column; gap: 11px; }
+  /* Lifted clear of the row it sits in, but not up to the masthead: level with
+     the headline it answers, where the column beside it is still asking its
+     question. It rises into the hero's row and never into the hero, which keeps
+     a reading measure of its own well to the left of this. */
+  .taste { display: none; flex: none; width: 452px; flex-direction: column; gap: 11px;
+           margin-top: -58px; }
   @media (min-width: 1260px) { #s-books:not(.wide) .taste { display: flex; } }
   .taste .spread { aspect-ratio: 7 / 5; }
   .taste .leaf { min-height: 0; overflow: hidden; padding: 17px 17px 9px; gap: 7px; }
@@ -708,8 +713,9 @@
         <div class="folio">8</div>
       </div>
     </div>
-    <div class="note">One file, both pages, and the French hoverable phrase by
-      phrase. It opens in any browser, with no connection and no account.</div>
+    <div class="note">One file, both pages, and any phrase in the French
+      translated under the pointer. It opens in any browser, with no connection
+      and no account.</div>
   </aside>
   </div>
 
