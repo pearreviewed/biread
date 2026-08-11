@@ -173,7 +173,7 @@
      The panel answers what a reader ends up with; it is not part of the
      question, so the question's height must not move it. Out of the flow, level
      with the headline, which is the one thing on this screen that stays put. */
-  .taste { display: none; position: absolute; top: 90px; right: 0;
+  .taste { display: none; position: absolute; top: 126px; right: 0;
            width: 452px; flex-direction: column; gap: 11px; }
   /* Out of the flow, so the column beside it is held off the panel by hand
      rather than by a flex gap: the same arithmetic, said once. */
@@ -186,13 +186,23 @@
      newsprint: the type ran to the edges, the lines sat close, and one paragraph
      ended where the next began. Given the page margins a book has, the leading a
      book has, and a paragraph break that can be seen from across the room. */
-  .taste .leaf { min-height: 0; overflow: hidden; padding: 22px 22px 11px; gap: 9px; }
-  .taste .leaf .head i { font-size: 8.5px; }
+  .taste .leaf { position: relative; min-height: 0; overflow: hidden; padding: 20px 20px 27px; gap: 9px; }
+  /* The heads the reader itself sets: a language tag in the outer top corner and
+     the folio in the outer foot, not a centred title over a rule, which is the
+     builder's own furniture from the sample spread on step two. A panel showing
+     what you end up with must show what you end up with. Sized to the miniature
+     rather than copied at the reader's 9px, which on a page a quarter the width
+     would read as a caption rather than a running head. */
+  .taste .corner, .taste .folio { position: absolute; font: 6.6px/1 system-ui, sans-serif;
+    letter-spacing: .24em; text-transform: uppercase; color: var(--page-muted); }
+  .taste .corner { top: 12px; }
+  .taste .leaf.l .corner, .taste .leaf.l .folio { left: 20px; }
+  .taste .leaf.r .corner, .taste .leaf.r .folio { right: 20px; }
   .taste .leaf .body { flex: 1; min-height: 0; overflow: hidden;
     -webkit-mask-image: linear-gradient(#000 calc(100% - 22px), transparent);
     mask-image: linear-gradient(#000 calc(100% - 22px), transparent); }
   .taste .leaf p { font-size: 8.4px; line-height: 1.85; margin-bottom: .95em; text-indent: 1.9em; }
-  .taste .leaf .folio { margin-top: 0; padding-top: 9px; font-size: 8px; }
+  .taste .leaf .folio { bottom: 9px; margin-top: 0; padding-top: 0; }
   .taste .note { font-size: 13px; }
   .hero + .beside { margin-top: 36px; }
   /* The question above the tabs is a prompt, not a second headline: at the
@@ -675,7 +685,7 @@
     <div class="caps">What you end up with</div>
     <div class="spread">
       <div class="leaf l">
-        <div class="head"><i>Candide, ou l’Optimisme</i><div class="rule"></div></div>
+        <div class="corner">FR</div>
         <div class="body">
           <p>Monsieur le baron était un des plus puissants seigneurs de la
           Vestphalie, car son château avait une porte et des fenêtres. Sa grande
@@ -701,7 +711,7 @@
         <div class="folio">7</div>
       </div>
       <div class="leaf r">
-        <div class="head"><i>English</i><div class="rule"></div></div>
+        <div class="corner">EN</div>
         <div class="body">
           <p>The Baron was one of the most powerful lords in Westphalia; for his
           castle had not only a gate, but even windows; and his great hall was

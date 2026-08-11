@@ -163,6 +163,20 @@ def test_the_door_shows_a_page_of_the_book_it_is_offering(page):
     assert over > 40, f"the page holds all its text with room to spare ({over})"
     assert "Vestphalie" in text(page, ".taste .leaf.l")
     assert "Westphalia" in text(page, ".taste .leaf.r")
+    # Headed the way the reader heads its own pages: a language tag in the outer
+    # top corner and the folio in the outer foot, not the centred title over a
+    # rule that the builder's sample spread uses.
+    assert text(page, ".taste .leaf.l .corner") == "FR"
+    assert text(page, ".taste .leaf.r .corner") == "EN"
+    assert page.locator(".taste .head").count() == 0
+    # Each page keeps its pair on its own outer margin, which is the edge they
+    # are set from: the left page reads from the left, the right from the right.
+    box = lambda s: page.eval_on_selector(
+        s, "e => { const r = e.getBoundingClientRect();"
+           "       return [Math.round(r.left), Math.round(r.right)]; }")
+    assert box(".taste .leaf.l .corner")[0] == box(".taste .leaf.l .folio")[0]
+    assert box(".taste .leaf.r .corner")[1] == box(".taste .leaf.r .folio")[1]
+    assert box(".taste .leaf.r .corner")[0] > box(".taste .leaf.l .corner")[0]
     # It fills the width the screen was leaving empty.
     right = lambda s: page.eval_on_selector(s, "e => e.getBoundingClientRect().right")
     assert right(".taste") - right("#s-books") == 0
