@@ -115,6 +115,36 @@ def test_the_door_asks_for_the_book_first(page):
     assert not showing(page, "settings")
 
 
+def test_every_block_on_the_door_starts_at_the_same_left_edge(page):
+    """The hero and the controls sat in a 640 column centred on the page while
+    the shelf broke out to 1180 beneath them, so pressing "Pick from the shelf"
+    moved the content 270px left. One measure now, left-aligned, and the edge
+    holds across the routes as well as down the page."""
+    edges = lambda: page.evaluate(
+        "() => ['.hero h1', '#route', '.step .row.foot'].map(s =>"
+        "  Math.round(document.querySelector(s).getBoundingClientRect().left))")
+    page.click("[data-route=translate]")
+    files = edges() + [page.evaluate(
+        "() => Math.round(document.getElementById('files').getBoundingClientRect().left)")]
+    page.click("[data-route=shelf]")
+    shelf = edges() + [page.evaluate(
+        "() => Math.round(document.getElementById('shelf-cards').getBoundingClientRect().left)")]
+    assert len(set(files + shelf)) == 1, (files, shelf)
+
+
+def test_the_headline_docks_once_it_has_been_answered(page):
+    """It is read once. A press is a reader who has read it and is now doing
+    something, so it goes to one line and the work comes up the page — never on
+    arrival, which is the whole of the front door."""
+    seen = lambda: page.eval_on_selector(".hero p", "e => getComputedStyle(e).display")
+    tall = page.eval_on_selector(".hero", "e => e.getBoundingClientRect().height")
+    assert seen() != "none"
+    page.click("[data-route=shelf]")
+    assert seen() == "none"
+    assert page.eval_on_selector(".hero", "e => e.getBoundingClientRect().height") < tall
+    assert text(page, ".hero h1").startswith("The original on the left")
+
+
 def test_who_does_the_work_is_asked_on_the_second_step(page):
     to_settings(page, key=None)
     assert showing(page, "settings")
@@ -786,6 +816,21 @@ def test_nothing_is_fetched_until_a_book_is_picked(page):
     page.click("[data-route=shelf]")
     assert page.eval_on_selector("#to-settings", "e => e.disabled")
     assert "Nothing is fetched" in text(page, "#books-foot")
+
+
+def test_the_shelf_carries_no_dead_next_under_the_card_that_is_the_button(page):
+    """A card is the thing you press here, and a disabled Next under it was a
+    third arrow competing with the card and with the line inside it. It arrives
+    when there is somewhere for it to go. The line beside it still says nothing
+    is fetched until a book is chosen, so the reassurance is not lost."""
+    page.click("[data-route=shelf]")
+    assert hidden(page, "#to-settings")
+    assert "Nothing is fetched" in text(page, "#books-foot")
+    to_shelf(page)
+    assert not hidden(page, "#to-settings")
+    # And it is still there on a route where files are what you bring.
+    page.click("[data-route=translate]")
+    assert not hidden(page, "#to-settings")
 
 
 def test_picking_a_book_fetches_both_editions_and_opens_the_way_on(page):

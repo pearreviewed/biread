@@ -87,13 +87,25 @@
      rows with no edge to come back to. The hero sits in step one's own column
      now, so masthead, headline, subtitle and everything below share one left
      edge and read down it. */
-  .hero { display: flex; flex-direction: column; align-items: flex-start; gap: 7px; max-width: 640px; margin: 30px auto 0; }
+  .hero { display: flex; flex-direction: column; align-items: flex-start; gap: 7px; margin: 30px 0 0; }
   .hero .caps { letter-spacing: .24em; font-size: 11px; }
-  .hero h1 { margin-top: 6px; font-size: 41px; line-height: 1.1; letter-spacing: -.015em; text-wrap: balance; }
+  .hero h1 { margin-top: 6px; max-width: 640px; font-size: 41px; line-height: 1.1; letter-spacing: -.015em; text-wrap: balance; }
   .hero p { margin: 8px 0 0; max-width: 60ch; font-size: 17px; color: var(--muted); }
+  /* Once a reader has answered the door, the headline has been read. It docks:
+     one line at a quarter of the height, the subtitle gone, and the work of the
+     page starts where the second paragraph used to. The front door itself is
+     untouched — this happens on the first press, never on arrival.
+     Instantly, and deliberately not eased: the press that docks the headline is
+     the same press that brings up the shelf, and animating the header means
+     three rows of cards sliding for a fifth of a second under a hand already
+     reaching for one of them. Two tests caught it doing exactly that. */
+  .settled .hero { margin-top: 12px; }
+  .settled .hero h1 { max-width: none; font-size: 25px; }
+  .settled .hero p { display: none; }
+  .settled .hero + .step { margin-top: 22px; }
   .row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
   .tag { flex: none; font: 500 10.5px/1 system-ui, sans-serif; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--rule-2); border-radius: 999px; padding: 5px 9px; white-space: nowrap; }
-  .assure { display: flex; justify-content: center; align-items: center; gap: 11px; margin-top: 24px; font-size: 14px; color: var(--muted); flex-wrap: wrap; }
+  .assure { display: flex; align-items: center; gap: 11px; margin-top: 24px; font-size: 14px; color: var(--muted); flex-wrap: wrap; }
   .assure span.sep { color: var(--rule-2); }
 
   /* --- the books this browser built ---
@@ -103,7 +115,7 @@
      says it once in its own words, each card is marked, and the two are set apart
      rather than sorted together. Dashed and tinted, which is already this page's
      mark for a book nobody has been through. */
-  .mine { max-width: 640px; margin: 34px auto 0; display: flex; flex-direction: column; gap: 13px; }
+  .mine { max-width: 640px; margin: 34px 0 0; display: flex; flex-direction: column; gap: 13px; }
   .mine .head { display: flex; flex-direction: column; gap: 5px; }
   .mine h2 { font-size: 21px; line-height: 1.25; }
   .mine .head p { margin: 0; max-width: 60ch; font-size: 14px; line-height: 1.55; color: var(--muted); }
@@ -114,8 +126,23 @@
   .mine .card .act { padding-top: 11px; font-size: 14.5px; }
   .mine .card .say { font-size: 13px; }
 
-  /* --- step one: route and files --- */
-  .step { max-width: 640px; margin: 26px auto 0; display: flex; flex-direction: column; gap: 22px; }
+  /* --- step one: route and files ---
+     One left edge for the whole screen. The hero and the controls sat in a 640
+     column centred on the page and the shelf broke out to 1180 beneath them, so
+     the content started 270px further left the moment a reader pressed "Pick
+     from the shelf" — two measures on one screen, and the eye has to find the
+     margin again. Centring a narrow thing above a wide one always does that, so
+     the column is left-aligned in the shelf's own width instead: the shelf fills
+     it, everything else keeps a reading measure inside it, and every block on
+     the screen starts at the same place. */
+  #s-books { --wide: min(1180px, calc(100vw - 76px));
+             width: var(--wide); margin-inline: calc((100% - var(--wide)) / 2); }
+  .step { margin: 26px 0 0; display: flex; flex-direction: column; gap: 22px; }
+  /* Type keeps a reading measure; what a reader aims at does not. The panels
+     span the column, so a screen with no shelf on it still has an edge on the
+     right and does not read as a page pushed into its own left half. */
+  .step > .caps, .step > h2, .step > .seg, .step > .seg-note,
+  .step > div:has(> h2), .step > .alert { max-width: 640px; }
   .hero + .step { margin-top: 36px; }
   /* The question above the tabs is a prompt, not a second headline: at the
      hero's weight it read as a rival title and broke over two lines. Sized to
@@ -170,9 +197,7 @@
   /* --- the shelf --- */
   /* The cards want more than the reading measure the rest of the screen wants,
      so the shelf breaks out of it — as far as the page allows, and no further. */
-  .shelf { --shelf: min(1180px, calc(100vw - 76px));
-           display: flex; flex-direction: column; gap: 22px;
-           width: var(--shelf); margin-inline: calc((100% - var(--shelf)) / 2); }
+  .shelf { display: flex; flex-direction: column; gap: 22px; }
   .find { display: flex; align-items: center; gap: 9px; padding: 9px 16px; border: 1px solid var(--rule); border-radius: 999px; background: var(--surface-3); }
   .find span { font-size: 14px; color: var(--muted); }
   .find input { flex: 1; min-width: 0; padding: 0; border: 0; background: none; font: 15px/1.3 'Charis SIL', Charter, Georgia, serif; color: var(--ink); }
@@ -1003,6 +1028,7 @@ function setRoute(route, keepHash) {
   for (const b of $("route").children) b.setAttribute("aria-pressed", String(b.dataset.route === route));
   $("route-note").textContent = ROUTE_NOTE[route];
   $("shelf").hidden = route !== "shelf";
+  $("s-books").classList.toggle("wide", route === "shelf");
   $("files").hidden = route === "shelf";
   $("pick-pub").hidden = route !== "align";
   $("files").classList.toggle("one", route !== "align");
@@ -1010,7 +1036,14 @@ function setRoute(route, keepHash) {
   if (!keepHash && hashRoute() !== route) history.replaceState(null, "", "#" + route);
   refreshNext();
 }
-for (const b of $("route").children) b.addEventListener("click", () => setRoute(b.dataset.route));
+// The headline is read once. A press of any kind is a reader who has read it and
+// is now doing something, so it docks and the work comes up the page. Hung on
+// the press rather than on the route, which is also set on arrival and by a
+// link — landing on the front door must still be landing on the front door.
+function settle() { $("s-books").classList.add("settled"); }
+for (const b of $("route").children) {
+  b.addEventListener("click", () => { settle(); setRoute(b.dataset.route); });
+}
 
 // Only while step one is up: a hash arriving later must not yank a reader out of
 // the screen they are working in.
@@ -1479,6 +1512,7 @@ function measurePick() {
 function pickBook(slug, index) {
   const book = S.shelf.books.find((b) => b.slug === slug);
   if (!book || S.busy) return;
+  settle();
   const key = slug + "#" + index;
   const already = S.pick && S.pick.key === key;
   S.pick = { slug, index, key, title: book.title, book, loaded: already && S.pick.loaded };
@@ -1779,6 +1813,11 @@ function paintFiles() {
 function refreshNext() {
   const enough = S.route === "shelf" ? haveBook() : S.orig && (S.route !== "align" || S.pub);
   $("to-settings").disabled = !(enough && S.ready && !S.busy);
+  // On the shelf a card is the thing you press, and a dead "Next" under it was a
+  // third arrow competing with the card and the line inside it. It arrives once
+  // a book is chosen and there is somewhere for it to go; the line beside it
+  // still says nothing is fetched until then, so the reassurance is not lost.
+  $("to-settings").hidden = S.route === "shelf" && !haveBook();
   $("fetching").hidden = !(S.busy === "shelf" && S.route === "shelf");
   if (S.busy === "shelf") return;
   // The engine is a ten-megabyte download on a first visit, and every button on
@@ -1802,6 +1841,7 @@ function wireFile(which) {
   input.addEventListener("change", () => took(which));
 }
 function took(which) {
+  settle();
   S[which] = $("f-" + which).files[0] || null;
   S.info[which] = null;
   S.sample = null; S.estimate = null;
