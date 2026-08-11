@@ -105,7 +105,7 @@
   .settled .hero { margin-top: 12px; }
   .settled .hero h1 { max-width: none; font-size: 25px; }
   .settled .hero p { display: none; }
-  .settled .hero + .step { margin-top: 22px; }
+  .settled .hero + .beside { margin-top: 22px; }
   .row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
   .tag { flex: none; font: 500 10.5px/1 system-ui, sans-serif; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--rule-2); border-radius: 999px; padding: 5px 9px; white-space: nowrap; }
   .assure { display: flex; align-items: center; gap: 11px; margin-top: 24px; font-size: 14px; color: var(--muted); flex-wrap: wrap; }
@@ -140,7 +140,9 @@
      the screen starts at the same place. */
   #s-books { --wide: min(1180px, calc(100vw - 76px));
              width: var(--wide); margin-inline: calc((100% - var(--wide)) / 2); }
-  .step { margin: 26px 0 0; display: flex; flex-direction: column; gap: 22px; }
+  .beside { margin: 26px 0 0; display: flex; align-items: flex-start; gap: 46px; }
+  .beside > .step { flex: 1; min-width: 0; }
+  .step { display: flex; flex-direction: column; gap: 22px; }
   /* Type keeps a reading measure; what a reader aims at does not. The panels
      span the column, so a screen with no shelf on it still has an edge on the
      right and does not read as a page pushed into its own left half. */
@@ -154,7 +156,27 @@
      that must not move; only the right edge differs by route, and an edge that
      is ragged anyway is not an edge the eye is keeping. */
   #s-books:not(.wide) .files, #s-books:not(.wide) .step > .row.foot { max-width: 860px; }
-  .hero + .step { margin-top: 36px; }
+  /* A page of the finished book, standing where the screen was empty. Sized at
+     the book's own 7:5 and set in the reader's own face at a quarter of its
+     size, so it reads as a page rather than as an illustration of one — and it
+     carries a page's worth of type, running past the foot where a real page
+     does. The shelf wants the whole column for its cards, so it stands down
+     there; and it stands down below the width at which the column beside it
+     stops being a full measure, which is where the container reaches its own cap
+     and not a pixel sooner: any narrower and the tab strip would shrink on the
+     routes that carry the page and not on the one that does not. */
+  .taste { display: none; flex: none; width: 452px; flex-direction: column; gap: 11px; }
+  @media (min-width: 1260px) { #s-books:not(.wide) .taste { display: flex; } }
+  .taste .spread { aspect-ratio: 7 / 5; }
+  .taste .leaf { min-height: 0; overflow: hidden; padding: 17px 17px 9px; gap: 7px; }
+  .taste .leaf .head i { font-size: 8.5px; }
+  .taste .leaf .body { flex: 1; min-height: 0; overflow: hidden;
+    -webkit-mask-image: linear-gradient(#000 calc(100% - 22px), transparent);
+    mask-image: linear-gradient(#000 calc(100% - 22px), transparent); }
+  .taste .leaf p { font-size: 8.6px; line-height: 1.62; margin-bottom: .45em; }
+  .taste .leaf .folio { margin-top: 0; padding-top: 8px; font-size: 8px; }
+  .taste .note { font-size: 13px; }
+  .hero + .beside { margin-top: 36px; }
   /* The question above the tabs is a prompt, not a second headline: at the
      hero's weight it read as a rival title and broke over two lines. Sized to
      sit on one, under the masthead rather than against it. */
@@ -561,6 +583,7 @@
     <div class="cards" id="mine-cards"></div>
   </div>
 
+  <div class="beside">
   <div class="step">
     <div style="display:flex;flex-direction:column;gap:6px">
       <div class="caps">Step one of two</div>
@@ -620,6 +643,76 @@
     </div>
     <div class="alert" id="books-alert" hidden></div>
   </div>
+
+  <!-- The right of step one was empty, and the empty half is why the screen read
+       as pushed to the left: step two has the sample spread there, step one had
+       nothing. What belongs there is the answer to the question a reader is
+       actually asking at the door — what do I end up with — so it is a page of a
+       finished book, at the book's own 7:5, set in the reader's own type and
+       overrunning at the foot the way a page does. Real text, from the Candide on
+       the shelf: the two columns correspond because they were aligned, not
+       because they were written to fit. It stands down on the shelf route, which
+       needs the width for its cards, and on any window too narrow to hold both. -->
+  <aside class="taste" id="taste">
+    <div class="caps">What you end up with</div>
+    <div class="spread">
+      <div class="leaf l">
+        <div class="head"><i>Candide, ou l’Optimisme</i><div class="rule"></div></div>
+        <div class="body">
+          <p>Monsieur le baron était un des plus puissants seigneurs de la
+          Vestphalie, car son château avait une porte et des fenêtres. Sa grande
+          salle même était ornée d’une tapisserie. Tous les chiens de ses
+          basses-cours composaient une meute dans le besoin ; ses palefreniers
+          étaient ses piqueurs ; le vicaire du village était son grand aumônier.
+          Ils l’appelaient tous Monseigneur, et ils riaient quand il faisait des
+          contes.</p>
+          <p>Madame la baronne, qui pesait environ trois cent cinquante livres,
+          s’attirait par là une très-grande considération, et faisait les honneurs
+          de la maison avec une dignité qui la rendait encore plus respectable. Sa
+          fille Cunégonde, âgée de dix-sept ans, était haute en couleur, fraîche,
+          grasse, appétissante. Le fils du baron paraissait en tout digne de son
+          père. Le précepteur Pangloss était l’oracle de la maison, et le petit
+          Candide écoutait ses leçons avec toute la bonne foi de son âge et de son
+          caractère.</p>
+          <p>Pangloss enseignait la métaphysico-théologo-cosmolo-nigologie. Il
+          prouvait admirablement qu’il n’y a point d’effet sans cause, et que,
+          dans ce meilleur des mondes possibles, le château de monseigneur le
+          baron était le plus beau des châteaux, et madame la meilleure des
+          baronnes possibles.</p>
+        </div>
+        <div class="folio">7</div>
+      </div>
+      <div class="leaf r">
+        <div class="head"><i>English</i><div class="rule"></div></div>
+        <div class="body">
+          <p>The Baron was one of the most powerful lords in Westphalia; for his
+          castle had not only a gate, but even windows; and his great hall was
+          hung with tapestry. He used to hunt with his mastiffs and spaniels
+          instead of greyhounds; his groom served him for huntsman; and the parson
+          of the parish officiated as grand almoner. He was called “My Lord” by
+          all his people, and he never told a story but every one laughed at it.</p>
+          <p>My lady Baroness weighed three hundred and fifty pounds, consequently
+          was a person of no small consideration; and then she did the honours of
+          the house with a dignity that commanded universal respect. Her daughter
+          Cunegund was about seventeen years of age, fresh coloured, comely,
+          plump, and desirable. The Baron’s son seemed to be a youth in every
+          respect worthy of his father. Pangloss the preceptor was the oracle of
+          the family, and little Candide listened to his instructions with all the
+          simplicity natural to his age and disposition.</p>
+          <p>Master Pangloss taught the metaphysico-theologo-cosmolo-nigology. He
+          could prove to admiration that there is no effect without a cause; and
+          that, in this best of all possible worlds, the Baron’s castle was the
+          most magnificent of all castles, and my lady the best of all possible
+          baronesses.</p>
+        </div>
+        <div class="folio">8</div>
+      </div>
+    </div>
+    <div class="note">One file, both pages, and the French hoverable phrase by
+      phrase. It opens in any browser, with no connection and no account.</div>
+  </aside>
+  </div>
+
   <div class="assure">
     <span>No account, and nothing to sign.</span><span class="sep">·</span><span>We keep no copy of the book you build.</span>
   </div>

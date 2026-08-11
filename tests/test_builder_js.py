@@ -148,6 +148,32 @@ def test_the_panels_stop_short_where_there_is_no_shelf_to_fill(page):
     assert right("#shelf-cards") > files[1], "the shelf gave up the width it needs"
 
 
+def test_the_door_shows_a_page_of_the_book_it_is_offering(page):
+    """The right of step one was empty, which is what made the screen read as
+    pushed left: step two has its sample spread there and step one had nothing.
+    It carries a page of a finished book, at the book's own proportions and with
+    a page's worth of type, running past the foot the way a page does."""
+    page.set_viewport_size({"width": 1440, "height": 900})
+    page.click("[data-route=align]")
+    assert page.eval_on_selector(".taste", "e => getComputedStyle(e).display") == "flex"
+    # A page, not an illustration of one: more type than the leaf can hold, and
+    # the two columns say the same thing because they were aligned.
+    over = page.eval_on_selector(".taste .leaf.l .body",
+                                 "e => e.scrollHeight - e.getBoundingClientRect().height")
+    assert over > 40, f"the page holds all its text with room to spare ({over})"
+    assert "Vestphalie" in text(page, ".taste .leaf.l")
+    assert "Westphalia" in text(page, ".taste .leaf.r")
+    # It fills the width the screen was leaving empty.
+    right = lambda s: page.eval_on_selector(s, "e => e.getBoundingClientRect().right")
+    assert right(".taste") - right("#s-books") == 0
+    # And it stands down where the shelf wants the room, and on a narrow window.
+    page.click("[data-route=shelf]")
+    assert page.eval_on_selector(".taste", "e => getComputedStyle(e).display") == "none"
+    page.click("[data-route=align]")
+    page.set_viewport_size({"width": 1100, "height": 900})
+    assert page.eval_on_selector(".taste", "e => getComputedStyle(e).display") == "none"
+
+
 def test_the_headline_docks_once_it_has_been_answered(page):
     """It is read once. A press is a reader who has read it and is now doing
     something, so it goes to one line and the work comes up the page — never on
