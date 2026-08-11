@@ -146,6 +146,14 @@
      right and does not read as a page pushed into its own left half. */
   .step > .caps, .step > h2, .step > .seg, .step > .seg-note,
   .step > div:has(> h2), .step > .alert { max-width: 640px; }
+  /* Where there is no shelf, the panels stop short of the shelf's own width.
+     Spanning the whole of it left 540px of nothing between the end of the type
+     and the end of the dropzone, which reads as a page holding its content in
+     its left half — the fault the one edge above was meant to cure, come back
+     as a gap on the other side. The left edge is untouched, which is the part
+     that must not move; only the right edge differs by route, and an edge that
+     is ragged anyway is not an edge the eye is keeping. */
+  #s-books:not(.wide) .files, #s-books:not(.wide) .step > .row.foot { max-width: 860px; }
   .hero + .step { margin-top: 36px; }
   /* The question above the tabs is a prompt, not a second headline: at the
      hero's weight it read as a rival title and broke over two lines. Sized to

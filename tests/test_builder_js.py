@@ -132,6 +132,22 @@ def test_every_block_on_the_door_starts_at_the_same_left_edge(page):
     assert len(set(files + shelf)) == 1, (files, shelf)
 
 
+def test_the_panels_stop_short_where_there_is_no_shelf_to_fill(page):
+    """One left edge cost a gap on the other side: spanning the shelf's width on
+    a route with no shelf on it left 540px of nothing between the end of the
+    type and the end of the dropzone, which reads as a page holding its content
+    in its left half. The left edge, which is the one that must not move, is
+    untouched; only the ragged right differs by route."""
+    right = lambda s: page.eval_on_selector(s, "e => e.getBoundingClientRect().right")
+    left = lambda s: page.eval_on_selector(s, "e => e.getBoundingClientRect().left")
+    page.click("[data-route=align]")
+    assert right("#files") - right(".seg-note") < 300
+    files = (left("#files"), right("#files"))
+    page.click("[data-route=shelf]")
+    assert left("#shelf-cards") == files[0], "the left edge moved between routes"
+    assert right("#shelf-cards") > files[1], "the shelf gave up the width it needs"
+
+
 def test_the_headline_docks_once_it_has_been_answered(page):
     """It is read once. A press is a reader who has read it and is now doing
     something, so it goes to one line and the work comes up the page — never on
