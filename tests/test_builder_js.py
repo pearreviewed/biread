@@ -758,13 +758,17 @@ def test_a_card_shows_the_translator_the_wiki_names_and_nothing_more(page):
     page.click("[data-route=shelf]")
     card = ".card[data-slug=candide]"
     assert "Voltaire" in text(page, card)
-    assert "Smollett · 1920" in text(page, card)
-    assert "30" in text(page, f"{card} .facts")
+    # Which English and how the book divides, on one line where a two-column
+    # table used to stand under a rule of its own. The colon does what the
+    # "English" label did, and both facts stay on the face: the drawer they
+    # would otherwise go into is a thing only a pointer can open.
+    assert text(page, f"{card} .credit") == "English: Smollett · 1920 · 30 chapters"
+    assert page.locator(f"{card} .facts").count() == 0
     # How long a build takes is said wherever building is what is offered: on
     # the card's own action where no finished file exists, on the line under one
     # where it does — never beside the weight, which it would be mistaken for.
     # It is the figure the "under ten minutes" shelf is counting.
-    assert "about 3 min" not in text(page, f"{card} .facts")
+    assert "about 3 min" not in text(page, f"{card} .credit")
     assert "about 3 min" in text(page, f"{card} .own")
     assert "about 9 min" in text(page, ".card[data-slug='80days'] .act")
 
@@ -811,7 +815,7 @@ def test_a_book_with_two_translations_lets_the_reader_choose(page):
     assert labels == ["Phalen", "Fleming · 1906"]
     page.click(".versions .pills button:nth-child(2)")
     page.wait_for_function("!document.getElementById('to-settings').disabled")
-    assert "Fleming · 1906" in text(page, ".card[data-slug=micromegas] .facts")
+    assert "Fleming · 1906" in text(page, ".card[data-slug=micromegas] .credit")
 
 
 def test_the_shelf_reads_alphabetically_as_the_line_beneath_it_says(page):
@@ -837,7 +841,7 @@ def test_a_filter_narrows_the_shelf_and_lets_go(page):
     page.click("#shelf-filters button:nth-child(2)")
     assert page.eval_on_selector_all(".card", "n => n.length") == 1
     page.click("#shelf-filters button:nth-child(2)")
-    assert page.eval_on_selector_all(".card", "n => n.length") == 3
+    assert page.eval_on_selector_all(".card", "n => n.length") == 4
 
 
 def test_the_row_below_the_cards_keeps_its_place_across_categories(page):
@@ -846,7 +850,7 @@ def test_the_row_below_the_cards_keeps_its_place_across_categories(page):
     page.click("[data-route=shelf]")
     tall = page.eval_on_selector("#shelf-pager", "n => n.getBoundingClientRect().height")
     assert not hidden(page, "#shelf-pager")
-    assert "3 books" in text(page, "#shelf-count")
+    assert "4 books" in text(page, "#shelf-count")
     page.click("#shelf-filters button:nth-child(2)")
     assert page.eval_on_selector("#shelf-pager", "n => n.getBoundingClientRect().height") == tall
     assert "1 book" in text(page, "#shelf-count")
@@ -915,9 +919,12 @@ def test_only_an_approved_book_is_offered_ready_to_read(page):
     page.click("[data-route=shelf]")
     offered = page.eval_on_selector_all(
         ".card .act.ready", "n => n.map(b => b.closest('.card').dataset.slug)")
-    assert offered == ["candide", "micromegas"], (
+    assert offered == ["candide", "lesmis", "micromegas"], (
         "a card may hand over a book only where one was approved")
-    assert "1.1 MB" in text(page, ".card[data-slug=micromegas] .act")
+    # The weight is in the drawer, not on the action: a figure nobody weighs a
+    # novel by was taking a line on every card that had a file behind it.
+    assert "1.1 MB" not in text(page, ".card[data-slug=micromegas] .act")
+    assert "1.1 MB" in text(page, ".card[data-slug=micromegas] .brief")
     # Every other card still says what it does, so no card is a dead panel.
     assert "Build it yourself" in text(page, ".card[data-slug='80days'] .act")
 
@@ -1209,7 +1216,7 @@ def test_a_kept_book_is_on_the_shelf_next_time_and_can_be_taken_off(page):
     assert "about" in text(page, card) and "min" in text(page, card)
     # The shelf's own lede still counts only the books somebody has read.
     page.click("[data-goto=lookup]")
-    assert "shelf is 3 books" in text(page, "#look-lede")
+    assert "shelf is 4 books" in text(page, "#look-lede")
     page.click("[data-goto=books]")
     page.click(card + " .forget")
     assert page.locator(card).count() == 0
@@ -1228,12 +1235,49 @@ def test_a_book_divided_differently_says_so_rather_than_shrugging(page):
 
 def test_a_book_without_hover_translations_says_so_in_a_phrase(page):
     """The offer used to be made here, in a sentence with a price in it, and it
-    ran to two lines on seven cards of eight. A card states the fact; the offer
-    is met in the reader, whose header carries it."""
+    ran to two lines on seven cards of eight. The fact is stated; the offer is
+    met in the reader, whose header carries it."""
     page.click("[data-route=shelf]")
-    assert text(page, ".card[data-slug=candide] .say") == \
-        "French + published translation · no hover translations"
+    assert "no hover translations" in text(page, "#shelf-norm")
     assert "penny" not in text(page, ".card[data-slug=candide]")
+
+
+def test_what_the_finished_books_agree_on_is_said_once_above_them(page):
+    """Six cards of seven carried the same line in the same words: the longest
+    and greyest on the card, and identical to the one on either side of it. It
+    is furniture, so it stands above the shelf and the cards go without."""
+    page.click("[data-route=shelf]")
+    assert text(page, "#shelf-norm") == ("Unless a card says otherwise: "
+        "French + published translation · no hover translations · EPUB")
+    for slug in ("candide", "lesmis"):
+        assert page.locator(f".card[data-slug={slug}] .say").count() == 0, slug
+    # And the one book that is not made that way says so itself, in full, which
+    # is what "unless a card says otherwise" is there to allow for.
+    assert text(page, ".card[data-slug=micromegas] .say") == \
+        "French + Phalen · hover translations · EPUB + PDF"
+
+
+def test_a_shelf_whose_books_do_not_agree_claims_nothing_for_them(page):
+    """The line is read off the cards on show rather than declared, so narrowing
+    the shelf to one book takes it away rather than leaving it to speak for a
+    card it was never counted from."""
+    page.click("[data-route=shelf]")
+    page.fill("#shelf-find", "micromégas")
+    assert page.eval_on_selector_all(".card", "n => n.length") == 1
+    assert hidden(page, "#shelf-norm")
+    assert text(page, ".card[data-slug=micromegas] .say") == \
+        "French + Phalen · hover translations · EPUB + PDF"
+
+
+def test_the_weight_of_a_file_is_said_only_where_it_is_worth_saying(page):
+    """A figure nobody weighs a novel by was spending a line on every card that
+    had a file behind it. It waits in the drawer, except where the download is
+    big enough to be felt before it starts."""
+    page.click("[data-route=shelf]")
+    assert text(page, ".card[data-slug=candide] .act").startswith("Ready to read")
+    assert "MB" not in text(page, ".card[data-slug=candide] .act")
+    assert "615 KB" in text(page, ".card[data-slug=candide] .brief")
+    assert "15.9 MB" in text(page, ".card[data-slug=lesmis] .act")
 
 
 def test_a_book_that_has_them_is_not_said_to_be_missing_them(page):
@@ -1255,7 +1299,7 @@ def test_a_card_says_on_its_face_what_the_book_is(page):
     # The pills are gone, and with them the shout: a book that is abridged says
     # so on the line naming the edition, in the card's own voice.
     assert page.locator(".card .mark").count() == 0
-    assert "Towle · 1873 · abridged" in text(page, ".card[data-slug='80days'] .facts")
+    assert "Towle · 1873 · abridged" in text(page, ".card[data-slug='80days'] .credit")
     # A book somebody looked up has no sentence written for it, and its card
     # invents none.
     assert page.locator(".card[data-slug='80days'] .lead").count() == 0

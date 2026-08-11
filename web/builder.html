@@ -179,6 +179,10 @@
   .find input::placeholder { color: var(--muted); }
   .shelf .row.top { align-items: center; gap: 20px; }
   .shelf .row.top .find { flex: none; width: 260px; }
+  /* What every finished book here is, where they agree — said once above them
+     rather than on each of six cards in the same words. It sits with the cards
+     it governs, close under the row that narrows them. */
+  .norm { margin-top: -8px; font-size: 13.5px; color: var(--muted); }
   .chips { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
   .chips button { padding: 7px 15px; border: 1px solid var(--rule); border-radius: 999px; background: none; font-size: 13.5px; color: var(--body); }
   .chips button:hover { border-color: var(--solid); }
@@ -206,9 +210,7 @@
   .card.unread { border-style: dashed; }
   .card .name { font-size: 19px; font-weight: 700; line-height: 1.2; color: var(--ink); }
   .card .who { font-size: 14px; color: var(--muted); }
-  .facts { display: flex; flex-direction: column; gap: 6px; padding-top: 11px; border-top: 1px solid var(--rule); }
-  .facts > div { display: flex; justify-content: space-between; gap: 14px; font-size: 14px; color: var(--body); }
-  .facts b { font-weight: 400; color: var(--muted); }
+  .card .credit { margin-top: 6px; font-size: 13.5px; line-height: 1.4; color: var(--body); }
   /* What the book is, on the face of the card. It stood where a row of uppercase
      pills stood — "ABRIDGED", "364 AGAINST 365 CHAPTERS" — which cost a line on
      three cards of seven, said nothing on the other four, and put a fact that is
@@ -245,6 +247,7 @@
     color: var(--body); text-wrap: pretty; text-align: left;
     opacity: 0; visibility: hidden; transition: opacity .16s ease; }
   .card.unread .brief { border-style: dashed; border-top: 0; }
+  .card .brief .figures { margin-bottom: 7px; font-size: 12.5px; color: var(--muted); }
   @media (hover: hover) {
     /* The card is opaque while it is open, or the card underneath reads through
        its own drawer. */
@@ -522,6 +525,7 @@
         <div class="chips" id="shelf-filters"></div>
         <label class="find"><span>⌕</span><input id="shelf-find" placeholder="Search the shelf" autocomplete="off" spellcheck="false"></label>
       </div>
+      <div class="norm" id="shelf-norm" hidden></div>
       <div class="cards" id="shelf-cards"></div>
       <div class="fetching" id="fetching" hidden>
         <div class="row"><span id="fetch-at"></span><span id="fetch-of"></span></div>
@@ -788,8 +792,9 @@ const S = {
   book: null, restored: null,
   // the books this browser has built, and whether the last one could be kept
   mine: [], kept: null,
-  // the shelf: a catalogue, whichever book is picked, and how it is narrowed
-  shelf: null, pick: null, filter: null, page: 0, query: "",
+  // the shelf: a catalogue, whichever book is picked, how it is narrowed, and
+  // what the cards on show have in common, which none of them then repeats
+  shelf: null, pick: null, filter: null, page: 0, query: "", norm: null,
   hits: null, looked: "", more: 0, lookOffset: 0,
 };
 
@@ -1101,12 +1106,6 @@ function agreement(a, b) {
   }
   return chapters(a) + " against " + b + ", which is two editions counting differently.";
 }
-function fact(label, value) {
-  const row = el("div");
-  row.appendChild(el("b", null, label));
-  row.appendChild(el("span", null, value));
-  return row;
-}
 // A book that was built, read and approved is already made, and the card hands
 // it over rather than asking for a key. Every figure here was measured off that
 // file when the builder was assembled, so the description cannot drift from the
@@ -1115,15 +1114,20 @@ function fact(label, value) {
 function weight(bytes) {
   return bytes >= 1e6 ? (bytes / 1e6).toFixed(1) + " MB" : Math.round(bytes / 1e3) + " KB";
 }
+// A weight is worth interrupting a card for only where the download is big
+// enough to be felt. On this shelf that is one book of seven, and the other six
+// were each spending a line on a figure nobody weighs a novel by; the rest carry
+// theirs in the drawer, beside what the book is about.
+const HEAVY = 10e6;
 // What is in the finished file, as a line to be scanned rather than a sentence
-// to be read. It sits directly under the card's own action, where it is the
-// answer to "what am I taking?" and nothing else.
-// One line, always: what is in the file, whether it is glossed, what else it
-// came out as. Glosses used to have a sentence of their own offering to sell
-// them, which ran to two lines on seven cards of eight and left the rule inside
-// each card at a different height from its neighbours'. A book without them
-// says so in two words; the offer itself is met in the reader, whose header
-// carries it, and where the reader is the one about to want it.
+// to be read: what is in it, whether it is glossed, what else it came out as.
+// Glosses used to have a sentence of their own offering to sell them, which ran
+// to two lines on seven cards of eight and left the rule inside each card at a
+// different height from its neighbours'. A book without them says so in two
+// words; the offer itself is met in the reader, whose header carries it, and
+// where the reader is the one about to want it.
+// It is said on the card only where the card differs from its neighbours: see
+// the line above the shelf.
 function madeOf(book) {
   const made = book.prebuilt;
   // Name the edition only where there is more than one to confuse it with.
@@ -1142,6 +1146,23 @@ function madeOf(book) {
       : "hover translations on " + made.glossed + " paragraphs");
   if (made.formats.length) parts.push(made.formats.map((f) => f.toUpperCase()).join(" + "));
   return parts.join(" · ");
+}
+// What the finished books on this page are, where they agree: said once above
+// them instead of on each card. Six of seven carried the same line, which is
+// furniture rather than information — the longest, greyest line on the card, and
+// identical to the one on either side of it. Read off the cards actually shown
+// rather than declared, so a shelf whose books stop agreeing stops claiming they
+// do, and taken from more than half of them rather than all: one book with
+// glosses must not put the line back on the other six. A card that differs says
+// its own line in full, which is what the wording above the shelf allows for.
+function commonMake(books) {
+  const lines = books.filter((b) => b.prebuilt).map(madeOf);
+  if (lines.length < 2) return null;
+  const seen = new Map();
+  for (const line of lines) seen.set(line, (seen.get(line) || 0) + 1);
+  let best = null;
+  for (const [line, n] of seen) if (!best || n > best.n) best = { line, n };
+  return best.n > lines.length / 2 ? best.line : null;
 }
 function unreadNote(book) {
   if (book.readThrough) return null;
@@ -1176,7 +1197,7 @@ function minutesOf(book) {
 function actionLine(book) {
   const row = el("div", book.prebuilt ? "act ready" : "act");
   row.appendChild(el("span", null, book.prebuilt
-    ? "Ready to read · " + weight(book.prebuilt.bytes)
+    ? "Ready to read" + (book.prebuilt.bytes >= HEAVY ? " · " + weight(book.prebuilt.bytes) : "")
     : "Build it yourself" + minutesOf(book)));
   row.appendChild(el("span", book.prebuilt ? "arrow" : "arrow go", book.prebuilt ? "↓" : "→"));
   return row;
@@ -1199,7 +1220,6 @@ function bookCard(book) {
   if (book.author) head.appendChild(el("div", "who", book.author));
   card.appendChild(head);
 
-  const facts = el("div", "facts");
   const index = picked ? S.pick.index : 0;
   const version = book.translations[index] || book.translations[0];
   // Abridgement and the library it came from are facts about *this* English, so
@@ -1210,16 +1230,24 @@ function bookCard(book) {
   const english = [version.label];
   if (version.abridged ?? book.abridged) english.push("abridged");
   if (book.library) english.push(book.library);
-  facts.appendChild(fact("English", english.join(" · ")));
-  facts.appendChild(fact("Chapters", String(book.chapters)));
-  card.appendChild(facts);
+  // One line of type where a two-column table stood, under a rule of its own:
+  // it set the chapter count in the same weight as the book's name and spent
+  // three rows and a rule on facts nobody chooses a novel by. The colon carries
+  // what the "English" label used to. Both stay on the face rather than going
+  // into the drawer, which a pointer opens and a touchscreen cannot, and which a
+  // book somebody looked up does not have at all.
+  const credit = [english.join(" · ")];
+  if (book.chapters) credit.push(book.chapters + (book.chapters === 1 ? " chapter" : " chapters"));
+  head.appendChild(el("div", "credit", "English: " + credit.join(" · ")));
 
   // The one thing a reader picks a book on. Only the curated shelf has it
   // written; a book looked up carries none and its card simply goes without.
   if (book.lead) card.appendChild(el("div", "lead", book.lead));
 
   card.appendChild(actionLine(book));
-  if (book.prebuilt) card.appendChild(el("div", "say", madeOf(book)));
+  // Only where this book is not what the line above the shelf already said.
+  const make = book.prebuilt ? madeOf(book) : null;
+  if (make && make !== S.norm) card.appendChild(el("div", "say", make));
   const said = caveat(book);
   if (said) card.appendChild(el("div", "say", said));
 
@@ -1250,8 +1278,15 @@ function bookCard(book) {
   }
   // The rest of it, opening under the pointer where the face's one sentence
   // left off. A book a reader looked up has neither, and its card stays shut
-  // rather than opening on an empty panel.
-  if (book.summary) card.appendChild(el("div", "brief", book.summary));
+  // rather than opening on an empty panel. The weight of the file comes here
+  // too, where it is beside what the book is rather than in front of it; every
+  // book with a file behind it is a curated one and has a drawer to keep it in.
+  if (book.summary) {
+    const brief = el("div", "brief");
+    if (book.prebuilt) brief.appendChild(el("div", "figures", weight(book.prebuilt.bytes)));
+    brief.appendChild(el("div", null, book.summary));
+    card.appendChild(brief);
+  }
   // A card that has a finished book behind it hands it over; a card that has
   // none builds one. Either way the whole card is the thing you press.
   card.addEventListener("click", () => (book.prebuilt
@@ -1299,6 +1334,10 @@ function paintShelf() {
   S.page = Math.min(S.page, pages - 1);
   const from = S.page * PER_PAGE;
   const shown = books.slice(from, from + PER_PAGE);
+
+  S.norm = commonMake(shown);
+  $("shelf-norm").hidden = !S.norm;
+  $("shelf-norm").textContent = S.norm ? "Unless a card says otherwise: " + S.norm : "";
 
   const cards = $("shelf-cards");
   cards.innerHTML = "";

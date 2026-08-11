@@ -25,8 +25,12 @@ const TARGET = [
   "After resting awhile, they ate two mountains for their breakfast.",
 ];
 
-// Three books, enough to exercise the shelf's own shapes: one read through, one
-// with two translations, one nobody has vouched for.
+// Four books, enough to exercise the shelf's own shapes: one read through, one
+// with two translations, one nobody has vouched for, and one that is made the
+// same way as the first. The last is there for the line above the shelf, which
+// says what the finished books have in common and needs a majority to have
+// something in common with — the real shelf carries six such cards of seven,
+// and a fixture where every book differs is the one shape that cannot show it.
 const SHELF = {
   measured: "2026-07-30",
   perMinute: 390,
@@ -50,7 +54,7 @@ const SHELF = {
         href: "books/candide.html", filename: "Candide - bilingual reader.html",
         english: "Smollett · 1920", approved: "2026-08-01", bytes: 614583,
         paragraphs: 469, translated: 464, glossed: 0,
-        published: false, solo: true, formats: [],
+        published: false, solo: true, formats: ["epub"],
       },
       readThrough: true, coverage: 0.989, added: false,
       english: "Smollett · 1920", abridged: false, chaptered: true, counts: [30, 30],
@@ -93,6 +97,31 @@ const SHELF = {
       english: "Towle · 1873", abridged: true, chaptered: true, counts: [37, 37],
       translations: [{ page: "Around the World in Eighty Days (Towle)",
                       label: "Towle · 1873", chapters: 37, abridged: true }],
+    },
+    {
+      slug: "lesmis", title: "Les Misérables", author: "Victor Hugo",
+      page: "Les Misérables", lang: "fr", other: "en",
+      chapters: 364, paragraphs: 12208, minutes: 63, tokens: 1539064,
+      note: "Three hundred and sixty-five chapters over five volumes, and the two "
+        + "editions agree on all but two of them.",
+      lead: "Five years for a stolen loaf, fourteen for trying to escape, and a "
+        + "life outrunning both.",
+      summary: "A convict on a yellow passport, a policeman who will not let it "
+        + "go, and a barricade in between.",
+      // Made exactly as Candide was, which is half the point of it: two cards
+      // that agree, so the line above the shelf has a majority to speak for.
+      // The other half is its weight — the one book here heavy enough to be
+      // worth saying so on the face.
+      prebuilt: {
+        href: "books/lesmis.html", filename: "Les Misérables - bilingual reader.html",
+        english: "Hapgood · 1887", approved: "2026-08-05", bytes: 15943686,
+        paragraphs: 12208, translated: 11230, glossed: 0,
+        published: false, solo: true, formats: ["epub"],
+      },
+      readThrough: true, coverage: 0.921, added: false,
+      english: "Hapgood · 1887", abridged: false, chaptered: true, counts: [364, 365],
+      translations: [{ page: "/ebooks/victor-hugo/les-miserables/isabel-f-hapgood",
+                      label: "Hapgood · 1887", chapters: 365 }],
     },
   ],
 };
