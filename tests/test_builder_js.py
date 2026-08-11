@@ -293,12 +293,106 @@ def test_a_dead_build_button_says_what_it_is_waiting_for(page):
     assert hidden(page, "#build-why")
 
 
+def test_a_second_visit_is_not_asked_to_settle_what_it_settled_before(page):
+    """The engine and the key are answered once and remembered, so on every
+    visit after the first they were two open panels asking a reader to confirm
+    what they had already said. Folded to the line that says what was settled,
+    with the way back beside it."""
+    page.evaluate("localStorage.setItem('or_key', 'sk-or-v1-remembered')")
+    page.reload()
+    page.wait_for_selector("[data-route=translate]")
+    to_settings(page, key=None)
+    assert not hidden(page, "#engine-said")
+    assert text(page, "#engine-said-line") == \
+        "Your own key · OpenRouter · remembered in this browser"
+    assert hidden(page, "#engine-block") and hidden(page, "#key-block")
+    # Folded is not forgotten: the key is in hand, so the build is live.
+    assert page.eval_on_selector("#key", "e => e.value") == "sk-or-v1-remembered"
+    # And it opens on request, staying open for the rest of the visit.
+    page.click("#engine-edit")
+    assert hidden(page, "#engine-said")
+    assert not hidden(page, "#engine-block") and not hidden(page, "#key-block")
+    page.click("[data-prov=openai]")
+    assert not hidden(page, "#key-block")
+
+
+def test_a_first_visit_is_asked_everything(page):
+    """Nothing to fold, and the panels are exactly what they always were."""
+    to_settings(page, key=None)
+    assert hidden(page, "#engine-said")
+    assert not hidden(page, "#engine-block") and not hidden(page, "#key-block")
+
+
+def test_the_machine_a_reader_chose_is_the_one_they_come_back_to(page):
+    """Which engine does the work is a preference and no secret, so it is kept
+    like the theme. A key is kept only where the reader asked for it to be."""
+    to_settings(page, key=None)
+    page.click("[data-engine=local]")
+    page.reload()
+    page.wait_for_selector("[data-route=translate]")
+    to_settings(page, key=None)
+    assert text(page, "#engine-said-line").startswith("Your own machine")
+    page.click("#engine-edit")
+    assert page.get_attribute("[data-engine=local]", "aria-pressed") == "true"
+    assert not hidden(page, "#local-block")
+
+
 def test_the_local_engine_is_never_asked_for_a_key_it_does_not_need(page):
     to_settings(page, key=None)
     page.click("[data-engine=local]")
     page.wait_for_timeout(150)
     assert not page.eval_on_selector("#build", "e => e.disabled")
     assert hidden(page, "#build-why")
+
+
+def test_a_rate_is_kept_for_the_tier_that_is_chosen(page):
+    """The rate is evidence; the answer is the price of this book, twice the
+    size and six inches to the right. It is on the tier that is pressed and on
+    whichever is under the pointer, and its space is held either way so the row
+    does not jump as a reader reads along it."""
+    to_settings(page)
+    seen = lambda t: page.eval_on_selector(
+        f"[data-tier={t}] .rate", "e => getComputedStyle(e).opacity")
+    tall = page.eval_on_selector("#tiers", "e => e.getBoundingClientRect().height")
+    assert seen("balanced") == "1"
+    assert seen("finest") == "0" and seen("thrifty") == "0"
+    page.hover("[data-tier=finest]")
+    page.wait_for_timeout(200)
+    assert seen("finest") == "1"
+    assert page.eval_on_selector("#tiers", "e => e.getBoundingClientRect().height") == tall
+    # The rate itself is unchanged where it is read.
+    page.click("[data-tier=finest]")
+    assert "$" in text(page, "[data-tier=finest] .rate")
+
+
+def test_a_model_id_is_pasted_by_whoever_already_knows_one(page):
+    """An escape hatch at the weight of a field: every reader met it, and it is
+    for the one who came with an id in hand."""
+    to_settings(page)
+    assert hidden(page, "#any-model")
+    page.click("#any-model-show")
+    assert not hidden(page, "#any-model") and hidden(page, "#any-model-show")
+    page.fill("#any-model", "some/other-model")
+    page.wait_for_timeout(150)
+    assert page.get_attribute("[data-tier=balanced]", "aria-pressed") == "false"
+
+
+def test_the_price_stays_in_view_while_the_column_beside_it_is_worked(page):
+    """The left column runs to nearly twice the height of the right, so the
+    figure a reader is changing sat halfway up an empty half-page and scrolled
+    off the moment they reached the hover."""
+    page.set_viewport_size({"width": 1280, "height": 520})
+    to_settings(page)
+    assert page.eval_on_selector(".proof", "e => getComputedStyle(e).position") == "sticky"
+    where = lambda: page.eval_on_selector("#build", "e => e.getBoundingClientRect().top")
+    before = where()
+    page.evaluate("window.scrollTo(0, document.documentElement.scrollHeight)")
+    page.wait_for_timeout(150)
+    scrolled = page.evaluate("window.scrollY")
+    assert scrolled > 200, f"the page hardly scrolled ({scrolled})"
+    # It gives up the distance to the top of the window and not a pixel more.
+    assert before - where() < scrolled / 2, "the button scrolled away with the column"
+    assert 0 < where() < 520, "the button left the window"
 
 
 # ---- the proof page ------------------------------------------------------

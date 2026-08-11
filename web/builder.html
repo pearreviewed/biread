@@ -63,6 +63,9 @@
   .quiet { padding: 6px 12px; font: 400 13.5px/1 'Charis SIL', Charter, Georgia, serif; background: none; border: 1px solid var(--rule); border-radius: 999px; color: var(--body); }
   .quiet:hover { background: var(--tint); }
   .link { background: none; border: 0; padding: 0; font: inherit; font-size: 13px; color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
+  /* A line of type in a column of panels: as wide as its own words, or it reads
+     as a button the width of the form with its label adrift in the middle. */
+  #any-model-show { align-self: flex-start; }
 
   input[type=password], input[type=text], select {
     width: 100%; padding: 11px 13px; font: 15px/1.2 ui-monospace, Menlo, monospace; color: var(--ink);
@@ -346,7 +349,14 @@
   .tier b { font-size: 14px; color: var(--body); }
   .tier[aria-pressed="true"] b { color: var(--ink); }
   .tier .of { font-size: 12px; color: var(--muted); }
-  .tier .rate { font: 12px/1.3 system-ui, sans-serif; color: var(--num); font-variant-numeric: tabular-nums; }
+  /* The rate is evidence, not the answer: the price of this book in this
+     reader's own money stands beside it in the gate, at twice the size. It is
+     kept for the tier that is chosen and for whichever one is under the pointer,
+     and its space is held either way so the row does not jump as a reader reads
+     along it. */
+  .tier .rate { font: 12px/1.3 system-ui, sans-serif; color: var(--num); font-variant-numeric: tabular-nums;
+    opacity: 0; transition: opacity .14s ease; }
+  .tier[aria-pressed="true"] .rate, .tier:hover .rate, .tier:focus-visible .rate { opacity: 1; }
   .tier .rec { font: 500 8.5px/1 system-ui, sans-serif; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
   .note { font-size: 12.5px; color: var(--muted); }
   .note.barred { padding: 9px 12px; border-left: 2px solid var(--rule-2); background: var(--surface); border-radius: 0 10px 10px 0; line-height: 1.5; }
@@ -358,7 +368,11 @@
   .lang select { width: auto; min-width: 150px; }
 
   /* --- the proof spread --- */
-  .proof { display: flex; flex-direction: column; gap: 14px; }
+  /* The price and the button stay in view while the column beside them is
+     worked. The left column runs to nearly twice the height of this one, so the
+     figure a reader is changing sat halfway up an empty half-page and scrolled
+     off the moment they reached the hover. */
+  .proof { display: flex; flex-direction: column; gap: 14px; position: sticky; top: 22px; }
   .spread { position: relative; display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--page-edge); border: 1px solid var(--page-edge); border-radius: 3px 13px 13px 3px; overflow: hidden; box-shadow: var(--shadow); }
   .leaf { padding: 26px 24px 15px; background: var(--page); display: flex; flex-direction: column; gap: 10px; min-height: 234px; }
   .leaf.l { box-shadow: inset -16px 0 26px -22px var(--page-edge); }
@@ -417,8 +431,12 @@
   .empty .ghost.busy:disabled { opacity: 1; cursor: progress; }
   .gate { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; margin-top: 8px; padding-top: 18px; border-top: 1px solid var(--rule); }
   .gate .fig { display: flex; align-items: baseline; gap: 9px; }
+  .gate > div:first-child { min-width: 0; }
   .gate .fig b { font-size: 26px; color: var(--ink); font-variant-numeric: tabular-nums; }
   .gate .fig span { font-size: 14px; color: var(--body); }
+  /* Broken as a block of its own rather than run out to the button's edge, where
+     its second line finished under the word "Build". */
+  #fig-detail { max-width: 42ch; }
   .gate .solid { padding: 13px 26px; font-size: 16px; flex: none; }
   .gate .ready { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 7px; }
   .gate .why { padding: 0; border: 0; background: none; text-align: right; font: 400 13px/1.3 'Charis SIL', Charter, Georgia, serif; color: var(--muted); }
@@ -485,6 +503,8 @@
     .shelf .row.top, .beyond { flex-direction: column; align-items: stretch; }
     .shelf .row.top .find { width: auto; }
     .two { gap: 30px; }
+    /* One column now, so there is nothing for it to stand beside. */
+    .proof { position: static; }
     .done { gap: 26px; }
     .centre .spread { width: 100%; }
   }
@@ -634,6 +654,16 @@
   </div>
   <div class="two">
     <div class="col">
+      <!-- Who does the work and which key are answered once and remembered, so
+           on every visit after the first they were two open panels asking a
+           reader to confirm what they had already said. Folded to the line that
+           says what was settled, with the way back beside it. A first visit has
+           nothing to fold and sees exactly what it always saw. -->
+      <div class="field" id="engine-said" hidden>
+        <div class="row"><h2>Who does the work</h2><button class="link" id="engine-edit">change</button></div>
+        <div class="note" id="engine-said-line"></div>
+      </div>
+
       <div class="field" id="engine-block">
         <div class="row"><h2>Who does the work</h2><div class="hint">either way, it's yours</div></div>
         <div class="who" id="engine">
@@ -679,7 +709,10 @@
         </div>
         <div class="note" id="model-why" hidden>Used for the hover translations only. The reading column stays your edition's, word for word.</div>
         <div class="note">Balanced is the recommendation: it reads within a hair of the finest at a fraction of the cost.</div>
-        <input class="inline" id="any-model" placeholder="or paste any model id" spellcheck="false" autocomplete="off">
+        <!-- An escape hatch at the weight of a field: everyone met it, and it is
+             for the reader who already knows the id they want. -->
+        <button class="link" id="any-model-show">or paste a model id</button>
+        <input class="inline" id="any-model" placeholder="deepseek/deepseek-chat" spellcheck="false" autocomplete="off" hidden>
       </div>
 
       <div class="field" id="embed-block" hidden>
@@ -801,8 +834,9 @@ const TIERS = {
 
 const S = {
   // `cloud` is the key-holding provider to come back to when the reader tries
-  // their own machine and thinks better of it.
-  route: "translate", provider: "openrouter", cloud: "openrouter", local: false,
+  // their own machine and thinks better of it; `folded` is whether the engine
+  // and the key were settled on an earlier visit and need only be confirmed.
+  route: "translate", provider: "openrouter", cloud: "openrouter", local: false, folded: false,
   // how much of the hover the build makes: the opening, or all of it
   glossScope: "opening",
   tier: "balanced", prices: {}, langs: null,
@@ -1924,6 +1958,11 @@ for (const b of $("tiers").children) {
   b.addEventListener("click", () => { S.tier = b.dataset.tier; $("any-model").value = ""; paintTiers(); priceIt(); });
 }
 $("any-model").addEventListener("input", () => { paintTiers(); priceIt(); });
+$("any-model-show").addEventListener("click", () => {
+  $("any-model-show").hidden = true;
+  $("any-model").hidden = false;
+  $("any-model").focus();
+});
 $("gloss").addEventListener("change", () => { setProvider(S.provider); priceIt(); });
 // How much of the hover the build itself makes. Glossing is four times the cost
 // of translating and runs after both pages are written, so on a long book it is
@@ -1958,6 +1997,7 @@ function openingOnly() {
 }
 
 /* --- step two ------------------------------------------------------------ */
+const PROV_NAME = { openrouter: "OpenRouter", anthropic: "Anthropic", openai: "OpenAI" };
 const PROV_NOTE = {
   openrouter: 'No key yet? Create one at <a href="https://openrouter.ai/keys" target="_blank" rel="noopener">openrouter.ai/keys</a>. It takes a minute, and one key reaches every model.',
   anthropic: "Your Anthropic key builds on Claude. Model ids look like <code>claude-sonnet-5</code>.",
@@ -1985,8 +2025,14 @@ function setProvider(prov) {
   $("barred-note").hidden = !barred;
   $("barred-note").textContent = BARRED_NOTE;
   $("prov-note").innerHTML = PROV_NOTE[prov] || "";
-  $("key-block").hidden = S.local;
-  $("local-block").hidden = !S.local;
+  // Folded, the two panels are one line saying what was settled last time.
+  $("engine-said").hidden = !S.folded;
+  $("engine-said-line").textContent = S.local
+    ? "Your own machine · Ollama, and nothing leaves it"
+    : "Your own key · " + PROV_NAME[prov] + " · remembered in this browser";
+  $("engine-block").hidden = S.folded;
+  $("key-block").hidden = S.local || S.folded;
+  $("local-block").hidden = !S.local || S.folded;
   // On the aligned route the chat model does nothing but the hover translations,
   // so it is asked for only once those are wanted.
   $("model-block").hidden = S.local || (aligning() && !$("gloss").checked);
@@ -2004,18 +2050,31 @@ for (const b of $("engine").children) {
     // Nothing carries across the switch: a sample drawn on one engine says
     // nothing about the other, and the price it was weighed from is void.
     S.sample = null; S.estimate = null;
-    setProvider(b.dataset.engine === "local" ? "local" : S.cloud);
+    const local = b.dataset.engine === "local";
+    try { localStorage.setItem("biread_engine", local ? "local" : "key"); } catch (e) {}
+    setProvider(local ? "local" : S.cloud);
     paintProof(); priceIt();
   });
 }
+// The way back out of the fold, and it stays out for the rest of the visit: a
+// reader who came to change their key is not shown the summary again the moment
+// they have changed it.
+$("engine-edit").addEventListener("click", () => { S.folded = false; setProvider(S.provider); });
 for (const b of $("providers").children) b.addEventListener("click", () => { if (!b.disabled) { setProvider(b.dataset.prov); priceIt(); } });
 $("key").addEventListener("input", refreshBuild);
 $("local-chat").addEventListener("input", () => setProvider(S.provider));
 $("or-embed").addEventListener("input", () => { S.sample = null; paintProof(); priceIt(); });
 
+// What a reader settled last time. The key is kept only where they asked for it
+// to be; which engine they use is a preference and no secret, kept like the
+// theme. Either one means step two has nothing to ask that has not been answered
+// already, so it opens folded.
 try {
   const k = localStorage.getItem("or_key");
   if (k) { $("key").value = k; $("remember").checked = true; }
+  const engine = localStorage.getItem("biread_engine");
+  if (engine === "local") { S.provider = "local"; S.local = true; }
+  S.folded = !!k || engine === "local";
 } catch (e) {}
 
 function hasKey() { return S.local || !!$("key").value.trim(); }
