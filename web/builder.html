@@ -954,7 +954,8 @@
     <div class="said">
       <h2>Your bilingual book is ready.</h2>
       <p>One file. No connection needed, no account, and nothing of it kept on our side. There are light and dark modes, whichever you prefer.</p>
-      <button class="solid" id="download">Download</button>
+      <button class="solid" id="read">Read it now</button>
+      <div class="after"><button class="link" id="download">Download</button></div>
       <div class="after" id="kept-line"></div>
       <div class="after"><span id="spent"></span> <button class="link" id="again">Build another</button></div>
     </div>
@@ -2808,6 +2809,15 @@ function paintKept() {
   });
   line.appendChild(off);
 }
+// The book is in hand, so the tab is opened inside the press with the book
+// already in it: nothing is awaited, which is what keeps a browser from taking
+// it for a popup. Where one is blocked anyway the book takes this tab, since it
+// is also on the reader's own row and this screen is reachable again from there.
+$("read").addEventListener("click", () => {
+  const url = URL.createObjectURL(new Blob([S.html], { type: "text/html;charset=utf-8" }));
+  if (!window.open(url, "_blank")) location.href = url;
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+});
 $("download").addEventListener("click", () => {
   const url = URL.createObjectURL(new Blob([S.html], { type: "text/html;charset=utf-8" }));
   const a = document.createElement("a");

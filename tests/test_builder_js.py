@@ -662,6 +662,19 @@ def test_the_finished_book_is_offered_with_its_cover_and_its_bill(page):
     assert "≈ $0.12 spent" in text(page, "#spent")
 
 
+def test_the_finished_book_opens_in_a_tab(page):
+    """The book is in hand at this point, so the tab carries it from the press
+    rather than being filled afterwards, which is what a browser blocks."""
+    to_settings(page)
+    page.click("#build")
+    page.wait_for_function("!document.getElementById('s-done').hidden", timeout=15000)
+    with page.expect_popup() as caught:
+        page.click("#read")
+    tab = caught.value
+    tab.wait_for_function("document.title.indexOf('Microm') !== -1", timeout=10000)
+    assert tab.url.startswith("blob:")
+
+
 def test_the_book_downloads_under_its_own_name(page):
     to_settings(page)
     page.click("#build")
