@@ -973,13 +973,32 @@ def to_shelf(page, slug="candide"):
     """Through the fork onto the shelf, with a book picked and fetched.
 
     A card with a finished book behind it hands that file over when pressed;
-    building the same book yourself is the small line under it.
+    building the same book yourself waits in the drawer under the pointer.
     """
     page.click("[data-route=shelf]")
     card = f".card[data-slug={slug!r}]"
-    own = page.locator(f"{card} .own")
-    page.click(f"{card} .own" if own.count() else card)
+    build_yourself(page, card) if page.locator(f"{card} .own").count() else page.click(card)
     page.wait_for_function("!document.getElementById('to-settings').disabled")
+
+
+def build_yourself(page, card):
+    """Press the line that builds a finished book again yourself.
+
+    It lives in the drawer, so it is reached the way a reader reaches it: the
+    pointer onto the card first, which is what opens the drawer at all — and
+    then straight down onto the line, without letting go. The card is scrolled
+    to the middle first and the press is made by coordinate, because Playwright's
+    own click scrolls to its target, and a scroll takes the card out from under a
+    pointer that stays where the window put it: the drawer shuts mid-gesture and
+    the line it was reaching for stops being there.
+    """
+    page.eval_on_selector(card, "c => c.scrollIntoView({block: 'center'})")
+    page.hover(card)
+    at = page.eval_on_selector(
+        f"{card} .own",
+        "e => { const r = e.getBoundingClientRect();"
+        "       return {x: r.x + r.width / 2, y: r.y + r.height / 2}; }")
+    page.mouse.click(at["x"], at["y"])
 
 
 def test_the_shelf_appears_only_once_the_engine_has_one(page):
@@ -1000,9 +1019,10 @@ def test_a_card_shows_the_translator_the_wiki_names_and_nothing_more(page):
     assert text(page, f"{card} .credit") == "English: Smollett · 1920"
     assert page.locator(f"{card} .facts").count() == 0
     # How long a build takes is said wherever building is what is offered: on
-    # the card's own action where no finished file exists, on the line under one
-    # where it does — never beside the weight, which it would be mistaken for.
-    # It is the figure the "under ten minutes" shelf is counting.
+    # the card's own action where no finished file exists, in the drawer beside
+    # the other quantities where one does — never beside the weight, which it
+    # would be mistaken for. It is the figure the "under ten minutes" shelf is
+    # counting.
     assert "about 3 min" not in text(page, f"{card} .credit")
     assert "about 3 min" in text(page, f"{card} .own")
     assert "about 9 min" in text(page, ".card[data-slug='80days'] .act")
@@ -1059,7 +1079,7 @@ def test_the_shelf_route_prices_the_reading_not_a_translation(page):
 def test_a_book_with_two_translations_lets_the_reader_choose(page):
     page.click("[data-route=shelf]")
     assert page.eval_on_selector_all(".versions", "n => n.length") == 0
-    page.click(".card[data-slug=micromegas] .own")
+    build_yourself(page, ".card[data-slug=micromegas]")
     page.wait_for_selector(".versions")
     labels = page.eval_on_selector_all(".versions .pills button", "n => n.map(b => b.textContent)")
     assert labels == ["Phalen", "Fleming · 1906"]
@@ -1201,7 +1221,7 @@ def test_the_finished_book_does_not_sit_under_a_note_denying_it(page):
     page.click("[data-route=shelf]")
     card = ".card[data-slug=micromegas]"
     assert "Nobody has read" not in text(page, card)
-    page.click(f"{card} .own")
+    build_yourself(page, card)
     page.wait_for_selector(f"{card} .more")
     assert "Nobody has read the edition you would build here" in text(page, f"{card} .more")
     assert "Nobody has read this one through" not in text(page, card)
@@ -1225,13 +1245,35 @@ def test_taking_the_finished_book_neither_builds_it_nor_costs_a_key(page):
     assert not hidden(page, "#s-books")
 
 
-def test_the_line_underneath_still_builds_the_book_yourself(page):
+def test_the_line_in_the_drawer_still_builds_the_book_yourself(page):
     page.click("[data-route=shelf]")
-    page.click(".card[data-slug=micromegas] .own")
+    build_yourself(page, ".card[data-slug=micromegas]")
     page.wait_for_selector(".card[data-slug=micromegas][aria-pressed=true]")
     assert not hidden(page, ".card[data-slug=micromegas] .act.ready"), (
         "a book already made must still be buildable — another English, another language"
     )
+
+
+def test_the_card_offers_the_finished_book_and_nothing_beside_it(page):
+    """The shelf is where a book is picked up finished. Building the same one
+    yourself sat directly under the action, underlined and arrowed, so the rare
+    path read as half the choice on a surface that is itself one button. It is
+    in the drawer now: one gesture for whoever wants it, invisible to everyone
+    else, and the face carries a single arrow going one way."""
+    page.click("[data-route=shelf]")
+    card = ".card[data-slug=candide]"
+    face = page.eval_on_selector(
+        card, "c => [...c.children].filter(n => !n.classList.contains('brief'))"
+              ".map(n => n.textContent).join(' ')")
+    assert "build it yourself" not in face.lower(), face
+    assert "↓" not in face and "→" in face
+    assert page.eval_on_selector(f"{card} .own", "e => e.closest('.brief') !== null")
+    assert page.eval_on_selector(
+        f"{card} .own", "e => getComputedStyle(e.closest('.brief')).visibility") == "hidden"
+    page.hover(card)
+    page.wait_for_timeout(250)
+    assert page.eval_on_selector(
+        f"{card} .own", "e => getComputedStyle(e.closest('.brief')).visibility") == "visible"
 
 
 def edge_contrast(page, box, side):
@@ -1529,7 +1571,7 @@ def test_the_weight_of_a_file_is_said_only_where_it_is_worth_saying(page):
     had a file behind it. It waits in the drawer, except where the download is
     big enough to be felt before it starts."""
     page.click("[data-route=shelf]")
-    assert text(page, ".card[data-slug=candide] .act").startswith("Ready to read")
+    assert text(page, ".card[data-slug=candide] .act").startswith("Read it now")
     assert "MB" not in text(page, ".card[data-slug=candide] .act")
     assert "615 KB" in text(page, ".card[data-slug=candide] .brief")
     assert "15.9 MB" in text(page, ".card[data-slug=lesmis] .act")
