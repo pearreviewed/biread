@@ -156,11 +156,23 @@ def test_the_door_shows_a_page_of_the_book_it_is_offering(page):
     page.set_viewport_size({"width": 1440, "height": 900})
     page.click("[data-route=align]")
     assert page.eval_on_selector(".taste", "e => getComputedStyle(e).display") == "flex"
-    # A page, not an illustration of one: more type than the leaf can hold, and
-    # the two columns say the same thing because they were aligned.
-    over = page.eval_on_selector(".taste .leaf.l .body",
-                                 "e => e.scrollHeight - e.getBoundingClientRect().height")
-    assert over > 40, f"the page holds all its text with room to spare ({over})"
+    # A page, not an illustration of one, and cut the way this reader cuts one:
+    # a page holds whole lines to its foot and breaks the paragraph it cannot
+    # finish, both columns breaking at the same fraction through it. So the type
+    # fills the leaf and none of it is hidden — the page used to be overfilled
+    # and faded out at the foot, which no page of a biread book does.
+    for side in ("l", "r"):
+        fit = page.eval_on_selector(
+            f".taste .leaf.{side} .body",
+            "e => [e.scrollHeight, Math.round(e.getBoundingClientRect().height),"
+            "      getComputedStyle(e).webkitMaskImage || getComputedStyle(e).maskImage]")
+        held, box, mask = fit
+        assert held <= box, f"{side}: the page overruns its own foot ({held} in {box})"
+        assert box - held < 18, f"{side}: the page is short of its foot by {box - held}px"
+        assert mask in (None, "none"), f"{side}: the foot of the page is faded out"
+    # The break lands mid-sentence on both pages, because the paragraph carries on.
+    assert not text(page, ".taste .leaf.l .body p:last-child").endswith("."), \
+        "the French page ends on a full stop, so it was not broken as the reader breaks one"
     assert "Vestphalie" in text(page, ".taste .leaf.l")
     assert "Westphalia" in text(page, ".taste .leaf.r")
     # Headed the way the reader heads its own pages: a language tag in the outer

@@ -212,9 +212,15 @@
   .taste .corner { top: 12px; }
   .taste .leaf.l .corner, .taste .leaf.l .folio { left: 20px; }
   .taste .leaf.r .corner, .taste .leaf.r .folio { right: 20px; }
-  .taste .leaf .body { flex: 1; min-height: 0; overflow: hidden;
-    -webkit-mask-image: linear-gradient(#000 calc(100% - 22px), transparent);
-    mask-image: linear-gradient(#000 calc(100% - 22px), transparent); }
+  /* No fade at the foot, because no page of a biread book has one. A page that
+     cannot hold the rest of its paragraph breaks it, and both columns break at
+     the same fraction through it so they meet again where it ends: the text
+     here is cut at 0.567 of the paragraph it is in the middle of, which is the
+     furthest cut that leaves both pages whole. What a reader sees is what the
+     reader gives them — a full page whose last line is a whole line, and a
+     sentence that carries on overleaf. `overflow` stays as a guard for a
+     browser that lays the type out differently. */
+  .taste .leaf .body { flex: 1; min-height: 0; overflow: hidden; }
   .taste .leaf p { font-size: 8.4px; line-height: 1.85; margin-bottom: .95em; text-indent: 1.9em; }
   .taste .leaf .folio { bottom: 9px; margin-top: 0; padding-top: 0; }
   .taste .note { font-size: 13px; }
@@ -718,16 +724,7 @@
           <p>Madame la baronne, qui pesait environ trois cent cinquante livres,
           s’attirait par là une très-grande considération, et faisait les honneurs
           de la maison avec une dignité qui la rendait encore plus respectable. Sa
-          fille Cunégonde, âgée de dix-sept ans, était haute en couleur, fraîche,
-          grasse, appétissante. Le fils du baron paraissait en tout digne de son
-          père. Le précepteur Pangloss était l’oracle de la maison, et le petit
-          Candide écoutait ses leçons avec toute la bonne foi de son âge et de son
-          caractère.</p>
-          <p>Pangloss enseignait la métaphysico-théologo-cosmolo-nigologie. Il
-          prouvait admirablement qu’il n’y a point d’effet sans cause, et que,
-          dans ce meilleur des mondes possibles, le château de monseigneur le
-          baron était le plus beau des châteaux, et madame la meilleure des
-          baronnes possibles.</p>
+          fille Cunégonde, âgée de dix-sept ans, était haute en couleur, fraîche,</p>
         </div>
         <div class="folio">7</div>
       </div>
@@ -744,15 +741,7 @@
           was a person of no small consideration; and then she did the honours of
           the house with a dignity that commanded universal respect. Her daughter
           Cunegund was about seventeen years of age, fresh coloured, comely,
-          plump, and desirable. The Baron’s son seemed to be a youth in every
-          respect worthy of his father. Pangloss the preceptor was the oracle of
-          the family, and little Candide listened to his instructions with all the
-          simplicity natural to his age and disposition.</p>
-          <p>Master Pangloss taught the metaphysico-theologo-cosmolo-nigology. He
-          could prove to admiration that there is no effect without a cause; and
-          that, in this best of all possible worlds, the Baron’s castle was the
-          most magnificent of all castles, and my lady the best of all possible
-          baronesses.</p>
+          plump, and desirable.</p>
         </div>
         <div class="folio">8</div>
       </div>
