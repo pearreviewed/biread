@@ -677,7 +677,7 @@ def test_the_finished_book_opens_in_a_tab(page):
         page.click("#read")
     tab = caught.value
     tab.wait_for_function("document.title.indexOf('Microm') !== -1", timeout=10000)
-    assert tab.url.startswith("blob:")
+    assert not downloads
 
 
 def test_the_book_downloads_under_its_own_name(page):
@@ -1003,12 +1003,12 @@ def to_shelf(page, slug="candide"):
     """
     page.click("[data-route=shelf]")
     card = f".card[data-slug={slug!r}]"
-    build_yourself(page, card) if page.locator(f"{card} .own").count() else page.click(card)
+    build_yourself(page, card) if page.locator(f"{card} .own.after").count() else page.click(card)
     page.wait_for_function("!document.getElementById('to-settings').disabled")
 
 
-def build_yourself(page, card):
-    """Press the line that builds a finished book again yourself.
+def in_drawer(page, card, line):
+    """Press one of the lines in a card's drawer.
 
     It lives in the drawer, so it is reached the way a reader reaches it: the
     pointer onto the card first, which is what opens the drawer at all — and
@@ -1021,10 +1021,20 @@ def build_yourself(page, card):
     page.eval_on_selector(card, "c => c.scrollIntoView({block: 'center'})")
     page.hover(card)
     at = page.eval_on_selector(
-        f"{card} .own",
+        f"{card} {line}",
         "e => { const r = e.getBoundingClientRect();"
         "       return {x: r.x + r.width / 2, y: r.y + r.height / 2}; }")
     page.mouse.click(at["x"], at["y"])
+
+
+def build_yourself(page, card):
+    """The drawer's second line: the book built again on your own key."""
+    in_drawer(page, card, ".own.after")
+
+
+def take_the_file(page, card):
+    """The drawer's first line: the finished file, taken away."""
+    in_drawer(page, card, ".own:not(.after)")
 
 
 def test_the_shelf_appears_only_once_the_engine_has_one(page):
@@ -1050,7 +1060,7 @@ def test_a_card_shows_the_translator_the_wiki_names_and_nothing_more(page):
     # would be mistaken for. It is the figure the "under ten minutes" shelf is
     # counting.
     assert "about 3 min" not in text(page, f"{card} .credit")
-    assert "about 3 min" in text(page, f"{card} .own")
+    assert "about 3 min" in text(page, f"{card} .own.after")
     assert "about 9 min" in text(page, ".card[data-slug='80days'] .act")
 
 
@@ -1258,17 +1268,31 @@ def test_the_finished_book_does_not_sit_under_a_note_denying_it(page):
     assert order < later, "the book in hand comes before anything about building one"
 
 
-def test_taking_the_finished_book_neither_builds_it_nor_costs_a_key(page):
+def test_reading_the_finished_book_neither_builds_it_nor_costs_a_key(page):
+    """The card says Read it now, so it opens the book. It fetched the file
+    instead, which is the same fault as the done screen's and the one a reader
+    actually met, this being the press that needs no build at all."""
+    downloads = []
+    page.on("download", lambda d: downloads.append(d.suggested_filename))
+    page.click("[data-route=shelf]")
+    with page.expect_popup() as caught:
+        page.click(".card[data-slug=micromegas] .name")
+    assert caught.value.url.endswith("/books/micromegas.html")
+    assert not downloads
+    # Opening it is not choosing the book: no build starts behind it.
+    assert page.eval_on_selector_all(".card[aria-pressed=true]", "n => n.length") == 0
+    assert not hidden(page, "#s-books")
+
+
+def test_the_file_of_a_finished_book_waits_in_the_drawer(page):
     page.click("[data-route=shelf]")
     with page.expect_download() as caught:
-        page.click(".card[data-slug=micromegas] .name")
+        take_the_file(page, ".card[data-slug=micromegas]")
     # Normalized on both sides: Safari hands the name back decomposed (an `e`
     # and a separate accent), which is the same name and a different string.
     assert (unicodedata.normalize("NFC", caught.value.suggested_filename)
             == "Micromégas - bilingual reader.html")
-    # Taking the file is not choosing the book: no build starts behind it.
     assert page.eval_on_selector_all(".card[aria-pressed=true]", "n => n.length") == 0
-    assert not hidden(page, "#s-books")
 
 
 def test_the_line_in_the_drawer_still_builds_the_book_yourself(page):

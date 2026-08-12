@@ -371,6 +371,10 @@
      above it by a rule of its own so it does not read as the end of a sentence
      about the book. */
   .card .brief .own { display: block; width: 100%; margin-top: 11px; padding-top: 10px; border-top: 1px solid var(--rule); text-align: left; }
+  /* The second of the two stands under the first, not under a rule of its own:
+     one rule closes the sentence about the book, and a second would read as a
+     separate drawer rather than the other half of this one. */
+  .card .brief .own.after { margin-top: 6px; padding-top: 0; border-top: 0; }
   @media (hover: hover) {
     /* The card is opaque while it is open, or the card underneath reads through
        its own drawer. */
@@ -1509,7 +1513,17 @@ function actionLine(book) {
   row.appendChild(el("span", "arrow", "→"));
   return row;
 }
+// The card says Read it now, so it opens the book. It fetched the file instead:
+// an `<a download>` behind a line promising a page, which is the one thing a
+// shelf of finished books is for. A published book is a real address on this
+// site, so its tab is simply sent there — which also makes it the only book here
+// that can be bookmarked and reloaded, where one built in the browser lives only
+// in the tab it was written into. Taking the file away is still worth offering
+// and waits in the drawer, beside the weight and the formats it is about.
 function takeBook(book) {
+  if (!window.open(book.prebuilt.href, "_blank")) location.href = book.prebuilt.href;
+}
+function saveBook(book) {
   const link = el("a");
   link.href = book.prebuilt.href;
   link.download = book.prebuilt.filename;
@@ -1598,7 +1612,10 @@ function bookCard(book) {
     if (book.prebuilt) brief.appendChild(el("div", "figures", fileFacts(book)));
     if (book.summary) brief.appendChild(el("div", null, book.summary));
     if (book.prebuilt) {
-      const own = el("button", "own", "Or build it yourself" + minutesOf(book));
+      const file = el("button", "own", "Download the file");
+      file.addEventListener("click", (e) => { e.stopPropagation(); saveBook(book); });
+      brief.appendChild(file);
+      const own = el("button", "own after", "Or build it yourself" + minutesOf(book));
       own.addEventListener("click", (e) => { e.stopPropagation(); pickBook(book.slug, index); });
       brief.appendChild(own);
     }
