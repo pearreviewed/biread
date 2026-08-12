@@ -115,8 +115,6 @@
   .settled .hero + .beside { margin-top: 22px; }
   .row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
   .tag { flex: none; font: 500 10.5px/1 system-ui, sans-serif; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--rule-2); border-radius: 999px; padding: 5px 9px; white-space: nowrap; }
-  .assure { display: flex; align-items: center; gap: 11px; margin-top: 24px; font-size: 14px; color: var(--muted); flex-wrap: wrap; }
-  .assure span.sep { color: var(--rule-2); }
 
   /* --- the books this browser built ---
      They stand above the shelf and never among it. What is on the shelf was
@@ -153,7 +151,7 @@
   /* Type keeps a reading measure; what a reader aims at does not. The panels
      span the column, so a screen with no shelf on it still has an edge on the
      right and does not read as a page pushed into its own left half. */
-  .step > .caps, .step > h2, .step > .seg, .step > .seg-note,
+  .step > .caps, .step > h2, .step > .seg,
   .step > div:has(> h2), .step > .alert { max-width: 640px; }
   /* Where there is no shelf, the panels stop short of the shelf's own width.
      Spanning the whole of it left 540px of nothing between the end of the type
@@ -255,12 +253,6 @@
   :root[data-theme="night"] .seg { border-radius: 14px; }
   :root[data-theme="night"] .seg button { border-radius: 11px; }
   :root[data-theme="night"] .seg button[aria-pressed="true"] { background: rgba(200,184,145,.9); color: #241b12; }
-  /* The note explains the tabs above it and is set to their width, not to a
-     measure of its own: a narrower one broke every note mid-sentence with a
-     third of the panel standing empty beside it. Each route explains itself in
-     a different number of lines, so the longest is reserved and the panel below
-     does not step up and down as they are tried. */
-  .seg-note { margin: -8px 0 0; font-size: 14px; line-height: 1.55; min-height: calc(3 * 1.55em); color: var(--muted); }
   .files { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
   .files.one { grid-template-columns: 1fr; }
   /* The one thing this screen asks a reader to do, and it was the palest
@@ -663,7 +655,6 @@
       <button data-route="translate" aria-pressed="true" data-label="Have a model translate it"><span>Have a model translate it</span></button>
       <button data-route="shelf" aria-pressed="false" hidden data-label="Pick from the shelf"><span>Pick from the shelf</span></button>
     </div>
-    <div class="seg-note" id="route-note"></div>
 
     <div class="shelf" id="shelf" hidden>
       <div class="row top">
@@ -759,15 +750,15 @@
         <div class="folio">8</div>
       </div>
     </div>
-    <div class="note">One file, both pages, and any phrase in the French
-      translated under the pointer. It opens in any browser, with no connection
-      and no account.</div>
+    <!-- The line under the headline already says you leave with one file, so
+         saying it again under the picture spent the opening of the sentence on
+         something the reader has read. What is left is what the picture cannot
+         show: the hover, and where the finished book will open. -->
+    <div class="note">A finished book you can open anywhere, even offline.
+      Point at any French expression to see what it means.</div>
   </aside>
   </div>
 
-  <div class="assure">
-    <span>No account, and nothing to sign.</span><span class="sep">·</span><span>We keep no copy of the book you build.</span>
-  </div>
   <input type="file" id="f-orig" accept=".txt,.epub,.pdf,.html,.htm,.docx" hidden>
   <input type="file" id="f-pub" accept=".txt,.epub,.pdf,.html,.htm,.docx" hidden>
 </section>
@@ -1197,11 +1188,10 @@ function alert_(id, message) {
 }
 
 /* --- step one: route and files ----------------------------------------- */
-const ROUTE_NOTE = {
-  translate: "A model of your choosing turns the book into your language, paragraph by paragraph. You read one page of it before the rest is made.",
-  align: "We match the published edition you already own to the original by meaning. Every word stays its translator's.",
-  shelf: "Here you can find and build books that are out of copyright and freely available. You do not need to bring a copy of your own.",
-};
+// The note that stood under the tabs is gone. It opened by restating the tab
+// the reader had just pressed, and step one was carrying six blocks of grey
+// commentary around a single question: what a reader has to read through is as
+// much of the weight as what they have to look at.
 const ROUTES = ["translate", "align", "shelf"];
 function hashRoute() {
   const r = decodeURIComponent(location.hash.slice(1));
@@ -1214,7 +1204,6 @@ let linkedRoute = null;
 function setRoute(route, keepHash) {
   S.route = route;
   for (const b of $("route").children) b.setAttribute("aria-pressed", String(b.dataset.route === route));
-  $("route-note").textContent = ROUTE_NOTE[route];
   $("shelf").hidden = route !== "shelf";
   $("s-books").classList.toggle("wide", route === "shelf");
   $("files").hidden = route === "shelf";

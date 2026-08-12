@@ -141,7 +141,7 @@ def test_the_panels_stop_short_where_there_is_no_shelf_to_fill(page):
     right = lambda s: page.eval_on_selector(s, "e => e.getBoundingClientRect().right")
     left = lambda s: page.eval_on_selector(s, "e => e.getBoundingClientRect().left")
     page.click("[data-route=align]")
-    assert right("#files") - right(".seg-note") < 300
+    assert right("#files") - right("#route") < 300
     files = (left("#files"), right("#files"))
     page.click("[data-route=shelf]")
     assert left("#shelf-cards") == files[0], "the left edge moved between routes"
@@ -1180,14 +1180,13 @@ def test_the_cards_in_a_row_end_level(page):
 
 def test_the_tab_strip_is_the_same_size_on_every_route(page):
     """The shelf used to widen the whole step, so the three tabs grew under the
-    finger that had just pressed one, and the note below them stood at a
-    different height on each route."""
+    finger that had just pressed one."""
     boxes = []
     for route in ("translate", "align", "shelf"):
         page.click(f"[data-route={route}]")
         page.wait_for_timeout(80)
         boxes.append(page.evaluate(
-            "() => ['#route', '#route-note'].map(s => {"
+            "() => ['#route'].map(s => {"
             "  const r = document.querySelector(s).getBoundingClientRect();"
             "  return [Math.round(r.left), Math.round(r.width), Math.round(r.height)];"
             "})"))
@@ -1208,15 +1207,6 @@ def test_the_tab_strip_holds_its_height_in_a_face_it_was_not_drawn_in(page):
         tall.append(page.evaluate(
             "() => Math.round(document.getElementById('route').getBoundingClientRect().height)"))
     assert tall[0] == tall[1] == tall[2], tall
-
-
-def test_the_route_note_is_set_to_the_width_of_the_tabs_it_explains(page):
-    """At a measure of its own it broke mid-sentence with a third of the panel
-    standing empty beside it."""
-    seg, note = page.evaluate(
-        "() => ['#route', '#route-note'].map(s =>"
-        "  Math.round(document.querySelector(s).getBoundingClientRect().width))")
-    assert seg == note, (seg, note)
 
 
 # ---- books already made --------------------------------------------------
