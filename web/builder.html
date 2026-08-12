@@ -215,8 +215,10 @@
   /* No fade at the foot, because no page of a biread book has one. A page that
      cannot hold the rest of its paragraph breaks it, and both columns break at
      the same fraction through it so they meet again where it ends: the text
-     here is cut at 0.567 of the paragraph it is in the middle of, which is the
-     furthest cut that leaves both pages whole. What a reader sees is what the
+     here is cut at 0.639 of the paragraph it is in the middle of, which is the
+     furthest cut that leaves both pages whole in *both* engines: a cut fitted in
+     Chromium alone overran WebKit's own setting of the same column by 29px, and
+     with no fade to hide it that is a line of type sliced through. What a reader sees is what the
      reader gives them — a full page whose last line is a whole line, and a
      sentence that carries on overleaf. `overflow` stays as a guard for a
      browser that lays the type out differently. */
@@ -724,7 +726,7 @@
           <p>Madame la baronne, qui pesait environ trois cent cinquante livres,
           s’attirait par là une très-grande considération, et faisait les honneurs
           de la maison avec une dignité qui la rendait encore plus respectable. Sa
-          fille Cunégonde, âgée de dix-sept ans, était haute en couleur, fraîche,</p>
+          fille Cunégonde,</p>
         </div>
         <div class="folio">7</div>
       </div>
@@ -740,8 +742,7 @@
           <p>My lady Baroness weighed three hundred and fifty pounds, consequently
           was a person of no small consideration; and then she did the honours of
           the house with a dignity that commanded universal respect. Her daughter
-          Cunegund was about seventeen years of age, fresh coloured, comely,
-          plump, and desirable.</p>
+          Cunegund was about</p>
         </div>
         <div class="folio">8</div>
       </div>
