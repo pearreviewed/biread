@@ -1711,19 +1711,27 @@ function whenBuilt(iso) {
   if (isNaN(on)) return "";
   return on.toLocaleDateString(undefined, { day: "numeric", month: "long" });
 }
+// A book is written into its tab, never addressed. Sent to a `blob:` URL, Safari
+// hands the tab to its downloader instead of drawing it, so pressing Read it now
+// put a second file in somebody's Downloads: the exact thing the button exists to
+// spare them. Writing it in involves no URL at all, so there is nothing for a
+// downloader to take, and the tab keeps this site's own storage, which is where
+// the reader's bookmark and theme are kept. The tab is opened inside the press,
+// since one opened after an await is a popup and blocked.
+function intoTab(tab, html) {
+  const doc = tab ? tab.document : document;
+  doc.open();
+  doc.write(html);
+  doc.close();
+}
 function openMine(book) {
-  // The tab is opened inside the press and filled when the book comes back:
-  // opened afterwards, a browser takes it for a popup and blocks it.
   const tab = window.open("", "_blank");
   fileOfMine(book.id).then((html) => {
     if (html == null) {
       if (tab) tab.close();
       return dropMine(book.id).then(loadMine);
     }
-    const url = URL.createObjectURL(new Blob([html], { type: "text/html;charset=utf-8" }));
-    if (tab) tab.location = url;
-    else location.href = url;
-    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    intoTab(tab, html);
   });
 }
 function saveMine(book) {
@@ -2809,15 +2817,10 @@ function paintKept() {
   });
   line.appendChild(off);
 }
-// The book is in hand, so the tab is opened inside the press with the book
-// already in it: nothing is awaited, which is what keeps a browser from taking
-// it for a popup. Where one is blocked anyway the book takes this tab, since it
-// is also on the reader's own row and this screen is reachable again from there.
-$("read").addEventListener("click", () => {
-  const url = URL.createObjectURL(new Blob([S.html], { type: "text/html;charset=utf-8" }));
-  if (!window.open(url, "_blank")) location.href = url;
-  setTimeout(() => URL.revokeObjectURL(url), 60000);
-});
+// The book is in hand here, so nothing is awaited at all. Where a tab is blocked
+// anyway the book takes this one, since it is also on the reader's own row and
+// the way back to this screen is the front door.
+$("read").addEventListener("click", () => intoTab(window.open("", "_blank"), S.html));
 $("download").addEventListener("click", () => {
   const url = URL.createObjectURL(new Blob([S.html], { type: "text/html;charset=utf-8" }));
   const a = document.createElement("a");

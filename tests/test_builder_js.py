@@ -663,8 +663,13 @@ def test_the_finished_book_is_offered_with_its_cover_and_its_bill(page):
 
 
 def test_the_finished_book_opens_in_a_tab(page):
-    """The book is in hand at this point, so the tab carries it from the press
-    rather than being filled afterwards, which is what a browser blocks."""
+    """The book is written into the tab rather than addressed. Handed a blob:
+    URL, Safari gives the tab to its downloader, so the one press that exists to
+    spare a reader a file put a second one in their Downloads. What is asserted
+    is therefore the book drawn *and* nothing downloaded: no URL is involved, so
+    there is nothing for a downloader to take."""
+    downloads = []
+    page.on("download", lambda d: downloads.append(d.suggested_filename))
     to_settings(page)
     page.click("#build")
     page.wait_for_function("!document.getElementById('s-done').hidden", timeout=15000)
@@ -752,17 +757,20 @@ def test_the_finished_screen_says_where_the_copy_is_and_offers_to_drop_it(page):
 
 
 def test_your_own_book_opens_from_its_card(page):
+    downloads = []
+    page.on("download", lambda d: downloads.append(d.suggested_filename))
     built(page)
     page.click("#again")
     page.wait_for_selector("#mine:not([hidden])")
     with page.expect_popup() as caught:
         page.click("#mine-cards .card")
-    # The tab is opened empty inside the press and filled when the book comes
-    # back out of storage, so what is asserted is the book, once it is there.
+    # The tab is opened empty inside the press and written into when the book
+    # comes back out of storage, so what is asserted is the book, once it is
+    # there, and no file taken instead — see the done screen's own test.
     tab = caught.value
     tab.wait_for_function(
         "document.title.indexOf('Microm') !== -1", timeout=10000)
-    assert tab.url.startswith("blob:")
+    assert not downloads
 
 
 def test_your_own_book_hands_over_the_file_it_kept(page):
