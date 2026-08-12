@@ -1397,31 +1397,20 @@ const HEAVY = 10e6;
 // equation where the rest of this page speaks in phrases. The formats sat in the
 // same middot run as the hover, which is a fact about the download wearing the
 // dress of a fact about the book; they are in the drawer now, beside the weight,
-// which is the same kind of fact. And the hover was a bare noun, `hover
-// translations`, which does not say whether the book has them or is merely about
-// them: the reader's own header settled on **Hover to translate** as the name of
-// the thing, and this is the last place that was still calling it something else.
+// which is the same kind of fact. And the hover is not here either, in any
+// wording: `Hover to translate: included` stood on one card and read as a
+// capability the other six lacked, which is false, since every book here hovers
+// on the reader's own key a page ahead of them as they read. What differs is how
+// much is already made, and that is a quantity: it belongs in the drawer with
+// the rest of them. So no card claims a book lacks the hover, because none does.
 function madeParts(book) {
   const made = book.prebuilt;
-  const pages = made.solo
+  return [made.solo
     ? { said: "the French beside a published English", card: "A published English" }
     : made.published
       ? { said: "the French with a translation of ours and a published one",
           card: "Our translation, and a published one" }
-      : { said: "the French beside a translation of ours", card: "A translation of ours" };
-  // Binary, deliberately. A count of glossed paragraphs is a quantity, and in a
-  // slot whose other values are states it reads as a third state that does not
-  // exist. A book part-glossed says what is true of the book — they have not
-  // been made — and under-claims, which is the safe direction: a reader who
-  // hovers the first page and finds one has been given something, not misled.
-  // The count is in the drawer, where the quantities are.
-  const whole = made.glossed >= made.paragraphs;
-  return [
-    pages,
-    { said: whole ? "the hover translations are made throughout"
-                  : "the hover translations are not made yet",
-      card: "Hover to translate: " + (whole ? "included" : "not made yet") },
-  ];
+      : { said: "the French beside a translation of ours", card: "A translation of ours" }];
 }
 // What is in the download, as against what is in the book: the weight, and the
 // formats that used to sit on the face in the middle of a sentence about the
@@ -1430,9 +1419,11 @@ function fileFacts(book) {
   const made = book.prebuilt;
   const parts = [weight(made.bytes)];
   if (made.formats.length) parts.push(made.formats.map((f) => f.toUpperCase()).join(" + "));
-  // Bought glosses that do not cover the book are a quantity, and this is where
-  // the quantities are.
-  if (made.glossed && made.glossed < made.paragraphs) {
+  // How much of the hover is already made — the whole of it here, since a book
+  // with none is a book whose reader makes them as they read, and saying "none"
+  // of that reads as a book that cannot.
+  if (made.glossed >= made.paragraphs) parts.push("hover translations throughout");
+  else if (made.glossed) {
     parts.push("hover translations on the first " + made.glossed.toLocaleString() + " passages");
   }
   return parts.join(" · ");

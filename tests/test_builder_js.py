@@ -1579,13 +1579,16 @@ def test_a_book_divided_differently_says_so_rather_than_shrugging(page):
     assert page.evaluate("agreement(1, 22)").startswith("1 chapter against 22")
 
 
-def test_a_book_without_hover_translations_says_so_in_a_phrase(page):
-    """The offer used to be made here, in a sentence with a price in it, and it
-    ran to two lines on seven cards of eight. The fact is stated; the offer is
-    met in the reader, whose header carries it."""
+def test_no_card_says_a_book_is_without_the_hover(page):
+    """Every book here hovers, on the reader's own key as they read, so a face
+    saying `not made yet` — or an offer with a price in it, which is what stood
+    here before that — described a book that does not exist on this shelf."""
     page.click("[data-route=shelf]")
-    assert "hover translations are not made yet" in text(page, "#shelf-norm")
-    assert "penny" not in text(page, ".card[data-slug=candide]")
+    assert "hover" not in text(page, "#shelf-norm").lower()
+    for slug in ("candide", "micromegas"):
+        card = f".card[data-slug={slug}]"
+        assert "not made yet" not in text(page, card), slug
+        assert "penny" not in text(page, card), slug
 
 
 def test_what_the_finished_books_agree_on_is_said_once_above_them(page):
@@ -1593,15 +1596,14 @@ def test_what_the_finished_books_agree_on_is_said_once_above_them(page):
     and greyest on the card, and identical to the one on either side of it. It
     is furniture, so it stands above the shelf and the cards go without."""
     page.click("[data-route=shelf]")
-    assert text(page, "#shelf-norm") == ("Unless a card says otherwise: the French "
-        "beside a published English, and the hover translations are not made yet.")
+    assert text(page, "#shelf-norm") == \
+        "Unless a card says otherwise: the French beside a published English."
     for slug in ("candide", "lesmis"):
         assert page.locator(f".card[data-slug={slug}] .say").count() == 0, slug
-    # And the one book that is not made that way says so itself, fact by fact:
-    # it is the only one here carrying a translation of ours as well as a
-    # published edition, and the only one whose hover was paid for.
+    # And the one book that is not made that way says so itself: it is the only
+    # one here carrying a translation of ours as well as a published edition.
     assert text(page, ".card[data-slug=micromegas] .say") == \
-        "Our translation, and a published one · Hover to translate: included"
+        "Our translation, and a published one"
 
 
 def test_a_shelf_whose_books_do_not_agree_claims_nothing_for_them(page):
@@ -1613,7 +1615,7 @@ def test_a_shelf_whose_books_do_not_agree_claims_nothing_for_them(page):
     assert page.eval_on_selector_all(".card", "n => n.length") == 1
     assert hidden(page, "#shelf-norm")
     assert text(page, ".card[data-slug=micromegas] .say") == \
-        "Our translation, and a published one · Hover to translate: included"
+        "Our translation, and a published one"
 
 
 def test_the_weight_of_a_file_is_said_only_where_it_is_worth_saying(page):
@@ -1627,19 +1629,18 @@ def test_the_weight_of_a_file_is_said_only_where_it_is_worth_saying(page):
     assert "15.9 MB" in text(page, ".card[data-slug=lesmis] .act")
 
 
-def test_a_book_glossed_in_part_claims_nothing_it_cannot_keep(page):
-    """Part-glossed is a quantity, not a state, and in a slot whose other values
-    are states it read as a third one that does not exist. The face says what is
-    true of the book, which is that they have not been made; the drawer counts
-    what was bought. It under-claims, which is the safe direction: a reader who
-    hovers the first page and finds one has been given something."""
+def test_how_much_of_the_hover_is_made_is_counted_in_the_drawer(page):
+    """A quantity, kept with the quantities. None of it reaches the face, where
+    it would have to be a state, and the only states available say a book cannot
+    do something every book here can."""
     page.click("[data-route=shelf]")
-    card = ".card[data-slug=lesmis]"
-    assert page.locator(f"{card} .say").count() == 0, "it agrees with the line above"
-    assert "included" not in text(page, card)
-    assert "hover translations on the first 126 passages" in text(page, f"{card} .brief")
-    # And the whole-book case is still the one that says included.
-    assert "Hover to translate: included" in text(page, ".card[data-slug=micromegas] .say")
+    part, whole = ".card[data-slug=lesmis]", ".card[data-slug=micromegas]"
+    assert page.locator(f"{part} .say").count() == 0, "it agrees with the line above"
+    assert "hover translations on the first 126 passages" in text(page, f"{part} .brief")
+    assert "hover translations throughout" in text(page, f"{whole} .brief")
+    # A book with none is a book whose reader makes them as they read, so the
+    # drawer says nothing rather than counting to zero.
+    assert "hover" not in text(page, ".card[data-slug=candide] .brief")
 
 
 def test_a_book_that_has_them_is_not_said_to_be_missing_them(page):
