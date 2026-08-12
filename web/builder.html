@@ -13,6 +13,8 @@
     --solid: #3a2f20; --solid-hover: #4d3f2b; --on-solid: #fdf8ec;
     --page: #fffdf6; --page-edge: rgba(120,95,55,.26); --page-ink: #332a1c; --page-muted: #a8926e;
     --num: #4a3d2b; --shadow: 0 18px 44px rgba(90,70,40,.14); --tint: rgba(58,47,32,.07);
+    --lifted: rgba(255,255,255,.9); --lifted-edge: rgba(120,95,55,.42);
+    --lift: 0 8px 22px rgba(90,70,40,.10); --lift-over: 0 12px 28px rgba(90,70,40,.16);
     /* Every surface here is translucent, which is right for a panel sitting on
        the paper and wrong for one standing over another card. Opaque, and mixed
        to the paper it stands on. */
@@ -26,6 +28,8 @@
     --solid: #c8b891; --solid-hover: #dccdaa; --on-solid: #1f1810;
     --page: #f2e9d6; --page-edge: rgba(120,95,55,.5); --page-ink: #332a1c; --page-muted: #a8926e;
     --num: #b9c99a; --shadow: 0 20px 44px rgba(0,0,0,.5); --tint: rgba(120,95,55,.2);
+    --lifted: rgba(255,255,255,.085); --lifted-edge: rgba(180,150,100,.4);
+    --lift: 0 8px 22px rgba(0,0,0,.34); --lift-over: 0 12px 28px rgba(0,0,0,.45);
     --over: #241d13;
   }
   * { box-sizing: border-box; }
@@ -236,8 +240,15 @@
   .seg-note { margin: -8px 0 0; font-size: 14px; line-height: 1.55; min-height: calc(3 * 1.55em); color: var(--muted); }
   .files { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
   .files.one { grid-template-columns: 1fr; }
-  .file { position: relative; display: flex; flex-direction: column; gap: 6px; padding: 18px 52px 18px 20px; border: 1px solid var(--rule-2); border-radius: 17px; background: var(--surface-2); text-align: left; width: 100%; min-height: 118px; }
-  .file:hover, .file.over { border-color: var(--solid); background: var(--surface-3); }
+  /* The one thing this screen asks a reader to do, and it was the palest
+     object on it: 1.8 times smaller than the page beside it, lower in
+     contrast against the paper, and flat where that page had a shadow. So
+     the brightest, most raised thing on the screen was the one thing nobody
+     can press. It stands off the paper now and reads as a slot rather than
+     as a caption; the panel beside it was left exactly as it was, since the
+     dropzones were too quiet before it existed and would be after it. */
+  .file { position: relative; display: flex; flex-direction: column; gap: 6px; padding: 18px 52px 18px 20px; border: 1px solid var(--lifted-edge); border-radius: 17px; background: var(--lifted); box-shadow: var(--lift); text-align: left; width: 100%; min-height: 118px; transition: box-shadow .16s ease, border-color .16s ease, background .16s ease; }
+  .file:hover, .file.over { border-color: var(--solid); box-shadow: var(--lift-over); }
   /* A card that takes a file has to look like one before it is read. The corner
      carries an arrow into a tray until a file arrives, then the page it holds. */
   .file .sign { position: absolute; top: 18px; right: 20px; width: 20px; height: 20px; background: var(--muted);

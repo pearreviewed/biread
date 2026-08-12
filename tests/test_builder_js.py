@@ -201,6 +201,36 @@ def test_the_door_shows_a_page_of_the_book_it_is_offering(page):
     assert page.eval_on_selector(".taste", "e => getComputedStyle(e).display") == "none"
 
 
+def test_the_thing_you_press_outweighs_the_thing_you_look_at(page):
+    """Salience is area, contrast and elevation, and the page of a book beat the
+    dropzones on all three: 1.8 times the area, 1.135 against 1.095 on the paper,
+    and a shadow against none. The brightest, most raised object on the screen
+    was the one thing nobody can press.
+
+    Measured rather than asserted by eye, and as an ordering rather than a
+    number, so it survives a change of palette: what a reader must do stands at
+    least as far off the paper as what they are being shown."""
+    page.set_viewport_size({"width": 1440, "height": 900})
+    page.click("[data-route=align]")
+    lift = page.evaluate("""() => {
+      const lum = c => { const m = c.match(/[\\d.]+/g).map(Number);
+        const a = m.length > 3 ? m[3] : 1, bg = [246, 238, 219];
+        return m.slice(0, 3).map((v, i) => v * a + bg[i] * (1 - a))
+          .map(v => { v /= 255; return v <= .03928 ? v / 12.92 : Math.pow((v + .055) / 1.055, 2.4); })
+          .reduce((s, v, i) => s + v * [0.2126, 0.7152, 0.0722][i], 0); };
+      const paper = lum('rgb(246,238,219)');
+      const con = s => { const L = lum(getComputedStyle(document.querySelector(s)).backgroundColor);
+        return (Math.max(L, paper) + .05) / (Math.min(L, paper) + .05); };
+      const shadow = s => getComputedStyle(document.querySelector(s)).boxShadow !== 'none';
+      return { drop: con('.file'), panel: con('.taste .leaf'),
+               dropLifted: shadow('.file'), panelLifted: shadow('.taste .spread') };
+    }""")
+    assert lift["drop"] >= lift["panel"], (
+        f"the page of a book stands off the paper further than the dropzone "
+        f"({lift['panel']:.3f} against {lift['drop']:.3f})")
+    assert lift["dropLifted"], "the dropzone is flat while the page beside it is raised"
+
+
 def test_the_headline_docks_once_it_has_been_answered(page):
     """It is read once. A press is a reader who has read it and is now doing
     something, so it goes to one line and the work comes up the page — never on
