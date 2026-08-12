@@ -14,6 +14,8 @@
     --page: #fffdf6; --page-edge: rgba(120,95,55,.26); --page-ink: #332a1c; --page-muted: #a8926e;
     --num: #4a3d2b; --shadow: 0 18px 44px rgba(90,70,40,.14); --tint: rgba(58,47,32,.07);
     --lifted: rgba(255,255,255,.9); --lifted-edge: rgba(120,95,55,.42);
+    /* the reader's page, a step back toward the paper it lies on */
+    --page-quiet: #fefbf3;
     --lift: 0 8px 22px rgba(90,70,40,.10); --lift-over: 0 12px 28px rgba(90,70,40,.16);
     /* Every surface here is translucent, which is right for a panel sitting on
        the paper and wrong for one standing over another card. Opaque, and mixed
@@ -29,6 +31,7 @@
     --page: #f2e9d6; --page-edge: rgba(120,95,55,.5); --page-ink: #332a1c; --page-muted: #a8926e;
     --num: #b9c99a; --shadow: 0 20px 44px rgba(0,0,0,.5); --tint: rgba(120,95,55,.2);
     --lifted: rgba(255,255,255,.085); --lifted-edge: rgba(180,150,100,.4);
+    --page-quiet: #ded5c3;
     --lift: 0 8px 22px rgba(0,0,0,.34); --lift-over: 0 12px 28px rgba(0,0,0,.45);
     --over: #241d13;
   }
@@ -185,7 +188,14 @@
     #s-books:not(.wide) .taste { display: flex; }
     #s-books:not(.wide) .beside > .step { max-width: calc(var(--wide) - 452px - 46px); }
   }
-  .taste .spread { aspect-ratio: 7 / 5; }
+  /* The panel is what a reader looks at; the slots are what they press. Both
+     were raised and both were bright, so they read as peers and the larger
+     one won. It gives up the shadow, which is the strongest of the three
+     cues at this distance, and one step of tone — enough to sit on the
+     paper rather than over it, and not enough to touch the type, which is
+     the whole reason the panel is here. */
+  .taste .spread { aspect-ratio: 7 / 5; box-shadow: none; }
+  .taste .leaf { background: var(--page-quiet); }
   /* A book's page is mostly margin, and the miniature was set like a column of
      newsprint: the type ran to the edges, the lines sat close, and one paragraph
      ended where the next began. Given the page margins a book has, the leading a
