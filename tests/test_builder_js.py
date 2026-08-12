@@ -981,11 +981,11 @@ def test_a_card_shows_the_translator_the_wiki_names_and_nothing_more(page):
     page.click("[data-route=shelf]")
     card = ".card[data-slug=candide]"
     assert "Voltaire" in text(page, card)
-    # Which English and how the book divides, on one line where a two-column
-    # table used to stand under a rule of its own. The colon does what the
-    # "English" label did, and both facts stay on the face: the drawer they
-    # would otherwise go into is a thing only a pointer can open.
-    assert text(page, f"{card} .credit") == "English: Smollett · 1920 · 30 chapters"
+    # Which English, and nothing else: one line where a two-column table used to
+    # stand under a rule of its own. The colon does what the "English" label did,
+    # and how the book divides is not said here at all — a chapter count is not
+    # something anybody chooses a novel on.
+    assert text(page, f"{card} .credit") == "English: Smollett · 1920"
     assert page.locator(f"{card} .facts").count() == 0
     # How long a build takes is said wherever building is what is offered: on
     # the card's own action where no finished file exists, on the line under one
@@ -1000,7 +1000,7 @@ def test_a_book_nobody_has_read_says_so_instead_of_claiming_coverage(page):
     page.click("[data-route=shelf]")
     unread = text(page, ".card[data-slug='80days']")
     assert "Nobody has read this one through" in unread
-    assert "Towle · 1873 · abridged" in unread
+    assert "Towle · 1873" in unread
     # And the one that has been read carries no such warning.
     assert "Nobody has read" not in text(page, ".card[data-slug=candide]")
 
@@ -1554,10 +1554,10 @@ def test_a_card_says_on_its_face_what_the_book_is(page):
         "                                              / parseFloat(getComputedStyle(e).lineHeight))})")
     assert lead["said"].startswith("A young man taught this is the best")
     assert lead["lines"] <= 2, lead
-    # The pills are gone, and with them the shout: a book that is abridged says
-    # so on the line naming the edition, in the card's own voice.
+    # The pills are gone, and the credit line did not inherit their shout: it
+    # names the edition and nothing about it that reads as a fault.
     assert page.locator(".card .mark").count() == 0
-    assert "Towle · 1873 · abridged" in text(page, ".card[data-slug='80days'] .credit")
+    assert text(page, ".card[data-slug='80days'] .credit") == "English: Towle · 1873"
     # A book somebody looked up has no sentence written for it, and its card
     # invents none.
     assert page.locator(".card[data-slug='80days'] .lead").count() == 0

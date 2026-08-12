@@ -1466,23 +1466,23 @@ function bookCard(book) {
 
   const index = picked ? S.pick.index : 0;
   const version = book.translations[index] || book.translations[0];
-  // Abridgement and the library it came from are facts about *this* English, so
-  // they are said on the line naming it — where switching edition can take them
-  // back. Chapter counts that differ are not said here at all: 47 against 46 is
-  // two editions rather than a fault, and the book's own note says so where a
-  // build is being chosen, which is the only place it changes anything.
+  // The library it came from is a fact about *this* English, so it is said on
+  // the line naming it — where switching edition can take it back. Chapter
+  // counts that differ are not said here at all: 47 against 46 is two editions
+  // rather than a fault, and the book's own note says so where a build is being
+  // chosen, which is the only place it changes anything. Abridgement is not said
+  // either: it read as a defect stamp beside a translator's name, and the note
+  // where a build is chosen is where it can change something.
   const english = [version.label];
-  if (version.abridged ?? book.abridged) english.push("abridged");
   if (book.library) english.push(book.library);
   // One line of type where a two-column table stood, under a rule of its own:
   // it set the chapter count in the same weight as the book's name and spent
   // three rows and a rule on facts nobody chooses a novel by. The colon carries
-  // what the "English" label used to. Both stay on the face rather than going
-  // into the drawer, which a pointer opens and a touchscreen cannot, and which a
-  // book somebody looked up does not have at all.
-  const credit = [english.join(" · ")];
-  if (book.chapters) credit.push(book.chapters + (book.chapters === 1 ? " chapter" : " chapters"));
-  head.appendChild(el("div", "credit", "English: " + credit.join(" · ")));
+  // what the "English" label used to. The count itself is gone with them — it is
+  // a fact about how a book is divided, which says nothing to a reader choosing
+  // one, and where the two editions divide it differently the book's own note
+  // says so where a build is being chosen.
+  head.appendChild(el("div", "credit", "English: " + english.join(" · ")));
 
   // The one thing a reader picks a book on. Only the curated shelf has it
   // written; a book looked up carries none and its card simply goes without.
