@@ -35,7 +35,6 @@ const SHELF = {
   measured: "2026-07-30",
   perMinute: 390,
   filters: [
-    { key: "read", label: "Read through", slugs: ["candide"] },
     { key: "several", label: "More than one translation", slugs: ["micromegas"] },
   ],
   books: [

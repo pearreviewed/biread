@@ -296,16 +296,20 @@ def search(query: str, books: tuple[Book, ...] = SHELF) -> list[Book]:
 # so 80 Days disappeared although the unabridged 1911 edition of it is on the
 # card and choosable. The fact keeps its place on the card, where it is about a
 # translation and not about a book.
+#
+# "Read through" went the same way, and for the reason abridgement did: it hid
+# books over something that is not about them. Whether anybody here has read a
+# book end to end is a fact about this shelf's own work, not about the novel, so
+# a reader pressing it was shown three books and told nothing about why the other
+# four had gone. What it stands for is already on the cards it would have kept,
+# as a coverage figure, and on the ones it would have dropped, in words.
 FILTERS: dict[str, str] = {
-    "read": "Read through",
     "several": "More than one translation",
     "quick": "Builds in under ten minutes",
 }
 
 
 def matches(book: Book, key: str) -> bool:
-    if key == "read":
-        return book.read_through
     if key == "several":
         return len(book.translations) > 1
     if key == "quick":
