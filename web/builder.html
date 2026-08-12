@@ -1219,13 +1219,22 @@ function setRoute(route, keepHash) {
   if (!keepHash && hashRoute() !== route) history.replaceState(null, "", "#" + route);
   refreshNext();
 }
-// The headline is read once. A press of any kind is a reader who has read it and
-// is now doing something, so it docks and the work comes up the page. Hung on
-// the press rather than on the route, which is also set on arrival and by a
-// link — landing on the front door must still be landing on the front door.
+// The headline is read once, and docking it lifts everything under it by 122px.
+// On the shelf that is room the cards need, and the same press is redrawing the
+// page with them anyway. On the other two routes it bought nothing and was felt:
+// pressing between "align" and "translate" took the tab strip out from under the
+// finger that had just pressed it, and only the first time, which is the shape
+// of a glitch rather than of a page settling. So it docks for the shelf alone,
+// and stays docked once it has — coming back must not drop the page 122px the
+// other way. Hung on the press rather than on the route, which is also set on
+// arrival and by a link: landing on the front door, wherever the link points,
+// must still be landing on the front door.
 function settle() { $("s-books").classList.add("settled"); }
 for (const b of $("route").children) {
-  b.addEventListener("click", () => { settle(); setRoute(b.dataset.route); });
+  b.addEventListener("click", () => {
+    if (b.dataset.route === "shelf") settle();
+    setRoute(b.dataset.route);
+  });
 }
 
 // The page of a book on the right is filled the way the reader fills one: the
@@ -2117,8 +2126,10 @@ function wireFile(which) {
   });
   input.addEventListener("change", () => took(which));
 }
+// A file landing does not dock the headline either, for the reason above: the
+// two file routes need no room and the lift would come the moment a reader is
+// looking at the card they have just filled.
 function took(which) {
-  settle();
   S[which] = $("f-" + which).files[0] || null;
   S.info[which] = null;
   S.sample = null; S.estimate = null;
