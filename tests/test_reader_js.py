@@ -409,6 +409,49 @@ def test_a_bookmark_does_not_bleed_onto_the_preceding_spread(reader):
     reader.evaluate("() => localStorage.clear()")
 
 
+def test_the_header_keeps_one_line_and_its_right_margin(browser, tmp_path_factory):
+    """What the tools left the header for.
+
+    Eight groups in one row needed 1490px to fit beside the title. Below that the
+    row fell to a second line and went flush left, so the right of the header
+    stood empty by up to 369px. With the tools at the foot, the book's name is
+    what gives way instead, and the controls hold the margin at every laptop
+    width.
+    """
+    page = open_reader(browser, build_reader(tmp_path_factory, published=True))
+    for width in (1440, 1280, 1100, 900):
+        page.set_viewport_size({"width": width, "height": 860})
+        page.wait_for_timeout(450)
+        box = page.evaluate("""() => {
+            const L = document.querySelector('.header-left').getBoundingClientRect();
+            const R = document.querySelector('.header-right').getBoundingClientRect();
+            return {wrapped: Math.round(R.y) > Math.round(L.y) + 2,
+                    gap: Math.round(innerWidth - 30 - R.right)}; }""")
+        assert not box["wrapped"], f"the header broke in two at {width}px"
+        assert box["gap"] == 0, f"{box['gap']}px of empty header at {width}px"
+    page.close()
+
+
+def test_the_desk_bar_never_stands_on_the_book(browser, tmp_path_factory):
+    """The bar is fixed to the desk, so the stage has to be told to leave it room.
+
+    Its height is measured rather than assumed because it wraps to two rows on a
+    narrow window, and a constant would have the book running underneath it.
+    """
+    page = open_reader(browser, build_reader(tmp_path_factory, published=False))
+    for width, height in ((1440, 900), (1100, 760), (900, 700)):
+        page.set_viewport_size({"width": width, "height": height})
+        page.wait_for_timeout(450)
+        box = page.evaluate("""() => {
+            const bar = document.getElementById('deskbar').getBoundingClientRect();
+            const book = document.querySelector('.book-desk, .book-mobile').getBoundingClientRect();
+            return {bookBottom: Math.round(book.bottom), barTop: Math.round(bar.top),
+                    barH: Math.round(bar.height)}; }""")
+        assert box["bookBottom"] <= box["barTop"], \
+            f"the book runs under the bar at {width}x{height}"
+        assert box["barH"] > 0
+
+
 def test_narrow_viewport_switches_to_the_stacked_layout(browser, tmp_path_factory):
     page = open_reader(browser, build_reader(tmp_path_factory, published=False))
     assert page.locator("#stage-wrap .book-desk").count() == 1
@@ -703,12 +746,15 @@ def test_no_download_control_without_a_built_format(reader):
     assert reader.is_hidden("#dl-btn")
 
 
-def test_the_download_control_sits_at_the_far_edge(reader_with_downloads):
+def test_the_download_control_closes_the_desk_bar(reader_with_downloads):
     page = reader_with_downloads
     assert page.is_visible("#dl-btn")
-    # Every other control works the book in place; download is set apart, last.
+    # It lives at the foot with the other tools, and it is the last of them:
+    # everything else works the book in place, this one hands it over.
     assert page.evaluate(
-        "() => document.querySelector('.header-right').lastElementChild.id") == "dl-btn"
+        "() => document.getElementById('deskbar').lastElementChild.id") == "dl-btn"
+    assert page.evaluate(
+        "() => !!document.getElementById('dl-btn').closest('#deskbar')")
 
 
 def test_the_menu_lists_built_formats_and_saves_them_intact(reader_with_downloads):

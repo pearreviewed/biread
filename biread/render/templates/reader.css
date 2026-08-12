@@ -80,10 +80,18 @@ button:focus-visible { outline: 2px solid rgba(200,175,130,.85); outline-offset:
 
 /* ---------- header ---------- */
 #app-header { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 16px 30px; border-bottom: 1px solid var(--rule-faint); flex-wrap: wrap; }
-.header-left { display: flex; align-items: baseline; gap: 14px; min-width: 0; }
+/* The book's name is what gives way, never the controls: a flex basis of 0 means
+   the left block asks for nothing and takes only what is left over, so a long
+   title shortens instead of pushing the controls onto a second line and leaving
+   the right of the header empty. Wrapping is still allowed, and is what a phone
+   gets, where the row cannot fit however short the title is. */
+.header-left { display: flex; align-items: baseline; gap: 14px; flex: 1 1 0; min-width: 0; overflow: hidden; }
 .eyebrow { font-size: 12px; letter-spacing: .34em; text-transform: uppercase; color: var(--ink-dim); white-space: nowrap; }
 .booktitle { font-size: 18px; color: var(--ink-soft); font-style: italic; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .header-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+/* The masthead is the reader's signature and the title is the book; where only
+   one fits beside the controls, the book wins. */
+@media (max-width: 900px) { .eyebrow { display: none; } }
 /* The counter is the page finder: it already says where you are, so it is also
    what takes you elsewhere. Sized alike so swapping one for the other does not
    shift the header, and wide enough for a two-digit "12 / 38" on one line —
@@ -102,11 +110,9 @@ button:focus-visible { outline: 2px solid rgba(200,175,130,.85); outline-offset:
 .link-btn.copied { color: var(--good); }
 .link-btn.copied::after { content: 'Link copied'; position: absolute; top: calc(100% + 6px); right: 0; white-space: nowrap; font-size: 12px; letter-spacing: .04em; color: var(--ink-soft); background: var(--panel); border-radius: 6px; padding: 4px 8px; box-shadow: var(--panel-shadow); animation: xfade .16s ease-out; }
 
-/* Link + download are a "take it with you" pair at the far edge, set a little
-   apart from the controls that work the book in place. The gap goes before the
-   pair (on the link, which leads it); the two stay tight together. */
-#link-btn { margin-left: 8px; }
-/* .link-btn sets display:flex, which would otherwise defeat the `hidden`
+/* The pair is set apart by the bar's own divider now that it closes the desk
+   bar rather than the header, so it needs no margin of its own.
+   .link-btn sets display:flex, which would otherwise defeat the `hidden`
    attribute that keeps the download out of a plain build (no format embedded). */
 .dl-btn[hidden] { display: none; }
 .edits-btn[hidden] { display: none; }
@@ -157,6 +163,25 @@ button:focus-visible { outline: 2px solid rgba(200,175,130,.85); outline-offset:
 .theme-control button[aria-pressed="true"] { background: var(--fill-strong); color: var(--ink-bright); }
 @media (max-width: 640px) { .theme-control { display: none; } }
 
+/* ---------- the tools, at the foot of the desk ---------- */
+/* One bar rather than a cluster of bordered pills: the groups inside give up
+   their own frames and keep their dividers, so it reads as a single object the
+   way the day-and-night control beside it does. Its height is measured into
+   --deskbar-h, which is what the stage leaves clear, so the bar can wrap on a
+   phone without the book ever running underneath it. */
+/* Centred by auto margins between both edges rather than by left:50%, which
+   would cap the bar at half the viewport and wrap it on a narrow window. */
+.deskbar { position: fixed; left: 0; right: 0; bottom: 14px; z-index: 30;
+  width: fit-content; margin: 0 auto; max-width: calc(100vw - 24px);
+  display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 6px;
+  padding: 4px 8px;
+  border: 1px solid var(--rule); border-radius: 999px; background: var(--fill); }
+.deskbar .nav-controls, .deskbar .fontsize-control { border: none; border-radius: 0; }
+.deskbar > .seg-divider { height: 20px; align-self: center; }
+.deskbar .link-btn { width: 28px; height: 26px; }
+/* The note has to open upward down here; below the button is off the desk. */
+.deskbar .link-btn.copied::after { top: auto; bottom: calc(100% + 6px); }
+
 /* ---------- crossing to the builder ---------- */
 /* Rare, one-way, and not something you flip while reading — so a quiet link in
    the desk's bottom-left corner rather than a header control. Present only when
@@ -169,8 +194,8 @@ button:focus-visible { outline: 2px solid rgba(200,175,130,.85); outline-offset:
 @media (max-width: 640px) { #builder-link { display: none; } }
 
 /* ---------- book ---------- */
-#stage-wrap { flex: 1; min-height: 0; display: flex; align-items: flex-start; justify-content: center; perspective: 2400px; padding: 14px 24px 20px; }
-#stage-wrap.mobile { perspective: 1800px; padding: 12px 16px 16px; }
+#stage-wrap { flex: 1; min-height: 0; display: flex; align-items: flex-start; justify-content: center; perspective: 2400px; padding: 14px 24px calc(20px + var(--deskbar-h, 0px)); }
+#stage-wrap.mobile { perspective: 1800px; padding: 12px 16px calc(16px + var(--deskbar-h, 0px)); }
 
 /* The spread is sized in JS (sizeBook): the largest 7:5 box that fits the stage
    both ways. On a wide window it fills the height and centres with a little desk
@@ -261,6 +286,12 @@ p.pair-en.blurred { filter: blur(5px); }
 /* ---------- overlays ---------- */
 .popover { background: var(--panel); color: var(--panel-ink); border-radius: 10px; box-shadow: var(--panel-shadow); padding: 12px 8px; z-index: 60; position: fixed; top: calc(var(--header-h, 66px) + 8px); right: 30px; width: 280px; max-height: 60vh; overflow-y: auto; animation: xfade .16s ease-out; }
 .popover.mobile { left: 16px; right: 16px; width: auto; }
+/* Chapters, bookmarks and the download open from the bar at the foot, so they
+   rise from it rather than dropping from a header that no longer holds them. */
+.popover.from-foot { top: auto; right: auto; left: 50%; transform: translateX(-50%);
+  bottom: calc(var(--deskbar-h, 40px) + 22px);
+  max-height: calc(100vh - var(--header-h, 66px) - var(--deskbar-h, 40px) - 44px); }
+.popover.from-foot.mobile { left: 16px; right: 16px; transform: none; }
 /* The download menu is short — two rows at most — so it need not be as wide. */
 .popover.dl-menu { width: 208px; }
 .popover.dl-menu.mobile { width: auto; }

@@ -187,11 +187,17 @@
   function isMobileWidth() { return availableWidth() < MOBILE_BREAKPOINT; }
 
   // The header wraps to two or three rows on narrow screens, so overlays cannot
-  // assume a fixed offset from the top.
-  function measureHeader() {
+  // assume a fixed offset from the top. The bar at the foot is fixed to the desk
+  // and wraps on a phone, so the stage is told its height rather than a constant:
+  // that is what keeps the book from running underneath it.
+  function measureChrome() {
     var header = document.getElementById('app-header');
     if (header) {
       document.documentElement.style.setProperty('--header-h', header.offsetHeight + 'px');
+    }
+    var bar = document.getElementById('deskbar');
+    if (bar) {
+      document.documentElement.style.setProperty('--deskbar-h', bar.offsetHeight + 'px');
     }
   }
 
@@ -2205,7 +2211,7 @@
         S.mobile = mobile;
         mount();
       }
-      measureHeader();
+      measureChrome();
       sizeBook();      // the stage changed, so re-fit the book to it
       applyFontSize(); // then scale the type to the book's new width
       repaginate(anchor);
@@ -2341,9 +2347,13 @@
   }
 
   // ---------- overlays ----------
+  // Every panel built here is opened from the bar at the foot of the desk, so it
+  // rises from the bar rather than dropping from the header. The ⓘ note is the
+  // exception and has its own class, because its button is still up there with
+  // the column it explains.
   function popover() {
     var el = document.createElement('div');
-    el.className = 'popover' + (S.mobile ? ' mobile' : '');
+    el.className = 'popover from-foot' + (S.mobile ? ' mobile' : '');
     el.setAttribute('data-pop', '1');
     el.addEventListener('click', function (e) { e.stopPropagation(); });
     return el;
@@ -2370,11 +2380,27 @@
       dl.setAttribute('aria-expanded', S.dlOpen ? 'true' : 'false');
     }
 
-    if (S.chapOpen) root.appendChild(renderChapterList());
-    if (S.bmOpen) root.appendChild(renderBookmarkList());
+    if (S.chapOpen) overFoot(root, renderChapterList(), 'chap-btn');
+    if (S.bmOpen) overFoot(root, renderBookmarkList(), 'bm-btn');
     if (S.infoOpen) root.appendChild(renderInfoPanel());
-    if (S.dlOpen) root.appendChild(renderDownloadMenu());
+    if (S.dlOpen) overFoot(root, renderDownloadMenu(), 'dl-btn');
     if (S.resumePair != null) root.appendChild(renderResumeBanner());
+  }
+
+  // A panel rising from the desk bar stands over the control that opened it, not
+  // in the middle of the desk: centred, all three landed on the gutter and hid
+  // the same lines of both pages. Measured after it is in the document, and held
+  // clear of either edge.
+  function overFoot(root, pop, btnId) {
+    root.appendChild(pop);
+    if (S.mobile) return;
+    var btn = document.getElementById(btnId);
+    if (!btn) return;
+    var b = btn.getBoundingClientRect();
+    var w = pop.offsetWidth;
+    var left = Math.min(Math.max(14, b.left + b.width / 2 - w / 2), window.innerWidth - w - 14);
+    pop.style.left = left + 'px';
+    pop.style.transform = 'none';
   }
 
   function renderDownloadMenu() {
@@ -2811,7 +2837,7 @@
       lsSet('bookmarks', { v: STORE_VERSION, pairs: S.bookmarks });
     }
 
-    measureHeader();
+    measureChrome();
     S.mobile = isMobileWidth();
     mount();
     sizeBook();      // give the book its box before anything measures against it
