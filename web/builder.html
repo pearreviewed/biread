@@ -2095,13 +2095,16 @@ function refreshNext() {
   $("fetching").hidden = !(S.busy === "shelf" && S.route === "shelf");
   if (S.busy === "shelf") return;
   // The engine is a ten-megabyte download on a first visit, and every button on
-  // this screen is dead until it lands. The line says so; the rule shows it.
+  // this screen is dead until it lands. The line says so, and that is enough:
+  // the sweeping rule that used to run under it was motion on the one screen a
+  // reader arrives at, drawing the eye to a wait they can do nothing about, and
+  // it made the foot two lines tall while it ran, so the button beside it moved
+  // when the engine landed.
   $("books-foot").textContent = !S.ready ? "Warming up the workshop…"
     : S.route === "shelf" ? (haveBook()
         ? "Both editions are here. Next: an engine, and the price."
         : "Nothing is fetched until you choose a book.")
     : "Next you'll pick an engine and see the price. Nothing leaves this page until then.";
-  if (!S.ready) working($("books-foot")).style.cssText = "width:110px;margin-top:7px";
 }
 function wireFile(which) {
   const button = $("pick-" + which), input = $("f-" + which);
