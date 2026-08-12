@@ -161,12 +161,17 @@ def test_the_door_shows_a_page_of_the_book_it_is_offering(page):
     # finish, both columns breaking at the same fraction through it. So the type
     # fills the leaf and none of it is hidden — the page used to be overfilled
     # and faded out at the foot, which no page of a biread book does.
+    # Measured off the last paragraph's own foot, never off scrollHeight, which
+    # is clamped to the box it is measured in and so reports a page two thirds
+    # full as exactly full: 48px of air went unseen behind that for as long as
+    # the type was a figure in the stylesheet.
     for side in ("l", "r"):
-        fit = page.eval_on_selector(
+        held, box, mask = page.eval_on_selector(
             f".taste .leaf.{side} .body",
-            "e => [e.scrollHeight, Math.round(e.getBoundingClientRect().height),"
+            "e => [e.querySelector('p:last-child').getBoundingClientRect().bottom"
+            "        - e.getBoundingClientRect().top,"
+            "      e.getBoundingClientRect().height,"
             "      getComputedStyle(e).webkitMaskImage || getComputedStyle(e).maskImage]")
-        held, box, mask = fit
         assert held <= box, f"{side}: the page overruns its own foot ({held} in {box})"
         assert box - held < 18, f"{side}: the page is short of its foot by {box - held}px"
         assert mask in (None, "none"), f"{side}: the foot of the page is faded out"

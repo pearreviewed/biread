@@ -215,13 +215,18 @@
   /* No fade at the foot, because no page of a biread book has one. A page that
      cannot hold the rest of its paragraph breaks it, and both columns break at
      the same fraction through it so they meet again where it ends: the text
-     here is cut at 0.639 of the paragraph it is in the middle of, which is the
-     furthest cut that leaves both pages whole in *both* engines: a cut fitted in
-     Chromium alone overran WebKit's own setting of the same column by 29px, and
-     with no fade to hide it that is a line of type sliced through. What a reader sees is what the
-     reader gives them — a full page whose last line is a whole line, and a
-     sentence that carries on overleaf. `overflow` stays as a guard for a
-     browser that lays the type out differently. */
+     here is cut at 0.639 of the paragraph it is in the middle of, and the type
+     is then set at the largest size that still leaves both pages whole, which
+     is measured at load (`fitTaste`) rather than written down here. A number
+     written down here can only be right in one engine: Chromium and WebKit set
+     this same column three lines apart, so 8.4px fills WebKit's page and leaves
+     a fifth of Chromium's empty, and the size that fills Chromium's overruns
+     WebKit by 29px — a line of type sliced in half, with no fade to hide it.
+     What a reader sees is what the reader gives them: a full page whose last
+     line is a whole line, and a sentence that carries on overleaf. The size
+     below is the floor the fit starts from and what a page with no script gets;
+     `overflow` stays as a guard for a browser that lays the type out
+     differently. */
   .taste .leaf .body { flex: 1; min-height: 0; overflow: hidden; }
   .taste .leaf p { font-size: 8.4px; line-height: 1.85; margin-bottom: .95em; text-indent: 1.9em; }
   .taste .leaf .folio { bottom: 9px; margin-top: 0; padding-top: 0; }
@@ -1222,6 +1227,44 @@ function settle() { $("s-books").classList.add("settled"); }
 for (const b of $("route").children) {
   b.addEventListener("click", () => { settle(); setRoute(b.dataset.route); });
 }
+
+// The page of a book on the right is filled the way the reader fills one: the
+// type is set at the largest size whose last line is still whole, found by
+// measuring rather than by a figure in the stylesheet. One figure cannot be
+// right in both engines — Chromium and WebKit set this column three lines
+// apart, so the size that fills one leaves a fifth of the other's page empty or
+// slices a line through. Measured in the face the page is actually set in,
+// which is the trap the EPUB paginator fell into: fit before Charis SIL has
+// arrived and every page is fitted to the fallback.
+const TASTE_FLOOR = 8.4, TASTE_CEIL = 11, TASTE_STEP = 0.1;
+function fitTaste() {
+  const panel = $("taste");
+  if (!panel || !panel.offsetParent) return;   // stood down at this width
+  const leaves = [...panel.querySelectorAll(".leaf")];
+  const type = [...panel.querySelectorAll(".leaf .body p")];
+  const overruns = (size) => {
+    for (const p of type) p.style.fontSize = size + "px";
+    return leaves.some((leaf) => {
+      const body = leaf.querySelector(".body");
+      const last = body.querySelector("p:last-child");
+      return last.getBoundingClientRect().bottom > body.getBoundingClientRect().bottom;
+    });
+  };
+  let fitted = TASTE_FLOOR;
+  for (let s = TASTE_CEIL; s > TASTE_FLOOR; s -= TASTE_STEP) {
+    const size = Math.round(s * 10) / 10;
+    if (!overruns(size)) { fitted = size; break; }
+  }
+  for (const p of type) p.style.fontSize = fitted + "px";
+}
+fitTaste();
+if (document.fonts) {
+  document.fonts.load("400 10px 'Charis SIL'").then(fitTaste, () => {});
+  document.fonts.ready.then(fitTaste, () => {});
+}
+// The panel is a fixed width, so only crossing the width at which it stands up
+// changes anything; refitting on any resize is the same call and one fewer rule.
+addEventListener("resize", fitTaste);
 
 // Only while step one is up: a hash arriving later must not yank a reader out of
 // the screen they are working in.
