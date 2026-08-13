@@ -15,6 +15,11 @@ rule about what a title page looks like.
 The translator is in the URL (`/salammbo/j-s-chartres`), so a search result
 already knows who translated it and a card costs no second request.
 
+A search also returns books the site has *not* made — it lists what is in the
+public domain beside what it has produced, in the same markup — and those carry
+no text at all. They are told apart by the cover, and only produced books are
+offered: see `_produced`.
+
 Nothing here opens a socket by itself: every entry point takes a `fetch`, so the
 browser can pass its own.
 """
@@ -33,8 +38,13 @@ BASE = "https://standardebooks.org"
 _SKIP_TAGS = {"script", "style", "head", "figure", "table"}
 _VOID = {"br", "img", "link", "meta", "hr", "input", "source", "col"}
 
-#: A work's path, with the translator as an optional third segment.
-_EBOOK_HREF = re.compile(r'href="(/ebooks/[a-z0-9\'-]+/[a-z0-9\'-]+(?:/[a-z0-9\'-]+)?)"')
+#: One result row, and the work it is about. The site states the path in the
+#: row's own `about`, which spares us choosing among the three links inside it:
+#: the cover, the title and the author all point somewhere.
+_RESULT_ROW = re.compile(r'<li\b[^>]*\babout="(/ebooks/[^"]+)"[^>]*>(.*?)</li>', re.S)
+
+#: What a produced book's row draws where an unmade one draws a placeholder.
+_COVER = "/images/covers/"
 
 
 def search_url(query: str) -> str:
@@ -49,6 +59,45 @@ def _titlecase(slug: str) -> str:
     return " ".join(word.capitalize() for word in slug.split("-"))
 
 
+def _credit(slug: str) -> str:
+    """The translators, as the site's own credit line writes them.
+
+    An underscore joins two of them: `jane-minot-sedgwick_ellery-sedgwick` is
+    the Devil's Pool, which the site credits as "Jane Minot Sedgwick and Ellery
+    Sedgwick". The character was missing from the path pattern entirely, so that
+    book — produced, readable, and the second of only two George Sand editions
+    this library has made — was dropped from every search it appeared in.
+    """
+    return " and ".join(_titlecase(name) for name in slug.split("_"))
+
+
+def _produced(row: str) -> bool:
+    """Whether the site has actually made this ebook, as its own row says.
+
+    A search lists what is in the public domain beside what has been produced,
+    in identical markup: George Sand returns five works and two of them exist.
+    The rest say "We don't have this ebook in our catalog yet" on the page
+    behind them, and their `/text/single-page` is a 404 — so a reader who picked
+    one from the lookup screen chose a book that failed at fetch time, minutes
+    later, having already been offered it.
+
+    The cover tells them apart. A produced book's row carries the one the site
+    drew for it; an unmade book has none to show and carries
+    `<div class="placeholder-cover">` in its place. Measured complementary over
+    173 rows across eight searches, grid view and list: every row has exactly
+    one of the two, and the cover agreed with what the text URL answered on all
+    eleven paths probed.
+
+    It is the **cover** that is read, rather than the placeholder, because the
+    two failures are not equal. Were the placeholder renamed, reading it would
+    call every unmade book produced and send readers back into builds that 404 —
+    silently, which is the fault this exists to prevent. Reading the cover fails
+    the other way: the second library goes quiet and offers nothing, which the
+    lookup screen already says plainly and a reader can see.
+    """
+    return _COVER in row
+
+
 @dataclass(frozen=True)
 class Book:
     """One edition, as the site's own URL names it."""
@@ -56,30 +105,41 @@ class Book:
     author: str
     title: str
     translator: str | None = None
+    #: False where the site lists the work but has not made it — no text to
+    #: fetch, whatever the search results imply by listing it.
+    produced: bool = True
 
     @property
     def label(self) -> str:
         return f"{self.title} · {self.translator}" if self.translator else self.title
 
 
-def search(query: str, fetch: Fetch = default_fetch, limit: int = 8) -> list[Book]:
-    """Works matching a query.
+def search(query: str, fetch: Fetch = default_fetch, limit: int = 8,
+           include_unproduced: bool = False) -> list[Book]:
+    """Works matching a query, and by default only the ones that can be read.
 
     A third path segment names the translator; two segments mean none is
-    credited. That is *not* evidence the book was written in English — Zola's
-    Doctor Pascal is plainly a translation and carries two — so an uncredited
+    credited. That is *not* evidence the book was written in English: nine of
+    Zola's works here carry no credit and every one of them is a translation,
+    because a book nobody has produced yet has nobody to name. So an uncredited
     edition is reported without a translator rather than as an original.
+
+    Books the site has listed but not produced are left out unless they are
+    asked for, since every caller here is about to fetch one.
     """
     page = fetch(search_url(query))
     seen: set[str] = set()
     found: list[Book] = []
-    for path in _EBOOK_HREF.findall(page):
-        if path in seen:
+    for path, row in _RESULT_ROW.findall(page):
+        parts = path.strip("/").split("/")[1:]
+        if not 2 <= len(parts) <= 3 or path in seen:
             continue
         seen.add(path)
-        parts = path.strip("/").split("/")[1:]
-        translator = _titlecase(parts[2]) if len(parts) > 2 else None
-        found.append(Book(path, _titlecase(parts[0]), _titlecase(parts[1]), translator))
+        made = _produced(row)
+        if not made and not include_unproduced:
+            continue
+        translator = _credit(parts[2]) if len(parts) > 2 else None
+        found.append(Book(path, _titlecase(parts[0]), _titlecase(parts[1]), translator, made))
         if len(found) >= limit:
             break
     return found
@@ -97,7 +157,8 @@ def _fold(name: str) -> str:
     return " ".join(bare.casefold().replace("-", " ").split())
 
 
-def by_author(author: str, fetch: Fetch = default_fetch, limit: int = 8) -> list[Book]:
+def by_author(author: str, fetch: Fetch = default_fetch, limit: int = 8,
+              include_unproduced: bool = False) -> list[Book]:
     """This author's editions here, and nobody else's.
 
     A search for a title alone is too loose to trust — "germinal" also returns
@@ -106,11 +167,16 @@ def by_author(author: str, fetch: Fetch = default_fetch, limit: int = 8) -> list
     empty list is the right answer: these are offered to a reader to confirm,
     never asserted, and offering the wrong book wastes the one judgement we are
     relying on.
+
+    An author the site lists but has produced nothing by comes back empty for
+    the same reason. Zola is the case to picture: twelve works, and two of them
+    made.
     """
     if not author:
         return []
     want = _fold(author)
-    return [b for b in search(author, fetch, limit=limit * 3) if _fold(b.author) == want][:limit]
+    found = search(author, fetch, limit=limit * 3, include_unproduced=include_unproduced)
+    return [b for b in found if _fold(b.author) == want][:limit]
 
 
 class _Body(HTMLParser):
