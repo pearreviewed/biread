@@ -1,12 +1,12 @@
 # biread
 
-Turn a French book into a single self-contained HTML file: an open-book spread
-with the French on the left page and an English translation on the right,
-paginated at runtime like a real book. It reads `.txt`, `.epub`, `.pdf`, `.html`
-and `.docx`.
+A bilingual reader for French books: an open-book spread with the French on the
+left page and your language on the right, paginated at runtime like a real book,
+and any phrase in the French translated under the pointer. It reads `.txt`,
+`.epub`, `.pdf`, `.html` and `.docx`.
 
-The output is one file. No server, no network, no build step — open it in a
-browser, or email it to someone.
+What comes out is one file. It needs nothing else: no server, no network, no
+build step. Open it in a browser, on a plane, in ten years.
 
 There are three ways to get the right-hand page, and they are the same three on
 the command line and in the [web builder](web/README.md):
